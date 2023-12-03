@@ -1,12 +1,99 @@
-import functools
 from collections import OrderedDict
-from typing import Any, TypedDict
+from typing import Any, TypedDict, Unpack
 
-from PySide6.QtWidgets import QWidget
+import pyqtgraph.parametertree.parameterTypes as pTypes
 from loguru import logger
-from pyqtgraph.parametertree import Parameter, ParameterTree, RunOptions, Interactor
+from pyqtgraph.parametertree import Parameter, ParameterTree
+from PySide6.QtWidgets import QWidget
 
-from ...models.peaks import find_ppg_peaks_elgendi
+from ...custom_types import GeneralParameterOptions, PeakDetectionMethod
+
+
+class PeakDetectionParameter(pTypes.GroupParameter):
+    def __init__(self, method: PeakDetectionMethod, **opts: Unpack[GeneralParameterOptions]) -> None:
+        pTypes.GroupParameter.__init__(self, **opts)
+
+        self._method = method
+
+    def set_elgendi_parameters(self) -> None:
+        self.clearChildren()
+        self.addChildren(
+            [
+                pTypes.SliderParameter(
+                    name="peakwindow",
+                    title="Peak window",
+                    type="float",
+                    value=0.111,
+                    default=0.111,
+                    step=0.001,
+                    limits=(0.0, 1.0),
+                    precision=3,
+                ),
+                pTypes.SliderParameter(
+                    name="beatwindow",
+                    title="Beat window",
+                    type="float",
+                    value=0.667,
+                    default=0.667,
+                    step=0.001,
+                    limits=(0.050, 2.500),
+                    precision=3,
+                ),
+                pTypes.SliderParameter(
+                    name="beatoffset",
+                    title="Beat offset",
+                    type="float",
+                    value=0.02,
+                    default=0.02,
+                    step=0.01,
+                    limits=(0.01, 1.0),
+                    precision=2,
+                ),
+                pTypes.SliderParameter(
+                    name="mindelay",
+                    title="Minimum delay",
+                    type="float",
+                    value=0.3,
+                    default=0.3,
+                    step=0.01,
+                    limits=(0.1, 5.0),
+                    precision=2,
+                ),
+            ]
+        )
+
+    def set_localmax_parameters(self) -> None:
+        self.clearChildren()
+        self.addChildren(
+            [
+                pTypes.SliderParameter(
+                    name="windowsize",
+                    title="Window size",
+                    type="int",
+                    value=110,
+                    default=110,
+                    step=1,
+                    limits=(5, 9999),
+                )
+            ]
+        )
+
+    def set_neurokit_parameters(self) -> None:
+        self.clearChildren()
+        self.addChildren(
+            [
+                pTypes.SliderParameter(
+                    name="smoothwindow",
+                    title="Smoothing window",
+                    type="float",
+                    value=0.1,
+                    default=0.1,
+                    step=0.01,
+                    limits=(0.01, 1.0),
+                    precision=2,
+                )
+            ]
+        )
 
 
 class ParamChild(TypedDict, total=False):
@@ -23,28 +110,9 @@ class ParamsType(TypedDict, total=False):
     children: list[ParamChild]
 
 
-ppg_clean_params_elgendi: list[ParamsType] = [
-    {
-        "name": "Filter parameters",
-        "type": "group",
-        "readonly": True,
-        "children": [
-            {
-                "name": "method",
-                "type": "str",
-                "value": "butterworth",
-                "title": "Filter method",
-            },
-            {"name": "lowcut", "type": "float", "value": 0.5},
-            {"name": "highcut", "type": "float", "value": 8.0},
-            {"name": "order", "type": "int", "value": 3},
-        ],
-    },
-]
-
-
 # Peak Detection parameters
-peak_method_elgendi = {
+peak_method_elgendi = (
+    {
         "name": "elgendi",
         "type": "group",
         "children": [
@@ -74,6 +142,7 @@ peak_method_elgendi = {
             },
         ],
     },
+)
 
 peak_method_neurokit2 = {
     "name": "neurokit2",
@@ -87,7 +156,7 @@ peak_method_neurokit2 = {
             "limits": [5, 9999],
             "step": 2,
         },
-    ]
+    ],
 }
 
 peak_method_local = {
@@ -108,7 +177,7 @@ peak_method_local = {
             "values": ["min", "max"],
             "default": "max",
         },
-    ]
+    ],
 }
 
 peak_method_xqrs = {
@@ -128,7 +197,7 @@ peak_method_xqrs = {
             "type": "list",
             "values": ["up", "down", "both", "compare", "None"],
         },
-    ]
+    ],
 }
 
 
@@ -165,9 +234,9 @@ class AlgoParamTree(ParameterTree):
         self,
         params_schema: list[ParamsType],
         parent: QWidget | None = None,
-        **kwargs: Any,
+        showHeader: bool = True,
     ) -> None:
-        ParameterTree.__init__(self, parent=parent, **kwargs)
+        ParameterTree.__init__(self, parent=parent, showHeader=showHeader)
         self._initial_params = params_schema
         self.params = Parameter.create(
             name="params", type="group", children=params_schema
@@ -189,22 +258,3 @@ class AlgoParamTree(ParameterTree):
         ]
         logger.debug(f"Current filter values: {formatted_logger_output}")
         return values
-
-
-def create_interactor_tree(host: Parameter):
-    interactor = Interactor(parent=host, runOptions=RunOptions.ON_ACTION)
-
-    @interactor.decorate()
-    def _interact_elgendi_peaks(
-        peakwindow: float = 0.111,
-        beatwindow: float = 0.667,
-        beatoffset: float = 0.02,
-        mindelay: float = 0.3,
-    ):
-        return functools.partial(
-            find_ppg_peaks_elgendi,
-            peakwindow=peakwindow,
-            beatwindow=beatwindow,
-            beatoffset=beatoffset,
-            mindelay=mindelay,
-        )

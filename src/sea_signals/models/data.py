@@ -42,6 +42,25 @@ from .io import read_edf
 from .peaks import find_ppg_peaks_elgendi
 
 
+@dataclass(slots=True, frozen=True)
+class Identifier:
+    signal_name: SignalName
+    file_name: str
+    subject_id: str
+    date_of_recording: date
+    oxygen_condition: OxygenCondition
+
+
+@dataclass(slots=True, kw_only=True)
+class Results:
+    signal_name: SignalName
+    identifier: Identifier
+    working_data_metadata: InfoWorkingData
+    processing_metadata: InfoProcessingParams
+    computed: ComputedResults
+    processed_data: pl.DataFrame = field(default_factory=pl.DataFrame)
+
+
 @dataclass
 class DataHandler:
     file_path: str | Path
@@ -49,6 +68,7 @@ class DataHandler:
     lazy: pl.LazyFrame = field(init=False)
     data: pl.DataFrame = field(init=False)
     min_max_mapping: dict[str, MinMaxMapping] = field(init=False)
+    _results: Results = field(init=False)
 
     def __post_init__(self) -> None:
         path = Path(self.file_path).resolve()
@@ -203,6 +223,7 @@ class DataHandler:
                     pl.when(pl.col("index").is_in(peak_indices))
                     .then(pl.lit(1))
                     .otherwise(pl.lit(0))
+                    .shrink_dtype()
                     .alias(f"{signal_name}_peaks")
                 )
             )
@@ -212,59 +233,61 @@ class DataHandler:
         self.calculate_rate(signal_name, peak_indices)
 
     def calculate_rate(self, signal_name: str, peaks: NDArray[np.int32]) -> None:
-        rate = nk.signal_rate(
-            peaks=peaks,
-            sampling_rate=self.sampling_rate,
-            desired_length=len(self.data),
-            interpolation_method="monotone_cubic",
+        rate = np.asarray(
+            nk.signal_rate(
+                peaks=peaks,
+                sampling_rate=self.sampling_rate,
+                desired_length=len(self.data),
+                interpolation_method="monotone_cubic",
+            ),
+            dtype=np.int32,
         )
         col_name = f"{signal_name}_rate"
 
         self.data = self.data.with_columns(
-            col_name=pl.Series(name=col_name, values=rate, dtype=pl.Float32)
+            pl.Series(name=col_name, values=rate, dtype=pl.Int32)
         )
 
-        setattr(self, f"{signal_name}_rate", rate)
+        setattr(self, f"{col_name}_len_signal", rate)
 
     @staticmethod
     def compute_stats(
         signal_name: SignalName, peaks: NDArray[np.int32], rate: NDArray[np.float32]
     ) -> StatsDict:
-        return {
-            "peak_stats": PeakIntervalStats(
+        return StatsDict(
+            signal_name=signal_name,
+            peak_stats=PeakIntervalStats(
                 signal_name=signal_name,
                 peak_interval_mean=np.mean(peaks),
                 peak_interval_median=np.median(peaks),
                 peak_interval_std=np.std(peaks),
                 peak_interval_var=np.var(peaks),
             ),
-            "signal_rate_stats": SignalRateStats(
+            signal_rate_stats=SignalRateStats(
                 signal_name=signal_name,
                 signal_rate_mean=np.mean(rate),
                 signal_rate_median=np.median(rate),
                 signal_rate_std=np.std(rate),
                 signal_rate_var=np.var(rate),
             ),
-        }
+        )
 
     def compute_results(
         self,
         signal_name: SignalName,
     ) -> ComputedResults:
         signals = {
-            "hbr": ("hbr_peaks", "hbr_rate"),
-            "ventilation": ("ventilation_peaks", "ventilation_rate"),
+            "hbr": ("hbr_peaks", "hbr_rate_len_signal"),
+            "ventilation": ("ventilation_peaks", "ventilation_rate_len_signal"),
         }
 
-        if signal_name not in signals:
-            raise ValueError(f"Invalid signal name: {signal_name}")
         peaks_attr, rate_attr = signals[signal_name]
-        peaks = getattr(self, peaks_attr)
-        rate = getattr(self, rate_attr)
+        peaks: NDArray[np.int32] = getattr(self, peaks_attr)
+        rate: NDArray[np.float32] = getattr(self, rate_attr)
 
-        stats = self.compute_stats(signal_name, peaks, rate)
-        peak_intervals = np.diff(peaks)
-        signal_rate_from_peaks = np.asarray(
+        peak_intervals = np.ediff1d(peaks, to_begin=0)
+        stats = self.compute_stats(signal_name, peak_intervals, rate)
+        signal_rate_len_peaks = np.asarray(
             nk.signal_rate(
                 peaks=peaks,
                 sampling_rate=self.sampling_rate,
@@ -274,36 +297,46 @@ class DataHandler:
             dtype=np.float32,
         )
 
+        setattr(
+            self,
+            f"{signal_name}_rate_len_peaks",
+            signal_rate_len_peaks.astype(np.int32),
+        )
+
         return ComputedResults(
+            signal_name=signal_name,
             peak_intervals=peak_intervals,
-            signal_rate_from_peaks=signal_rate_from_peaks,
-            signal_rate_interpolated_signal_length=rate,
+            signal_rate_len_peaks=signal_rate_len_peaks,
+            signal_rate_len_signal=rate,
             peak_interval_stats=stats["peak_stats"],
             signal_rate_stats=stats["signal_rate_stats"],
         )
 
-
     def make_results_df(
         self,
         peaks: NDArray[np.int32],
-        rate: NDArray[np.float32],
+        rate: NDArray[np.int32],
     ) -> pl.DataFrame:
-        schema = {
-            "time_s": pl.Float64,
-            "peak_index": pl.Int32,
-            "peak_interval": pl.Int32,
-            "temperature": pl.Float32,
-            "bpm": pl.Float32,
-        }
         return pl.DataFrame(
-            {
-                "time_s": self.data.get_column("time_s")[peaks].round(4),
-                "peak_index": peaks,
-                "peak_interval": np.diff(peaks, prepend=0),
-                "temperature": self.data.get_column("temperature")[peaks].round(1),
-                "bpm": rate.round(1),
-            },
-            schema=schema,
+            [
+                pl.Series(
+                    name="time_s",
+                    values=self.data.get_column("time_s").gather(peaks).round(4),
+                    dtype=pl.Float64,
+                ),
+                pl.Series(name="peak_index", values=peaks, dtype=pl.Int32),
+                pl.Series(
+                    name="peak_interval",
+                    values=np.ediff1d(peaks, to_begin=0),
+                    dtype=pl.Int32,
+                ),
+                pl.Series(
+                    name="temperature",
+                    values=self.data.get_column("temperature").gather(peaks).round(1),
+                    dtype=pl.Float32,
+                ).shrink_dtype(),
+                pl.Series(name="bpm", values=rate, dtype=pl.Int32),
+            ]
         )
 
 
@@ -402,74 +435,75 @@ class CompactDFModel(QAbstractTableModel):
         return None
 
 
-# class PolarsModel(QAbstractTableModel):
-#     """
-#     A model for displaying polars data in a QTableView.
-#     """
+class PolarsModel(QAbstractTableModel):
+    """
+    A model for displaying polars data in a QTableView.
+    """
 
-#     def __init__(self, dataframe: pl.DataFrame, parent: QWidget | None = None):
-#         QAbstractTableModel.__init__(self, parent)
-#         self._dataframe = dataframe
+    def __init__(self, dataframe: pl.DataFrame, parent: QWidget | None = None):
+        QAbstractTableModel.__init__(self, parent)
+        self._dataframe = dataframe
 
-#     def rowCount(
-#         self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
-#     ) -> int:
-#         return self._dataframe.shape[0] if parent == QModelIndex() else 0
+    def rowCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
+        return self._dataframe.shape[0] if parent == QModelIndex() else 0
 
-#     def columnCount(
-#         self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
-#     ) -> int:
-#         return self._dataframe.shape[1] if parent == QModelIndex() else 0
+    def columnCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
+        return self._dataframe.shape[1] if parent == QModelIndex() else 0
 
-#     def headerData(
-#         self,
-#         section: int,
-#         orientation: Qt.Orientation,
-#         role: int = Qt.ItemDataRole.DisplayRole,
-#     ) -> Any:
-#         if role == Qt.ItemDataRole.DisplayRole:
-#             if orientation == Qt.Orientation.Horizontal:
-#                 return self._dataframe.columns[section]
+    def headerData(
+        self,
+        section: int,
+        orientation: Qt.Orientation,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> Any:
+        if role == Qt.ItemDataRole.DisplayRole:
+            if orientation == Qt.Orientation.Horizontal:
+                return self._dataframe.columns[section]
 
-#             if orientation == Qt.Orientation.Vertical:
-#                 return f"{section}"
+            if orientation == Qt.Orientation.Vertical:
+                return f"{section}"
 
-#         return None
+        return None
 
-#     def data(
-#         self,
-#         index: QModelIndex | QPersistentModelIndex,
-#         role: int = Qt.ItemDataRole.DisplayRole,
-#     ) -> Any:
-#         if not index.isValid():
-#             return None
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> Any:
+        if not index.isValid():
+            return None
 
-#         column = index.column()
-#         row = index.row()
+        column = index.column()
+        row = index.row()
 
-#         if role == Qt.ItemDataRole.DisplayRole:
-#             col_name = self._dataframe.columns[column]
+        if role == Qt.ItemDataRole.DisplayRole:
+            col_name = self._dataframe.columns[column]
 
-#             if "index" in col_name or "peak" in col_name:
-#                 idx = self._dataframe[row, column]
-#                 return f"{int(idx)}"
-#             if "time" in col_name:
-#                 time_s = self._dataframe[row, column]
-#                 return f"{time_s:.4f}"
-#             elif "temp" in col_name:
-#                 temperature = self._dataframe[row, column]
-#                 return f"{temperature:.1f}"
-#             elif "hb" in col_name:
-#                 hbr = self._dataframe[row, column]
-#                 return f"{hbr:.4f}"
-#             elif "vent" in col_name:
-#                 ventilation = self._dataframe[row, column]
-#                 return f"{ventilation:.4f}"
+            if "index" in col_name or "peak" in col_name:
+                idx = self._dataframe[row, column]
+                return f"{int(idx)}"
+            if "time" in col_name:
+                time_s = self._dataframe[row, column]
+                return f"{time_s:.4f}"
+            elif "temp" in col_name:
+                temperature = self._dataframe[row, column]
+                return f"{temperature:.1f}"
+            elif "hb" in col_name:
+                hbr = self._dataframe[row, column]
+                return f"{hbr:.4f}"
+            elif "vent" in col_name:
+                ventilation = self._dataframe[row, column]
+                return f"{ventilation:.4f}"
+            return str(self._dataframe[row, column])
 
-#         return None
+        return None
 
 
-class InfoTableModel(QAbstractTableModel):
+class DescriptiveStatsModel(QAbstractTableModel):
     def __init__(self, dataframe: pl.DataFrame, parent: QWidget | None = None):
         QAbstractTableModel.__init__(self, parent)
         self._dataframe = dataframe.shrink_to_fit(in_place=True)
@@ -525,20 +559,3 @@ class InfoTableModel(QAbstractTableModel):
             return f"{info_data:.4g}"
 
         return None
-
-
-@dataclass(slots=True, frozen=True)
-class Identifier:
-    file_name: str
-    subject_id: str
-    date_of_recording: date
-    oxygen_condition: OxygenCondition
-
-
-@dataclass(slots=True, kw_only=True)
-class Results:
-    identifier: Identifier
-    working_data_metadata: InfoWorkingData
-    processing_metadata: InfoProcessingParams
-    computed: ComputedResults
-    processed_data: pl.DataFrame = field(default_factory=pl.DataFrame)

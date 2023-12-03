@@ -1,5 +1,8 @@
+from typing import Any, Iterable, NotRequired, Sequence, Unpack
+
 import numpy as np
 from numpy.typing import NDArray
+from pyqtgraph.parametertree import Parameter
 from typing_extensions import Literal, TypedDict
 
 type SignalName = Literal["hbr", "ventilation"]
@@ -28,6 +31,7 @@ type FilterMethod = Literal[
     "bessel",
     "None",
 ]
+type OxygenCondition = Literal["normoxic", "hypoxic"]
 
 
 class RequiredParameters(TypedDict):
@@ -63,7 +67,6 @@ class PeaksXQRS(TypedDict):
     correction_direction: Literal["up", "down", "both", "compare", "None"]
 
 
-type OxygenCondition = Literal["normoxic", "hypoxic"]
 
 
 class PeakIntervalStats(TypedDict):
@@ -83,19 +86,22 @@ class SignalRateStats(TypedDict):
 
 
 class StatsDict(TypedDict):
+    signal_name: SignalName
     peak_stats: PeakIntervalStats
     signal_rate_stats: SignalRateStats
 
 
 class ComputedResults(TypedDict):
+    signal_name: SignalName
     peak_intervals: NDArray[np.int32]
-    signal_rate_from_peaks: NDArray[np.float32]
-    signal_rate_interpolated_signal_length: NDArray[np.float32]
+    signal_rate_len_peaks: NDArray[np.float32]
+    signal_rate_len_signal: NDArray[np.float32]
     peak_interval_stats: PeakIntervalStats
     signal_rate_stats: SignalRateStats
 
 
 class InfoProcessingParams(TypedDict):
+    signal_name: SignalName
     sampling_rate: int
     preprocess_pipeline: Pipeline
     filter_parameters: SignalFilterParameters
@@ -105,7 +111,56 @@ class InfoProcessingParams(TypedDict):
 
 
 class InfoWorkingData(TypedDict):
+    signal_name: SignalName
     subset_column: str | None
     subset_lower_bound: int | float
     subset_upper_bound: int | float
     n_samples: int
+
+
+class ParamChild(TypedDict, total=False):
+    name: str
+    type: str
+    value: str | int | float | bool
+    title: str | None
+
+
+class ParamsType(TypedDict, total=False):
+    name: str
+    type: str
+    readonly: bool
+    children: list[ParamChild]
+
+
+class ParameterOpts(TypedDict, total=False):
+    name: str
+    type: str
+    value: str | int | float | bool | None
+    default: str | int | float | bool | None
+    children: list[ParamsType]
+    readonly: bool
+    enabled: bool
+    visible: bool
+    renamable: bool
+    removable: bool
+    expanded: bool
+    syncExpanded: bool
+    title: str | None
+
+
+class GeneralParameterOptions(TypedDict):
+    readonly: bool
+    removable: bool
+    visible: bool
+    disabled: bool
+    title: str
+    default: Any
+    expanded: bool
+
+
+class SliderParameterOptions(GeneralParameterOptions):
+    limits: Iterable[int | float]
+    step: int | float
+    span: NotRequired[Sequence[int | float]]
+    format: str
+    precision: int

@@ -22,17 +22,19 @@ pyinstaller = "^6.2.0"
 pyside6 = "^6.6.0"
 numpy = "^1.26.2"
 scipy = "^1.11.4"
-ipython = "^8.18.1"
+xlsxwriter = "^3.1.9"
 
 [tool.poetry.group.dev.dependencies]
+ipython = "^8.18.1"
+rich = "^13.7.0"
 sourcery = "^1.14.0"
 better-exceptions = "^0.3.3"
 loguru = "^0.7.2"
 pytest = "^7.4.3"
 mypy = "^1.7.1"
 ruff = "^0.1.6"
-black = "^23.11.0"
 attrs = "^23.1.0"
+snakeviz = "^2.2.0"
 
 [tool.mypy]
 python_version = "3.12"
@@ -71,3 +73,8 @@ addopts = [
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pyright]
+pythonVersion = "3.12"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false

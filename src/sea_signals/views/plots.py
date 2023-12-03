@@ -2,30 +2,11 @@ from typing import Any
 
 import numpy as np
 import pyqtgraph as pg
+from loguru import logger
 from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
-from PySide6 import QtCore
 from PySide6.QtCore import Qt, Signal, Slot
 from PySide6.QtWidgets import QWidget
-
-from ..custom_types import SignalName
-
-
-class Crosshair:
-    def __init__(
-        self,
-    ):
-        self.vline = pg.InfiniteLine(angle=90, movable=False)
-        self.hline = pg.InfiniteLine(angle=0, movable=False)
-        self.setZValue(100)
-
-    def setPos(self, pos: QtCore.QPointF) -> None:
-        self.vline.setPos(pos.x())
-        self.hline.setPos(pos.y())
-
-    def setZValue(self, z: int) -> None:
-        self.vline.setZValue(z)
-        self.hline.setZValue(z)
 
 
 class PlotManager(QWidget):
@@ -44,6 +25,8 @@ class PlotManager(QWidget):
 
         plot_bg = str(pg.getConfigOption("background"))
         self.click_tolerance = 60
+        self.added_points: dict[str, list[int]] = {"hbr": [], "ventilation": []}
+        self.removed_points: dict[str, list[int]] = {"hbr": [], "ventilation": []}
 
         self.hbr_plot_widget = pg.PlotWidget(
             background=plot_bg,
@@ -83,20 +66,6 @@ class PlotManager(QWidget):
         plot_item.setLabel(axis="left", text=left_label)
         plot_item.setLabel(axis="bottom", text=bottom_label)
 
-    def add_temperature_color_bar(self, start: float, end: float) -> None:
-        n_steps = int((end - start) * 10)
-        img_item = pg.ImageItem(np.zeros((n_steps, 1)))
-        color_bar = pg.ColorBarItem(
-            values=(start, end),
-            label="Temperature (°C)",
-            interactive=True,
-            limits=(start, end),
-            rounding=0.1,
-            orientation="horizontal",
-            colorMap=pg.colormap.get("CET-L8"),
-        )
-        color_bar.setImageItem(img_item, insert_in=self.hbr_plot_widget.getPlotItem())
-
     def _prepare_plot_items(self) -> None:  # sourcery skip: extract-method
         plot_widgets = [
             (self.hbr_plot_widget, "hbr"),
@@ -106,15 +75,19 @@ class PlotManager(QWidget):
         ]
         for pw, name in plot_widgets:
             plot_item = pw.getPlotItem()
-            if plot_item is not None:
-                plot_item.showGrid(x=True, y=True)
-                plot_item.enableAutoRange(x=False, y=True)
-                plot_item.setDownsampling(auto=True)
-                plot_item.setClipToView(True)
-                plot_item.addLegend(offset=(0, 1), pen=pg.mkPen(color="w"), colCount=2)
-                plot_item.register(name)
-                plot_item.setAutoVisible(x=False, y=True)
-                plot_item.setMouseEnabled(x=True, y=False)
+            plot_item.showGrid(x=True, y=True)
+            plot_item.enableAutoRange(y=True, enable=0.95)
+            plot_item.setDownsampling(auto=True)
+            plot_item.setClipToView(True)
+            plot_item.addLegend(
+                offset=(0.5, 1),
+                pen=pg.mkPen(color="w"),  # type: ignore
+                brush=pg.mkBrush(color="k"),  # type: ignore
+                colCount=2,
+            )
+            plot_item.register(name)
+            plot_item.setAutoVisible(y=True)
+            plot_item.setMouseEnabled(x=True, y=False)
 
         self.set_plot_titles_and_labels(
             self.hbr_plot_widget.getPlotItem(),
@@ -141,50 +114,13 @@ class PlotManager(QWidget):
             bottom_label="n samples",
         )
 
-        self.hbr_plot_widget.setXLink(
-            self.bpm_hbr_plot_widget.getPlotItem().getViewBox()
-        )
-        self.ventilation_plot_widget.setXLink(
-            self.bpm_ventilation_plot_widget.getPlotItem().getViewBox()
-        )
+        self.hbr_plot_widget.setXLink("bpm_hbr")
+        self.ventilation_plot_widget.setXLink("bpm_ventilation")
 
-        self.hbr_temp_label = pg.TextItem()
-        self.hbr_crosshair_vline = pg.InfiniteLine(angle=90, movable=False)
-        self.hbr_crosshair_hline = pg.InfiniteLine(angle=0, movable=False)
-        self.hbr_crosshair_vline.setZValue(100)
-        self.hbr_crosshair_hline.setZValue(100)
-
-        self.ventilation_crosshair_vline = pg.InfiniteLine(angle=90, movable=False)
-        self.ventilation_crosshair_hline = pg.InfiniteLine(angle=0, movable=False)
-        self.ventilation_crosshair_vline.setZValue(100)
-        self.ventilation_crosshair_hline.setZValue(100)
-
-        self.hbr_plot_widget.addItem(self.hbr_crosshair_hline, ignoreBounds=True)
-        self.hbr_plot_widget.addItem(self.hbr_crosshair_vline, ignoreBounds=True)
-        self.hbr_plot_widget.plotItem.scene().sigMouseMoved.connect(
-            lambda pos: self.mouse_moved("hbr", pos)
+        self.hbr_plot_widget.plotItem.getViewBox().setCursor(Qt.CursorShape.CrossCursor)  # type: ignore
+        self.ventilation_plot_widget.plotItem.getViewBox().setCursor(  # type: ignore
+            Qt.CursorShape.CrossCursor
         )
-
-        self.ventilation_plot_widget.addItem(
-            self.ventilation_crosshair_hline, ignoreBounds=True
-        )
-        self.ventilation_plot_widget.addItem(
-            self.ventilation_crosshair_vline, ignoreBounds=True
-        )
-        self.ventilation_plot_widget.plotItem.scene().sigMouseMoved.connect(
-            lambda pos: self.mouse_moved("ventilation", pos)
-        )
-
-    @Slot()
-    def mouse_moved(self, plot_widget: SignalName, pos: QtCore.QPointF) -> None:
-        if plot_widget == "hbr":
-            mouse_pos = self.hbr_plot_widget.getViewBox().mapSceneToView(pos)
-            self.hbr_crosshair_vline.setPos(mouse_pos.x())
-            self.hbr_crosshair_hline.setPos(mouse_pos.y())
-        elif plot_widget == "ventilation":
-            mouse_pos = self.ventilation_plot_widget.getViewBox().mapSceneToView(pos)
-            self.ventilation_crosshair_vline.setPos(mouse_pos.x())
-            self.ventilation_crosshair_hline.setPos(mouse_pos.y())
 
     def clear_all(self) -> None:
         self.hbr_plot_widget.plotItem.clear()
@@ -258,14 +194,14 @@ class PlotManager(QWidget):
             pxMode=True,
             size=10,
             pen=None,
-            brush=pg.mkBrush(color=color),
+            brush=pg.mkBrush(color=color),  # type: ignore
             useCache=True,
             name=f"{signal_name}_peaks",
             hoverable=True,
-            hoverPen=pg.mkPen(color="gray", width=1),  # type: ignore
+            hoverPen=pg.mkPen(color="k", width=1),  # type: ignore
             hoverSymbol="x",
-            hoverBrush=pg.mkBrush(color="red"),
-            hoverSize=12,
+            hoverBrush=pg.mkBrush(color="red"),  # type: ignore
+            hoverSize=14,
             tip=None,
         )
         peaks_scatter.setZValue(20)
@@ -304,6 +240,7 @@ class PlotManager(QWidget):
             angle=0,
             pen=pg.mkPen(color="orange", width=2, style=Qt.PenStyle.DashLine),  # type: ignore
             name=f"mean_bpm_{signal_name}",
+            label=f"Mean BPM: {int(mean_bpm)}",
         )
 
         if hasattr(self, f"bpm_{signal_name}_signal_line") and hasattr(
@@ -327,42 +264,40 @@ class PlotManager(QWidget):
         points: np.ndarray[pg.SpotItem, Any],
         ev: mouseEvents.MouseClickEvent,
     ) -> None:
-        if points.size > 0:
-            to_remove_index = points[0].index()
-            if sender.name() == "hbr_peaks":
-                new_points_x = np.delete(
-                    self.hbr_peaks_scatter.data["x"], to_remove_index
-                )
-                new_points_y = np.delete(
-                    self.hbr_peaks_scatter.data["y"], to_remove_index
-                )
-                self.hbr_peaks_scatter.setData(x=new_points_x, y=new_points_y)
-            elif sender.name() == "ventilation_peaks":
-                new_points_x = np.delete(
-                    self.ventilation_peaks_scatter.data["x"], to_remove_index
-                )
-                new_points_y = np.delete(
-                    self.ventilation_peaks_scatter.data["y"], to_remove_index
-                )
-                self.ventilation_peaks_scatter.setData(x=new_points_x, y=new_points_y)
+        ev.accept()
+        if points.size <= 0:
+            return
+        to_remove_index = points[0].index()
+        scatter_plots = {
+            "hbr_peaks": getattr(self, "hbr_peaks_scatter", None),
+            "ventilation_peaks": getattr(self, "ventilation_peaks_scatter", None),
+        }
+        if scatter_plot := scatter_plots.get(sender.name()):
+            new_points_x = np.delete(scatter_plot.data["x"], to_remove_index)
+            new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)
+            scatter_plot.setData(x=new_points_x, y=new_points_y)
             self.sig_peaks_edited.emit()
+            name = "hbr" if "hbr" in sender.name() else "ventilation"
+            self.removed_points[name].append(int(points[0].pos().x()))
 
     @Slot(object, object)
     def add_clicked_point(
         self, sender: pg.PlotCurveItem, ev: mouseEvents.MouseClickEvent
     ) -> None:
-        x_new = np.array(ev.pos().x(), dtype=np.int32).flatten()
-        if sender.name() == "hbr_signal":
-            assert self.hbr_signal_line.yData is not None
-            y_new = np.array(
-                self.hbr_signal_line.yData[x_new], dtype=np.float64
-            ).flatten()
-            self.hbr_peaks_scatter.addPoints(x=x_new, y=y_new)
-        elif sender.name() == "ventilation_signal":
-            assert self.ventilation_signal_line.yData is not None
-            y_new = np.array(
-                self.ventilation_signal_line.yData[x_new], dtype=np.float64
-            ).flatten()
-            self.ventilation_peaks_scatter.addPoints(x=x_new, y=y_new)
-
-        self.sig_peaks_edited.emit()
+        ev.accept()
+        x_new = np.rint(ev.pos().x()).astype(np.int32)
+        signal_map = {
+            "hbr_signal": getattr(self, "hbr_signal_line", None),
+            "ventilation_signal": getattr(self, "ventilation_signal_line", None),
+        }
+        scatter_map = {
+            "hbr_signal": getattr(self, "hbr_peaks_scatter", None),
+            "ventilation_signal": getattr(self, "ventilation_peaks_scatter", None),
+        }
+        signal_name = sender.name()
+        if signal_name in signal_map:
+            y_new = signal_map[signal_name].yData[x_new]
+            scatter_map[signal_name].addPoints(x=x_new, y=y_new)
+            self.sig_peaks_edited.emit()
+            name = "hbr" if "hbr" in signal_name else "ventilation"
+            self.added_points[name].append(x_new)

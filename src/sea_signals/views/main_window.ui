@@ -1290,6 +1290,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
        </layout>
       </widget>
       <widget class="QWidget" name="tab_results">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <attribute name="icon">
         <iconset resource="../../resources/icons/icons.qrc">
          <normaloff>:/material-symbols/table_chart_view_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/table_chart_view_FILL0_wght400_GRAD0_opsz24.png</iconset>
@@ -1298,8 +1304,150 @@ li.checked::marker { content: &quot;\2612&quot;; }
         <string>Results</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout_12">
+        <item row="0" column="1">
+         <widget class="QLineEdit" name="line_edit_output_dir">
+          <property name="placeholderText">
+           <string>Specify an output directory for the exported files. By default (when left empty), use the same folder as the applications .exe file</string>
+          </property>
+          <property name="clearButtonEnabled">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
         <item row="0" column="0">
-         <widget class="QWidget" name="container_results" native="true"/>
+         <widget class="QPushButton" name="btn_browse_output_dir">
+          <property name="text">
+           <string>Browse</string>
+          </property>
+          <property name="icon">
+           <iconset resource="../../resources/icons/icons.qrc">
+            <normaloff>:/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png</iconset>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0" colspan="2">
+         <widget class="QWidget" name="container_results" native="true">
+          <layout class="QGridLayout" name="gridLayout_8" rowstretch="1,15">
+           <item row="0" column="0">
+            <widget class="QPushButton" name="btn_export_to_csv">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="text">
+              <string>Export to CSV</string>
+             </property>
+             <property name="icon">
+              <iconset resource="../../resources/icons/icons.qrc">
+               <normaloff>:/material-symbols/csv_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/csv_FILL0_wght400_GRAD0_opsz24.png</iconset>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>24</width>
+               <height>24</height>
+              </size>
+             </property>
+             <property name="flat">
+              <bool>false</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="2">
+            <widget class="QPushButton" name="btn_export_to_excel">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="text">
+              <string>Export to Excel</string>
+             </property>
+             <property name="icon">
+              <iconset resource="../../resources/icons/icons.qrc">
+               <normaloff>:/material-symbols/icons8-export-excel-24.png</normaloff>:/material-symbols/icons8-export-excel-24.png</iconset>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>24</width>
+               <height>24</height>
+              </size>
+             </property>
+             <property name="flat">
+              <bool>false</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0" colspan="3">
+            <widget class="QTableView" name="table_view_results">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="editTriggers">
+              <set>QAbstractItemView::NoEditTriggers</set>
+             </property>
+             <property name="tabKeyNavigation">
+              <bool>false</bool>
+             </property>
+             <property name="showDropIndicator" stdset="0">
+              <bool>false</bool>
+             </property>
+             <property name="dragDropOverwriteMode">
+              <bool>false</bool>
+             </property>
+             <property name="alternatingRowColors">
+              <bool>false</bool>
+             </property>
+             <property name="selectionMode">
+              <enum>QAbstractItemView::NoSelection</enum>
+             </property>
+             <property name="cornerButtonEnabled">
+              <bool>false</bool>
+             </property>
+             <attribute name="horizontalHeaderHighlightSections">
+              <bool>false</bool>
+             </attribute>
+             <attribute name="verticalHeaderVisible">
+              <bool>false</bool>
+             </attribute>
+             <attribute name="verticalHeaderDefaultSectionSize">
+              <number>24</number>
+             </attribute>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QPushButton" name="btn_export_to_text">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="text">
+              <string>Export to Text</string>
+             </property>
+             <property name="icon">
+              <iconset resource="../../resources/icons/icons.qrc">
+               <normaloff>:/material-symbols/tsv_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/tsv_FILL0_wght400_GRAD0_opsz24.png</iconset>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>24</width>
+               <height>24</height>
+              </size>
+             </property>
+             <property name="flat">
+              <bool>false</bool>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
         </item>
        </layout>
       </widget>
@@ -1374,7 +1522,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <addaction name="action_open_console"/>
    <addaction name="separator"/>
    <addaction name="action_select_file"/>
-   <addaction name="action_save"/>
+   <addaction name="action_update_result"/>
    <addaction name="separator"/>
    <addaction name="action_toggle_whats_this_mode"/>
   </widget>
@@ -1496,16 +1644,16 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Requirements for input files</string>
    </property>
   </action>
-  <action name="action_save">
+  <action name="action_update_result">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/save_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/save_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material-symbols/output_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/output_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Save</string>
+    <string>Update result preview</string>
    </property>
    <property name="toolTip">
-    <string>Save results</string>
+    <string>Updates the results from the current values, viewable in the &quot;Results&quot; tab</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+S</string>
@@ -1556,7 +1704,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <action name="action_reset_view">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/aspect_ratio_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/aspect_ratio_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material-symbols/fit_screen_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/fit_screen_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Reset View</string>
@@ -1708,12 +1856,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setCurrentIndex(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>339</x>
-     <y>648</y>
+     <x>90</x>
+     <y>103</y>
     </hint>
     <hint type="destinationlabel">
-     <x>188</x>
-     <y>828</y>
+     <x>99</x>
+     <y>97</y>
     </hint>
    </hints>
   </connection>

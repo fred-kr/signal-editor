@@ -10,17 +10,20 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 import qdarkstyle
+import rich
 from loguru import logger
 from numpy.typing import NDArray
 from pyqtgraph.console import ConsoleWidget
 from pyqtgraph.parametertree import ParameterTree
-from PySide6 import QtCore
 from PySide6.QtCore import (
+    QAbstractTableModel,
     QByteArray,
     QDate,
     QObject,
+    QPointF,
     QSettings,
     QStandardPaths,
+    QThread,
     Qt,
     Signal,
     Slot,
@@ -33,6 +36,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QMainWindow,
     QSizePolicy,
+    QTableView,
     QVBoxLayout,
 )
 
@@ -49,8 +53,9 @@ from .custom_types import (
 from .models.data import (
     CompactDFModel,
     DataHandler,
+    DescriptiveStatsModel,
     Identifier,
-    InfoTableModel,
+    PolarsModel,
     Results,
 )
 from .models.io import parse_file_name
@@ -68,10 +73,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     sig_plot_data_changed = Signal(str)
     sig_init_complete = Signal()
     sig_prepare_new_data = Signal()
+    sig_results_updated = Signal(str)
 
-    def __init__(
-        self,
-    ) -> None:
+    def __init__(self, app_wd: str) -> None:
         super(MainWindow, self).__init__()
         self.setupUi(self)
         self.setWindowTitle("Sea Signals")
@@ -80,6 +84,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.connect_signals()
         self._read_settings()
         self._add_profiler()
+        self._wd = app_wd
         self.sig_init_complete.emit()
 
     def _add_profiler(self) -> None:
@@ -91,6 +96,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.widgets = UIHandler(self, self.plot)
         self.widgets.sig_apply_filter.connect(self.handle_apply_filter)
         self.widgets.sig_peak_detection_inputs.connect(self.handle_peak_detection)
+        self.line_edit_output_dir.setText(self._wd)
 
     def get_signal_name(self) -> SignalName:
         return "hbr" if self.stacked_hbr_vent.currentIndex() == 0 else "ventilation"
@@ -100,6 +106,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.btn_load_selection.clicked.connect(self.handle_load_selection)
         self.btn_select_file.clicked.connect(self.handle_select_file)
+        self.btn_browse_output_dir.clicked.connect(self.handle_browse_output_dir)
 
         self.action_select_file.triggered.connect(self.handle_select_file)
         self.action_exit.triggered.connect(self.closeEvent)
@@ -115,6 +122,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
 
     @Slot()
+    def handle_browse_output_dir(self) -> None:
+        if path := QFileDialog.getExistingDirectory(
+            self,
+            "Select Output Directory",
+            dir=Path(".").resolve().as_posix(),
+            options=QFileDialog.Option.ShowDirsOnly,
+        ):
+            self.line_edit_output_dir.setText(path)
+
+    @Slot()
     def handle_select_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -123,7 +140,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 QStandardPaths.StandardLocation.HomeLocation
             ),
             # "E:/dev-home/_readonly_datastore_/2023_HB_Vent_EDF/11092023_PA26_16°C_HB_Vent_16_25°C.edf",
-            filter="EDF (*.edf);;CSV (*.csv);;TXT (*.txt);;Feather (*.feather)",
+            filter="EDF (*.edf);;CSV (*.csv);;TXT (*.txt);;Feather (*.feather);;All Files (*)",
             selectedFilter="EDF (*.edf)",
         )
         if path:
@@ -253,93 +270,123 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
 
     @Slot(str)
-    def _update_plot_view(self, signal_name: str) -> None:
-        getattr(self.plot, f"{signal_name}_plot_widget").autoRange()
-        getattr(self.plot, f"{signal_name}_plot_widget").enableAutoRange(y=True)
-        # getattr(self.plot, f"bpm_{signal_name}_plot_widget").autoRange()
+    def _update_plot_view(self, signal_name: SignalName) -> None:
+        widget: pg.PlotWidget = getattr(self.plot, f"{signal_name}_plot_widget")
+        widget.autoRange()
+        widget.enableAutoRange(y=True, enable=0.95)
+        widget.setAutoVisible(y=True)
 
     @Slot()
     def handle_plot_draw(self) -> None:
         signal_name = self.get_signal_name()
-        if not hasattr(self.plot, "ventilation_signal_line") and not hasattr(
-            self.plot, "hbr_signal_line"
-        ):
-            self.plot.draw_signal(
-                sig=self.dm.data.get_column("hbr").to_numpy(zero_copy_only=True),
-                plot_widget=self.plot.hbr_plot_widget,
-                signal_name="hbr",
-            )
-            self.plot.draw_signal(
-                sig=self.dm.data.get_column("ventilation").to_numpy(
-                    zero_copy_only=True
-                ),
-                plot_widget=self.plot.ventilation_plot_widget,
-                signal_name="ventilation",
-            )
-            self.plot.hbr_plot_widget.setXRange(0, self.dm.data.shape[0])
-            self.plot.ventilation_plot_widget.setXRange(0, self.dm.data.shape[0])
-        else:
-            self.plot.draw_signal(
-                sig=self.dm.data.get_column(signal_name).to_numpy(zero_copy_only=True),
-                plot_widget=getattr(self.plot, f"{signal_name}_plot_widget"),
-                signal_name=signal_name,
-            )
-            self.sig_plot_data_changed.emit(signal_name)
+        hbr_line_exists = hasattr(self.plot, "hbr_signal_line")
+        ventilation_line_exists = hasattr(self.plot, "ventilation_signal_line")
+
+        with pg.BusyCursor():
+            if not hbr_line_exists and not ventilation_line_exists:
+                self._draw_initial_signals()
+            else:
+                self._update_signal(signal_name)
+
+    def _draw_initial_signals(self) -> None:
+        hbr_data = self.dm.data.get_column("hbr").to_numpy(zero_copy_only=True)
+        ventilation_data = self.dm.data.get_column("ventilation").to_numpy(
+            zero_copy_only=True
+        )
+
+        self.plot.draw_signal(hbr_data, self.plot.hbr_plot_widget, "hbr")
+        self.plot.draw_signal(
+            ventilation_data, self.plot.ventilation_plot_widget, "ventilation"
+        )
+        self._set_x_ranges()
+
+    def _set_x_ranges(self) -> None:
+        data_length = self.dm.data.shape[0]
+        self.plot.hbr_plot_widget.setXRange(0, data_length)
+        self.plot.ventilation_plot_widget.setXRange(0, data_length)
+
+    def _update_signal(self, signal_name: SignalName) -> None:
+        signal_data = self.dm.data.get_column(signal_name).to_numpy(zero_copy_only=True)
+        plot_widget = getattr(self.plot, f"{signal_name}_plot_widget")
+        self.plot.draw_signal(signal_data, plot_widget, signal_name)
+        self.sig_plot_data_changed.emit(signal_name)
 
     @Slot()
     def handle_table_view_data(self) -> None:
-        # model = PolarsModel(self.dm.data)
-        df_head = self.dm.data.head(15).shrink_to_fit(in_place=True)
-        df_tail = self.dm.data.tail(15).shrink_to_fit(in_place=True)
-        df_description = self.dm.data.describe(None).shrink_to_fit(in_place=True)
+        """
+        Prepares and sets the models for data preview and info tables by fetching the
+        head, tail and description of the main data. Also adjusts the alignment and
+        resizes columns for these tables.
+        """
+        # Get top and bottom parts of the data and its description
+        n_rows = 15
+        df_head = self.dm.data.head(n_rows).shrink_to_fit(in_place=True)
+        df_tail = self.dm.data.tail(n_rows).shrink_to_fit(in_place=True)
+        df_description = self.dm.data.describe(percentiles=None).shrink_to_fit(
+            in_place=True
+        )
 
         model = CompactDFModel(df_head=df_head, df_tail=df_tail)
-        self.table_data_preview.setModel(model)
-        self.table_data_preview.horizontalHeader().setDefaultAlignment(
-            Qt.AlignmentFlag.AlignLeft
-        )
-        self.table_data_preview.verticalHeader().setVisible(False)
-        self.table_data_preview.resizeColumnsToContents()
-        for col in range(model.columnCount()):
-            self.table_data_preview.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.Stretch
-            )
+        self._set_table_model(self.table_data_preview, model)
 
-        info = InfoTableModel(df_description)
-        self.table_data_info.setModel(info)
-        self.table_data_info.horizontalHeader().setDefaultAlignment(
-            Qt.AlignmentFlag.AlignLeft
-        )
-        self.table_data_info.resizeColumnsToContents()
-        for col in range(info.columnCount()):
-            self.table_data_info.horizontalHeader().setSectionResizeMode(
-                col, QHeaderView.ResizeMode.Stretch
-            )
+        info = DescriptiveStatsModel(df_description)
+        self._set_table_model(self.table_data_info, info)
+
+    def _set_table_model(
+        self, table_view: QTableView, model: QAbstractTableModel
+    ) -> None:
+        """
+        Set the model for the given table view
+
+        Args:
+            table_view (QTableView): The table view for which to set the model
+            model (QAbstractTableModel): The model to use
+        """
+        table_view.setModel(model)
+        self._customize_table_header(table_view, model.columnCount())
+
+    @staticmethod
+    def _customize_table_header(table_view: QTableView, n_columns: int) -> None:
+        """
+        Customize header alignment and resize the columns to fill the available
+        horizontal space
+
+        Args:
+            table_view (QTableView): The table view to customize
+            n_columns (int): The number of columns in the table
+        """
+        header_alignment = Qt.AlignmentFlag.AlignLeft
+        resize_mode = QHeaderView.ResizeMode.Stretch
+        table_view.horizontalHeader().setDefaultAlignment(header_alignment)
+        table_view.verticalHeader().setVisible(False)
+        table_view.resizeColumnsToContents()
+        for col in range(n_columns):
+            table_view.horizontalHeader().setSectionResizeMode(col, resize_mode)
 
     @Slot(object)
     def handle_apply_filter(self, filter_params: SignalFilterParameters) -> None:
-        logger.debug(f"Received filter params: {filter_params} in handle_apply_filter")
-        norm_method = self.combo_box_standardizing_method.currentText()
-        norm_method = cast(NormMethod, norm_method)
+        with pg.BusyCursor():
+            norm_method = self.combo_box_standardizing_method.currentText()
+            norm_method = cast(NormMethod, norm_method)
 
-        pipeline = self.combo_box_preprocess_pipeline.currentText()
-        pipeline = cast(Pipeline, pipeline)
+            pipeline = self.combo_box_preprocess_pipeline.currentText()
+            pipeline = cast(Pipeline, pipeline)
 
-        signal_name = self.get_signal_name()
+            signal_name = self.get_signal_name()
 
-        self.dm.preprocess_signal(
-            signal_name=signal_name,
-            norm_method=norm_method,
-            pipeline=pipeline,
-            filter_params=filter_params,
-        )
-        self.plot.draw_signal(
-            sig=self.dm.data.get_column(f"processed_{signal_name}").to_numpy(
-                zero_copy_only=True
-            ),
-            plot_widget=getattr(self.plot, f"{signal_name}_plot_widget"),
-            signal_name=signal_name,
-        )
+            self.dm.preprocess_signal(
+                signal_name=signal_name,
+                norm_method=norm_method,
+                pipeline=pipeline,
+                filter_params=filter_params,
+            )
+            self.plot.draw_signal(
+                sig=self.dm.data.get_column(f"processed_{signal_name}").to_numpy(
+                    zero_copy_only=True
+                ),
+                plot_widget=getattr(self.plot, f"{signal_name}_plot_widget"),
+                signal_name=signal_name,
+            )
         self.sig_plot_data_changed.emit(signal_name)
         self.sig_data_filtered.emit(signal_name)
 
@@ -349,26 +396,28 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         peak_detection_method = self.combo_box_peak_detection_method.currentText()
         peak_detection_method = cast(PeakDetectionMethod, peak_detection_method)
 
-        self.dm.find_peaks(
-            signal_name=signal_name,
-            peak_find_method=peak_detection_method,
-            **peak_params,
-        )
+        with pg.BusyCursor():
+            self.dm.find_peaks(
+                signal_name=signal_name,
+                peak_find_method=peak_detection_method,
+                **peak_params,
+            )
+            peaks: NDArray[np.int32] = getattr(self.dm, f"{signal_name}_peaks")
 
-        self.plot.draw_peaks(
-            pos_x=self.dm.__getattribute__(f"{signal_name}_peaks"),
-            pos_y=self.dm.data.get_column(f"processed_{signal_name}").to_numpy(
-                zero_copy_only=True
-            )[self.dm.__getattribute__(f"{signal_name}_peaks")],
-            plot_widget=getattr(self.plot, f"{signal_name}_plot_widget"),
-            signal_name=signal_name,
-        )
+            self.plot.draw_peaks(
+                pos_x=peaks,
+                pos_y=self.dm.data.get_column(f"processed_{signal_name}").to_numpy(
+                    zero_copy_only=True
+                )[peaks],
+                plot_widget=getattr(self.plot, f"{signal_name}_plot_widget"),
+                signal_name=signal_name,
+            )
         self.sig_peaks_updated.emit(signal_name)
 
     @Slot(str)
     def handle_draw_results(self, signal_name: SignalName) -> None:
         instant_signal_rate: NDArray[np.float32] = getattr(
-            self.dm, f"{signal_name}_rate"
+            self.dm, f"{signal_name}_rate_len_signal"
         )
         self.plot.draw_bpm(
             instant_signal_rate,
@@ -380,7 +429,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def handle_scatter_clicked(self) -> None:
         signal_name = self.get_signal_name()
         peaks = np.asarray(
-            self.plot.__getattribute__(f"{signal_name}_peaks_scatter").data["x"],
+            getattr(self.plot, f"{signal_name}_peaks_scatter").data["x"],
             dtype=np.int32,
         )
         peaks.sort()
@@ -419,22 +468,31 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             f"./logs/profiler_{int(datetime.timestamp(datetime.now()))}.pstats"
         )
 
-    def make_results(self, signal_name: SignalName) -> Results:
+    def make_results(self, signal_name: SignalName) -> None:
         identifier = self.widgets.get_identifier()
-        working_data_metadata = self.widgets.get_working_metadata()
-        processing_metadata = self.widgets.get_processing_metadata()
+        working_data_metadata = self.widgets.get_info_working_data()
+        processing_metadata = self.widgets.get_info_processing_params()
         computed = self.dm.compute_results(signal_name)
         results_df = self.dm.make_results_df(
             peaks=getattr(self.dm, f"{signal_name}_peaks"),
-            rate=computed["signal_rate_from_peaks"].round(1),
+            rate=getattr(self.dm, f"{signal_name}_rate_len_peaks"),
         )
-        return Results(
+        self.results = Results(
+            signal_name=signal_name,
             identifier=identifier,
             working_data_metadata=working_data_metadata,
             processing_metadata=processing_metadata,
             computed=computed,
             processed_data=results_df,
         )
+
+    def make_results_table(self) -> None:
+        main_table = self.results.processed_data
+        model = PolarsModel(main_table)
+        self._set_table_model(self.table_view_results, model)
+
+    def get_results_table(self) -> pl.DataFrame:
+        return self.results.processed_data
 
 
 class UIHandler(QObject):
@@ -443,11 +501,13 @@ class UIHandler(QObject):
     sig_ready_for_cleaning = Signal()
     sig_apply_filter = Signal(dict)
     sig_peak_detection_inputs = Signal(dict)
+    sig_ready_for_export = Signal()
 
     def __init__(self, window: MainWindow, plot: PlotManager) -> None:
         super(UIHandler, self).__init__()
         self.window = window
         self.plot = plot
+        self._can_export = False
         self.setup_widgets()
         self.setup_toolbars()
         self.connect_signals()
@@ -470,6 +530,9 @@ class UIHandler(QObject):
 
         # Statusbar
         self.create_statusbar()
+
+        # Sidebar
+        self.window.tabWidget.currentChanged.connect(self.handle_tab_changed)
 
         # Plots
         self.window.stacked_hbr_vent.setCurrentIndex(0)
@@ -496,9 +559,58 @@ class UIHandler(QObject):
 
         self.window.action_open_console.triggered.connect(self.show_console_widget)
         self.window.tabWidget.currentChanged.connect(self.handle_tab_changed)
+        self.window.action_update_result.triggered.connect(self.update_results)
+        self.window.action_toggle_sidebar.triggered.connect(self.handle_tab_changed)
+
+        self.window.btn_export_to_csv.clicked.connect(self.export_to_csv)
+        self.window.btn_export_to_excel.clicked.connect(self.export_to_excel)
+        self.window.btn_export_to_text.clicked.connect(self.export_to_text)
+
+        self.sig_ready_for_export.connect(setattr(self, "_can_export", True))
+
+    @Slot()
+    def export_to_csv(self) -> None:
+        if not self._can_export:
+            return
+        output_dir = self.window.line_edit_output_dir.text()
+        signal_name = self.window.results.signal_name
+        self.window.get_results_table().write_csv(
+            f"{output_dir}/results_{signal_name}_{Path(self.window.results.identifier.file_name).stem}.csv",
+        )
+
+    @Slot()
+    def export_to_excel(self) -> None:
+        if not self._can_export:
+            return
+        output_dir = self.window.line_edit_output_dir.text()
+        signal_name = self.window.results.signal_name
+        # requires xlsxwriter
+        self.window.get_results_table().write_excel(
+            f"{output_dir}/results_{signal_name}_{Path(self.window.results.identifier.file_name).stem}.xlsx",
+        )
+
+    @Slot()
+    def export_to_text(self) -> None:
+        if not self._can_export:
+            return
+        output_dir = self.window.line_edit_output_dir.text()
+        signal_name = self.window.results.signal_name
+        self.window.get_results_table().write_csv(
+            f"{output_dir}/results_{signal_name}_{Path(self.window.results.identifier.file_name).stem}.txt",
+            separator="\t",
+        )
 
     def setup_toolbars(self) -> None:
         self.window.toolbar_plots.setVisible(False)
+
+    @Slot()
+    def update_results(self) -> None:
+        signal_name = self.window.get_signal_name()
+        with pg.BusyCursor():
+            self.window.make_results(signal_name)
+            self.window.make_results_table()
+
+        self.sig_ready_for_export.emit()
 
     def get_peak_detection_inputs(self) -> PeaksPPGElgendi:
         group_name = "Peak Detection (Elgendi PPG)"
@@ -571,10 +683,10 @@ class UIHandler(QObject):
             lambda pos: self.update_temperature_label("ventilation", pos)
         )
 
-    @Slot(QtCore.QPointF)
-    def update_temperature_label(
-        self, signal_name: SignalName, pos: QtCore.QPointF
-    ) -> None:
+    @Slot(QPointF)
+    def update_temperature_label(self, signal_name: SignalName, pos: QPointF) -> None:
+        if not hasattr(self.window, "dm"):
+            return
         data_pos = int(
             getattr(self.plot, f"{signal_name}_plot_widget")
             .plotItem.vb.mapSceneToView(pos)
@@ -583,14 +695,20 @@ class UIHandler(QObject):
         try:
             temp_value = self.window.dm.data.get_column("temperature").to_numpy(
                 zero_copy_only=True
-            )[data_pos]
+            )[np.clip(data_pos, 0, self.window.dm.data.shape[0] - 1)]
         except Exception:
+            if data_pos < 0:
+                default_index = 0
+            elif data_pos > self.window.dm.data.shape[0]:
+                default_index = -1
+            else:
+                default_index = data_pos
             temp_value = self.window.dm.data.get_column("temperature").to_numpy(
                 zero_copy_only=True
-            )[-1]
+            )[default_index]
         if signal_name == "hbr":
             self.temperature_label_hbr.setText(f"Temperature: {temp_value:.1f}°C")
-        else:
+        elif signal_name == "ventilation":
             self.temperature_label_ventilation.setText(
                 f"Temperature: {temp_value:.1f}°C"
             )
@@ -604,12 +722,14 @@ class UIHandler(QObject):
             "pg (pyqtgraph)",
             "np (numpy)",
             "pl (polars)",
+            "rich (rich)",
         ]
         namespace: dict[str, types.ModuleType | MainWindow] = {
             "self": self.window,
             "pg": pg,
             "np": np,
             "pl": pl,
+            "rich": rich,
         }
         startup_message = f"Available namespaces: {*module_names,=}"
         self.window.console = ConsoleWidget(
@@ -635,9 +755,11 @@ class UIHandler(QObject):
     @Slot()
     def show_console_widget(self) -> None:
         self.console_dock.setVisible(not self.console_dock.isVisible())
+        if self.console_dock.isVisible():
+            self.console_dock.setFocus()
 
     def create_statusbar(self) -> None:
-        self.window.statusbar = self.window.statusBar()
+        self.window.__setattr__("statusbar", self.window.statusBar())
         self.window.statusbar.showMessage("Ready")
 
     @Slot(str)
@@ -777,30 +899,35 @@ class UIHandler(QObject):
         return cast(Pipeline, self.window.combo_box_preprocess_pipeline.currentText())
 
     def get_identifier(self) -> Identifier:
+        signal_name = self.window.get_signal_name()
         file_name = self.window.line_edit_active_file.text()
         subject_id = self.window.line_edit_subject_id.text()
         date_of_recording = self.window.date_edit_file_info.date().toPython()
         oxygen_condition = self.window.combo_box_oxygen_condition.currentText()
         return Identifier(
+            signal_name=signal_name,
             file_name=file_name,
             subject_id=subject_id,
             date_of_recording=date_of_recording,
             oxygen_condition=oxygen_condition,
         )
 
-    def get_working_metadata(self) -> InfoWorkingData:
+    def get_info_working_data(self) -> InfoWorkingData:
+        signal_name = self.window.get_signal_name()
         subset_column = self.window.combo_box_filter_column.currentText()
         subset_lower_bound = self.window.dbl_spin_box_subset_min.value()
         subset_upper_bound = self.window.dbl_spin_box_subset_max.value()
         n_samples = self.window.dm.data.shape[0]
         return InfoWorkingData(
+            signal_name=signal_name,
             subset_column=subset_column,
             subset_lower_bound=subset_lower_bound,
             subset_upper_bound=subset_upper_bound,
             n_samples=n_samples,
         )
 
-    def get_processing_metadata(self) -> InfoProcessingParams:
+    def get_info_processing_params(self) -> InfoProcessingParams:
+        signal_name = self.window.get_signal_name()
         sampling_rate = self.window.spin_box_fs.value()
         preprocess_pipeline = self.get_preprocess_pipeline()
         filter_parameters = self.get_filter_settings()
@@ -810,6 +937,7 @@ class UIHandler(QObject):
         )
         peak_method_parameters = self.get_peak_detection_inputs()
         return InfoProcessingParams(
+            signal_name=signal_name,
             sampling_rate=sampling_rate,
             preprocess_pipeline=preprocess_pipeline,
             filter_parameters=filter_parameters,
@@ -819,7 +947,11 @@ class UIHandler(QObject):
         )
 
 
-def main(dev_mode: bool = False) -> None:
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
+# Main Method                                                                          #
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
+
+def main(app_wd: str, dev_mode: bool = False) -> None:
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"
 
@@ -830,20 +962,6 @@ def main(dev_mode: bool = False) -> None:
         background="black",
         antialias=False,
     )
-    # logger.add(
-    # ,
-    # format=(
-    # "<magenta>{time:YYYY-MM-DD HH:mm:ss.SSS}</magenta> | "
-    # "<level>{level: <8}</level> | "
-    # "<yellow>{message}</yellow> | "
-    # "source: <blue>{name}</blue>.<cyan>{function}()</cyan>, line: <green>{line}</green> | "
-    # "pid: <red>{process}</red> | "
-    # "tid: <red>{thread}</red>"
-    # ),
-    # backtrace=True,
-    # diagnose=True,
-    # level="DEBUG",
-    # )
     logger.add(
         "./logs/debug.log",
         format=(
@@ -856,6 +974,6 @@ def main(dev_mode: bool = False) -> None:
     app.setStyleSheet(
         qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.DarkPalette)
     )
-    window = MainWindow()
+    window = MainWindow(app_wd)
     window.show()
     sys.exit(app.exec())

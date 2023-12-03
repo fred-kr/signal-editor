@@ -7,6 +7,7 @@ from loguru import logger
 from numpy.typing import NDArray
 from pyqtgraph.parametertree import Parameter
 from scipy import ndimage, signal
+import wfdb.processing as wfp
 
 
 @define
@@ -121,8 +122,6 @@ def find_ppg_peaks_elgendi(
     Returns:
         NDArray[np.int32]: Array of peak indices.
 
-    Note:
-        The function assumes that the input PPG signal is a 1-dimensional array.
     """
     sig_abs = sig.copy()
     sig_abs[sig_abs < 0] = 0
@@ -223,7 +222,9 @@ def adjust_peak_positions(
     radius: int,
     direction: Literal["up", "down", "both", "compare", "None"],
 ) -> NDArray[np.int32]:
-    if direction == "up":
+    if direction == "None":
+        return peaks
+    elif direction == "up":
         return shift_peaks(sig, peaks, radius, dir_is_up=True)
     elif direction == "down":
         return shift_peaks(sig, peaks, radius, dir_is_up=False)
@@ -233,12 +234,10 @@ def adjust_peak_positions(
         shifted_up = shift_peaks(sig, peaks, radius, dir_is_up=True)
         shifted_down = shift_peaks(sig, peaks, radius, dir_is_up=False)
 
-        up_dist = np.mean(np.abs(sig[shifted_up])).astype(float)
-        down_dist = np.mean(np.abs(sig[shifted_down])).astype(float)
+        up_dist = np.mean(np.abs(sig[shifted_up]), dtype=np.float32)
+        down_dist = np.mean(np.abs(sig[shifted_down]), dtype=np.float32)
 
-        return shifted_up if up_dist >= down_dist else shifted_down
-    elif direction in ["None", None]:
-        return peaks
+        return shifted_up if np.greater_equal(up_dist, down_dist) else shifted_down
     else:
         logger.warning(f"Unknown direction: `{direction}`. Returning original peaks.")
         return peaks
