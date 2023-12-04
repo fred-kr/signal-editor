@@ -23,7 +23,6 @@ from PySide6.QtCore import (
     QPointF,
     QSettings,
     QStandardPaths,
-    QThread,
     Qt,
     Signal,
     Slot,
@@ -35,6 +34,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHeaderView,
     QMainWindow,
+    QMessageBox,
     QSizePolicy,
     QTableView,
     QVBoxLayout,
@@ -63,6 +63,95 @@ from .models.peaks import ElgendiPPGPeaks
 from .views.main_window import Ui_MainWindow
 from .views.plots import PlotManager
 
+INITIAL_STATE = {
+    "table_data_preview": {
+        "model": QStandardItemModel(),
+    },
+    "table_data_info": {
+        "model": QStandardItemModel(),
+    },
+    "line_edit_active_file": {"text": ""},
+    "group_box_subset_params": {
+        "enabled": False,
+        "checked": False,
+    },
+    "container_file_info": {
+        "enabled": False,
+    },
+    "date_edit_file_info": {
+        "date": QDate.currentDate(),
+    },
+    "line_edit_subject_id": {
+        "text": "",
+    },
+    "combo_box_oxygen_condition": {
+        "currentText": "normoxic",
+    },
+    "btn_load_selection": {
+        "enabled": False,
+    },
+    "stacked_hbr_vent": {
+        "currentIndex": 0,
+    },
+    "btn_view_hbr": {
+        "checked": True,
+    },
+    "btn_view_vent": {
+        "checked": False,
+    },
+    "spin_box_fs": {
+        "value": 400,
+    },
+    "combo_box_preprocess_pipeline": {
+        "currentText": "custom",
+    },
+    "combo_box_filter_method": {
+        "enabled": True,
+        "currentText": "None",
+    },
+    "combo_box_standardizing_method": {
+        "enabled": True,
+        "currentText": "None",
+    },
+    "container_signal_filter_inputs": {
+        "enabled": False,
+    },
+    "dbl_spin_box_lowcut": {
+        "value": 0.5,
+    },
+    "dbl_spin_box_highcut": {
+        "value": 8.0,
+    },
+    "spin_box_order": {
+        "value": 3,
+    },
+    "slider_order": {
+        "value": 3,
+    },
+    "spin_box_window_size": {
+        "value": 251,
+    },
+    "slider_window_size": {
+        "value": 251,
+    },
+    "combo_box_peak_detection_method": {
+        "currentText": "elgendi",
+    },
+    "btn_find_peaks": {
+        "enabled": False,
+    },
+    "btn_compute_results": {"enabled": False},
+    "table_view_results_hbr": {
+        "model": QStandardItemModel(),
+    },
+    "table_view_results_ventilation": {
+        "model": QStandardItemModel(),
+    },
+    "tab_widget_results": {
+        "currentIndex": 0,
+    },
+}
+
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     sig_filter_column_changed = Signal()
@@ -78,12 +167,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, app_wd: str) -> None:
         super(MainWindow, self).__init__()
         self.setupUi(self)
-        self.setWindowTitle("Sea Signals")
+        self.setWindowTitle("Signal Editor")
         self.setDockNestingEnabled(True)
         self.plot = PlotManager()
         self.connect_signals()
         self._read_settings()
-        self._add_profiler()
+        # self._add_profiler()
         self._wd = app_wd
         self.sig_init_complete.emit()
 
@@ -104,8 +193,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def connect_signals(self) -> None:
         self.sig_init_complete.connect(self._init_complete)
 
-        self.btn_load_selection.clicked.connect(self.handle_load_selection)
         self.btn_select_file.clicked.connect(self.handle_select_file)
+        self.btn_load_selection.clicked.connect(self.handle_load_selection)
         self.btn_browse_output_dir.clicked.connect(self.handle_browse_output_dir)
 
         self.action_select_file.triggered.connect(self.handle_select_file)
@@ -115,9 +204,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.sig_data_loaded.connect(self.handle_plot_draw)
         self.sig_data_loaded.connect(self.handle_table_view_data)
         self.sig_peaks_updated.connect(self.handle_draw_results)
+        self.sig_peaks_updated.connect(self.handle_table_view_data)
         self.sig_plot_data_changed.connect(self._update_plot_view)
         self.sig_data_filtered.connect(self.handle_table_view_data)
-        self.sig_prepare_new_data.connect(self.plot.reset_plots)
+        self.sig_prepare_new_data.connect(self.prepare_new_data)
+        # self.sig_prepare_new_data.connect(self.plot.reset_plots)
 
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
 
@@ -144,8 +235,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             selectedFilter="EDF (*.edf)",
         )
         if path:
-            self.table_data_preview.setModel(QStandardItemModel())
-            self.table_data_info.setModel(QStandardItemModel())
             self.sig_prepare_new_data.emit()
 
             # Show the active file's name in the line edit field
@@ -159,10 +248,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.dm = DataHandler(file_path=path, sampling_rate=sampling_rate)
             self.dm.lazy_read()
             self.dm.get_min_max()
-
             # Set the UI elements to enabled and update them with the current data
             self.group_box_subset_params.setEnabled(True)
-            self.group_box_subset_params.setChecked(True)
+            # self.group_box_subset_params.setChecked(True)
 
             self.container_file_info.setEnabled(True)
             parsed_date, parsed_id = parse_file_name(Path(path).name)
@@ -208,9 +296,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.dbl_spin_box_subset_max.setValue(upper)
 
     @Slot()
+    def prepare_new_data(self) -> None:
+        self.tabWidget.setCurrentIndex(0)
+        for widget_name, widget_state in INITIAL_STATE.items():
+            if "enabled" in widget_state:
+                getattr(self, widget_name).setEnabled(widget_state["enabled"])
+            if "checked" in widget_state:
+                getattr(self, widget_name).setChecked(widget_state["checked"])
+            if "text" in widget_state:
+                getattr(self, widget_name).setText(widget_state["text"])
+            if "model" in widget_state:
+                getattr(self, widget_name).setModel(widget_state["model"])
+            if "value" in widget_state:
+                getattr(self, widget_name).setValue(widget_state["value"])
+            if "currentText" in widget_state:
+                getattr(self, widget_name).setCurrentText(widget_state["currentText"])
+            if "currentIndex" in widget_state:
+                getattr(self, widget_name).setCurrentIndex(widget_state["currentIndex"])
+        self.plot.reset_plots()
+        self.widgets.temperature_label_hbr.setText("Temperature: -")
+        self.widgets.temperature_label_ventilation.setText("Temperature: -")
+        self.statusbar.showMessage("Ready")
+
+    @Slot()
     def handle_load_selection(self) -> None:
         try:
-            self.sig_prepare_new_data.emit()
+            # self.sig_prepare_new_data.emit()
             filter_col = self.combo_box_filter_column.currentText()
             lower = self.dbl_spin_box_subset_min.value()
             upper = self.dbl_spin_box_subset_max.value()
@@ -278,11 +389,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def handle_plot_draw(self) -> None:
-        signal_name = self.get_signal_name()
-        hbr_line_exists = hasattr(self.plot, "hbr_signal_line")
-        ventilation_line_exists = hasattr(self.plot, "ventilation_signal_line")
-
         with pg.BusyCursor():
+            signal_name = self.get_signal_name()
+            hbr_line_exists = self.plot.hbr_signal_line is not None
+            ventilation_line_exists = self.plot.ventilation_signal_line is not None
+
             if not hbr_line_exists and not ventilation_line_exists:
                 self._draw_initial_signals()
             else:
@@ -304,6 +415,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         data_length = self.dm.data.shape[0]
         self.plot.hbr_plot_widget.setXRange(0, data_length)
         self.plot.ventilation_plot_widget.setXRange(0, data_length)
+        self.plot.hbr_plot_widget.getPlotItem().getViewBox().setLimits(
+            xMin=-0.5 * data_length, xMax=1.5 * data_length
+        )
+        self.plot.ventilation_plot_widget.getPlotItem().getViewBox().setLimits(
+            xMin=-0.5 * data_length, xMax=1.5 * data_length
+        )
 
     def _update_signal(self, signal_name: SignalName) -> None:
         signal_data = self.dm.data.get_column(signal_name).to_numpy(zero_copy_only=True)
@@ -393,6 +510,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot(object)
     def handle_peak_detection(self, peak_params: PeaksPPGElgendi) -> None:
         signal_name = self.get_signal_name()
+        if f"processed_{signal_name}" not in self.dm.data.columns:
+            info_msg = (
+                "Signal needs to be filtered before peak detection can be performed."
+            )
+            popup = QMessageBox(
+                QMessageBox.Icon.Warning,
+                "Warning",
+                info_msg,
+                QMessageBox.StandardButton.Ok,
+                parent=self,
+            )
+            popup.show()
+            return
         peak_detection_method = self.combo_box_peak_detection_method.currentText()
         peak_detection_method = cast(PeakDetectionMethod, peak_detection_method)
 
@@ -443,13 +573,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         super().closeEvent(event)
 
     def _read_settings(self) -> None:
-        settings = QSettings("AWI", "Sea Signals")
-        geometry: QByteArray = settings.value("geometry", QByteArray())
+        settings = QSettings("AWI", "Signal Editor")
+        geometry: QByteArray = settings.value("geometry", QByteArray())  # type: ignore
         if geometry.size():
             self.restoreGeometry(geometry)
 
     def _write_settings(self) -> None:
-        settings = QSettings("AWI", "Sea Signals")
+        settings = QSettings("AWI", "Signal Editor")
         geometry = self.saveGeometry()
         settings.setValue("geometry", geometry)
 
@@ -477,7 +607,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             peaks=getattr(self.dm, f"{signal_name}_peaks"),
             rate=getattr(self.dm, f"{signal_name}_rate_len_peaks"),
         )
-        self.results = Results(
+        results = Results(
             signal_name=signal_name,
             identifier=identifier,
             working_data_metadata=working_data_metadata,
@@ -485,14 +615,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             computed=computed,
             processed_data=results_df,
         )
+        setattr(self, f"{signal_name}_results", results)
 
     def make_results_table(self) -> None:
-        main_table = self.results.processed_data
+        signal_name = self.get_signal_name()
+        main_table: pl.DataFrame = getattr(
+            self, f"{signal_name}_results"
+        ).processed_data
         model = PolarsModel(main_table)
-        self._set_table_model(self.table_view_results, model)
+        table_view: QTableView = getattr(self, f"table_view_results_{signal_name}")
+        self._set_table_model(table_view, model)
 
-    def get_results_table(self) -> pl.DataFrame:
-        return self.results.processed_data
+    def get_results_table(self, signal_name: SignalName) -> pl.DataFrame:
+        return getattr(self, f"{signal_name}_results").processed_data
 
 
 class UIHandler(QObject):
@@ -507,43 +642,67 @@ class UIHandler(QObject):
         super(UIHandler, self).__init__()
         self.window = window
         self.plot = plot
-        self._can_export = False
         self.setup_widgets()
-        self.setup_toolbars()
         self.connect_signals()
 
     def setup_widgets(self) -> None:
         # Signal Filtering
-        self.window.container_standard_filter_method.setEnabled(True)
-        self.window.combo_box_preprocess_pipeline.setCurrentIndex(0)
-        self.window.container_signal_filter_inputs.setEnabled(False)
-        self.window.combo_box_filter_method.setCurrentIndex(0)
-        self.window.combo_box_standardizing_method.setCurrentIndex(0)
+        self._prepare_inputs()
+        # self.window.container_standard_filter_method.setEnabled(True)
+        # self.window.combo_box_preprocess_pipeline.setCurrentIndex(0)
+        # self.window.container_signal_filter_inputs.setEnabled(False)
+        # self.window.combo_box_filter_method.setCurrentIndex(0)
+        # self.window.combo_box_standardizing_method.setCurrentIndex(0)
 
-        # Peak Detection
-        self.window.combo_box_peak_detection_method.setCurrentIndex(0)
-        self.window.stacked_widget_peak_detection.setCurrentIndex(0)
+        # # Peak Detection
+        # self.window.combo_box_peak_detection_method.setCurrentIndex(0)
+        # self.window.stacked_widget_peak_detection.setCurrentIndex(0)
         self.create_peak_detection_trees()
 
         # File Info
-        self.window.container_file_info.setEnabled(False)
+        self._prepare_widgets()
+        # self.window.container_file_info.setEnabled(False)
 
         # Statusbar
         self.create_statusbar()
 
-        # Sidebar
-        self.window.tabWidget.currentChanged.connect(self.handle_tab_changed)
+        # Toolbar Plots
+        self._prepare_toolbars()
 
         # Plots
-        self.window.stacked_hbr_vent.setCurrentIndex(0)
-        self.window.btn_group_plot_view.setId(self.window.btn_view_hbr, 0)
-        self.window.btn_group_plot_view.setId(self.window.btn_view_vent, 1)
+        self._prepare_plots()
         self.create_plot_widgets()
 
         # Console
         self.create_console_widget()
 
+    def _prepare_widgets(self) -> None:
+        self.window.container_file_info.setEnabled(False)
+
+    def _prepare_inputs(self) -> None:
+        # Signal Filtering
+        self.window.combo_box_preprocess_pipeline.setCurrentIndex(0)
+        self.window.container_standard_filter_method.setEnabled(True)
+        self.window.combo_box_filter_method.setCurrentIndex(0)
+        self.window.combo_box_standardizing_method.setCurrentIndex(0)
+        self.window.container_signal_filter_inputs.setEnabled(False)
+        self.window.dbl_spin_box_lowcut.setValue(0.5)
+        self.window.dbl_spin_box_highcut.setValue(8.0)
+        self.window.spin_box_order.setValue(3)
+        self.window.slider_order.setValue(3)
+        self.window.spin_box_window_size.setValue(251)
+        self.window.slider_window_size.setValue(251)
+        # Peak Detection
+        self.window.combo_box_peak_detection_method.setCurrentIndex(0)
+        self.window.stacked_widget_peak_detection.setCurrentIndex(0)
+
+    def _prepare_plots(self) -> None:
+        self.window.stacked_hbr_vent.setCurrentIndex(0)
+        self.window.btn_group_plot_view.setId(self.window.btn_view_hbr, 0)
+        self.window.btn_group_plot_view.setId(self.window.btn_view_vent, 1)
+
     def connect_signals(self) -> None:
+        self.window.tabWidget.currentChanged.connect(self.handle_tab_changed)
         self.window.combo_box_filter_method.currentTextChanged.connect(
             self.handle_filter_method_changed
         )
@@ -555,52 +714,82 @@ class UIHandler(QObject):
             lambda index: self.window.stacked_hbr_vent.setCurrentIndex(index)  # type: ignore
         )
         self.window.btn_apply_filter.clicked.connect(self.emit_filter_settings)
+        self.window.btn_apply_filter.clicked.connect(
+            lambda: self.window.btn_find_peaks.setEnabled(True)
+        )
         self.window.btn_find_peaks.clicked.connect(self.emit_peak_detection_inputs)
+        self.window.btn_find_peaks.clicked.connect(
+            lambda: self.window.btn_compute_results.setEnabled(True)
+        )
 
         self.window.action_open_console.triggered.connect(self.show_console_widget)
         self.window.tabWidget.currentChanged.connect(self.handle_tab_changed)
-        self.window.action_update_result.triggered.connect(self.update_results)
-        self.window.action_toggle_sidebar.triggered.connect(self.handle_tab_changed)
 
+        self.window.btn_compute_results.clicked.connect(self.update_results)
         self.window.btn_export_to_csv.clicked.connect(self.export_to_csv)
         self.window.btn_export_to_excel.clicked.connect(self.export_to_excel)
         self.window.btn_export_to_text.clicked.connect(self.export_to_text)
 
-        self.sig_ready_for_export.connect(setattr(self, "_can_export", True))
-
     @Slot()
     def export_to_csv(self) -> None:
-        if not self._can_export:
-            return
         output_dir = self.window.line_edit_output_dir.text()
-        signal_name = self.window.results.signal_name
-        self.window.get_results_table().write_csv(
-            f"{output_dir}/results_{signal_name}_{Path(self.window.results.identifier.file_name).stem}.csv",
+        signal_name = (
+            "hbr"
+            if self.window.tab_widget_results.currentIndex() == 0
+            else "ventilation"
+        )
+        try:
+            original_file_name = getattr(
+                self.window, f"{signal_name}_results"
+            ).identifier.file_name
+        except Exception as e:
+            logger.error(f"There are no results to export for `{signal_name}`: {e}")
+            return
+        self.window.get_results_table(signal_name).write_csv(
+            f"{output_dir}/results_{signal_name}_{Path(original_file_name).stem}.csv",
         )
 
     @Slot()
     def export_to_excel(self) -> None:
-        if not self._can_export:
-            return
         output_dir = self.window.line_edit_output_dir.text()
-        signal_name = self.window.results.signal_name
+        signal_name = (
+            "hbr"
+            if self.window.tab_widget_results.currentIndex() == 0
+            else "ventilation"
+        )
+        try:
+            original_file_name = getattr(
+                self.window, f"{signal_name}_results"
+            ).identifier.file_name
+        except Exception as e:
+            logger.error(f"There are no results to export for `{signal_name}`: {e}")
+            return
         # requires xlsxwriter
-        self.window.get_results_table().write_excel(
-            f"{output_dir}/results_{signal_name}_{Path(self.window.results.identifier.file_name).stem}.xlsx",
+        self.window.get_results_table(signal_name).write_excel(
+            f"{output_dir}/results_{signal_name}_{Path(original_file_name).stem}.xlsx",
         )
 
     @Slot()
     def export_to_text(self) -> None:
-        if not self._can_export:
-            return
         output_dir = self.window.line_edit_output_dir.text()
-        signal_name = self.window.results.signal_name
-        self.window.get_results_table().write_csv(
-            f"{output_dir}/results_{signal_name}_{Path(self.window.results.identifier.file_name).stem}.txt",
+        signal_name = (
+            "hbr"
+            if self.window.tab_widget_results.currentIndex() == 0
+            else "ventilation"
+        )
+        try:
+            original_file_name = getattr(
+                self.window, f"{signal_name}_results"
+            ).identifier.file_name
+        except Exception as e:
+            logger.error(f"There are no results to export for `{signal_name}`: {e}")
+            return
+        self.window.get_results_table(signal_name).write_csv(
+            f"{output_dir}/results_{signal_name}_{Path(original_file_name).stem}.txt",
             separator="\t",
         )
 
-    def setup_toolbars(self) -> None:
+    def _prepare_toolbars(self) -> None:
         self.window.toolbar_plots.setVisible(False)
 
     @Slot()
@@ -645,12 +834,13 @@ class UIHandler(QObject):
 
     @Slot(int)
     def handle_tab_changed(self, index: int) -> None:
-        if index == 1:
-            self.window.toolbar_plots.setVisible(True)
-            self.window.toolbar_plots.setEnabled(True)
-        else:
-            self.window.toolbar_plots.setVisible(False)
-            self.window.toolbar_plots.setEnabled(False)
+        is_index_two = index == 2
+        is_index_one = index == 1
+
+        self.window.widget_sidebar.setVisible(not is_index_two)
+
+        self.window.toolbar_plots.setVisible(is_index_one)
+        self.window.toolbar_plots.setEnabled(is_index_one)
 
     def create_plot_widgets(self) -> None:
         self.window.plot_widget_hbr.setLayout(QVBoxLayout())
@@ -676,16 +866,18 @@ class UIHandler(QObject):
             parent=self.plot.ventilation_plot_widget.plotItem,
             angle=0,
         )
-        self.plot.hbr_plot_widget.plotItem.scene().sigMouseMoved.connect(
-            lambda pos: self.update_temperature_label("hbr", pos)
+        self.plot.hbr_plot_widget.plotItem.scene().sigMouseMoved.connect(  # type: ignore
+            lambda pos: self.update_temperature_label("hbr", pos)  # type: ignore
         )
-        self.plot.ventilation_plot_widget.plotItem.scene().sigMouseMoved.connect(
-            lambda pos: self.update_temperature_label("ventilation", pos)
+        self.plot.ventilation_plot_widget.plotItem.scene().sigMouseMoved.connect(  # type: ignore
+            lambda pos: self.update_temperature_label("ventilation", pos)  # type: ignore
         )
 
     @Slot(QPointF)
     def update_temperature_label(self, signal_name: SignalName, pos: QPointF) -> None:
         if not hasattr(self.window, "dm"):
+            return
+        if not hasattr(self.window.dm, "data"):
             return
         data_pos = int(
             getattr(self.plot, f"{signal_name}_plot_widget")
@@ -710,7 +902,7 @@ class UIHandler(QObject):
             self.temperature_label_hbr.setText(f"Temperature: {temp_value:.1f}°C")
         elif signal_name == "ventilation":
             self.temperature_label_ventilation.setText(
-                f"Temperature: {temp_value:.1f}°C"
+                f"Temperature: {temp_value:.1f}°C, cursor position: {data_pos}"
             )
         self.window.statusbar.showMessage(
             f"Temperature: {temp_value:.1f}°C, {data_pos=}"
@@ -747,6 +939,7 @@ class UIHandler(QObject):
             | QDockWidget.DockWidgetFeature.DockWidgetClosable
         )
         self.console_dock = dock
+        self.console_dock.setObjectName("console_dock")
         self.window.addDockWidget(
             Qt.DockWidgetArea.RightDockWidgetArea, self.console_dock
         )
@@ -759,7 +952,6 @@ class UIHandler(QObject):
             self.console_dock.setFocus()
 
     def create_statusbar(self) -> None:
-        self.window.__setattr__("statusbar", self.window.statusBar())
         self.window.statusbar.showMessage("Ready")
 
     @Slot(str)
@@ -951,6 +1143,7 @@ class UIHandler(QObject):
 # Main Method                                                                          #
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
 
+
 def main(app_wd: str, dev_mode: bool = False) -> None:
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"
@@ -974,6 +1167,7 @@ def main(app_wd: str, dev_mode: bool = False) -> None:
     app.setStyleSheet(
         qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.DarkPalette)
     )
+
     window = MainWindow(app_wd)
     window.show()
     sys.exit(app.exec())

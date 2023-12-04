@@ -1,7 +1,9 @@
-from typing import Any, Iterable, NotRequired, Sequence, Unpack
+from typing import Any, Iterable, NamedTuple, NotRequired, Sequence, Unpack
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QBrush, QPainter, QPainterPath, QPen
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import NDArray, ArrayLike
 from pyqtgraph.parametertree import Parameter
 from typing_extensions import Literal, TypedDict
 
@@ -164,3 +166,55 @@ class SliderParameterOptions(GeneralParameterOptions):
     span: NotRequired[Sequence[int | float]]
     format: str
     precision: int
+
+
+type PGSymbols = Literal[
+    "o",  # circle
+    "s",  # square
+    "t",  # triangle pointing down
+    "d",  # diamond
+    "+",  # plus
+    "t1",  # triangle pointing up
+    "t2",  # triangle pointing right
+    "t3",  # triangle pointing left
+    "p",  # pentagon
+    "h",  # hexagon
+    "star",  # star
+    "x", # cross
+    "arrow_up", # arrow pointing up
+    "arrow_right", # arrow pointing right
+    "arrow_down", # arrow pointing down
+    "arrow_left", # arrow pointing left
+    "crosshair", # crosshair
+] | QPainterPath
+
+class SpotItemDict(TypedDict):
+    pos: tuple[int | float, int | float]
+    size: int
+    pen: QPen
+    brush: QBrush
+    symbol: PGSymbols
+
+
+class SpotItemKargs(TypedDict, total=False):
+    spots: list[SpotItemDict]
+    x: ArrayLike
+    y: ArrayLike
+    pos: ArrayLike | list[tuple[int | float, int | float]]
+    pxMode: bool
+    symbol: PGSymbols | list[PGSymbols]
+    pen: QPen | list[QPen]
+    brush: QBrush | list[QBrush]
+    size: int | list[int]
+    data: list[object]
+    hoverable: bool
+    tip: str | None
+    hoverSymbol: PGSymbols | None
+    hoverSize: int | Literal[-1]
+    hoverPen: QPen | None
+    hoverBrush: QBrush | None
+    useCache: bool
+    antialias: bool
+    compositionMode: QPainter.CompositionMode
+    name: str | None
+    

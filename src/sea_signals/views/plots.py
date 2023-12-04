@@ -48,15 +48,15 @@ class PlotManager(QWidget):
         self._prepare_plot_items()
 
     def _init_plot_items(self) -> None:
-        self.hbr_signal_line: pg.PlotDataItem
-        self.ventilation_signal_line: pg.PlotDataItem
-        self.bpm_hbr_signal_line: pg.PlotDataItem
-        self.bpm_ventilation_signal_line: pg.PlotDataItem
+        self.hbr_signal_line: pg.PlotDataItem | None = None
+        self.ventilation_signal_line: pg.PlotDataItem | None = None
+        self.bpm_hbr_signal_line: pg.PlotDataItem | None = None
+        self.bpm_ventilation_signal_line: pg.PlotDataItem | None = None
 
-        self.hbr_peaks_scatter: pg.ScatterPlotItem
-        self.ventilation_peaks_scatter: pg.ScatterPlotItem
-        self.bpm_hbr_mean_hline: pg.InfiniteLine
-        self.bpm_ventilation_mean_hline: pg.InfiniteLine
+        self.hbr_peaks_scatter: pg.ScatterPlotItem | None = None
+        self.ventilation_peaks_scatter: pg.ScatterPlotItem | None = None
+        self.bpm_hbr_mean_hline: pg.InfiniteLine | None = None
+        self.bpm_ventilation_mean_hline: pg.InfiniteLine | None = None
 
     @staticmethod
     def set_plot_titles_and_labels(
@@ -67,6 +67,7 @@ class PlotManager(QWidget):
         plot_item.setLabel(axis="bottom", text=bottom_label)
 
     def _prepare_plot_items(self) -> None:  # sourcery skip: extract-method
+        self._init_plot_items()
         plot_widgets = [
             (self.hbr_plot_widget, "hbr"),
             (self.bpm_hbr_plot_widget, "bpm_hbr"),
@@ -122,32 +123,31 @@ class PlotManager(QWidget):
             Qt.CursorShape.CrossCursor
         )
 
-    def clear_all(self) -> None:
-        self.hbr_plot_widget.plotItem.clear()
-        self.ventilation_plot_widget.plotItem.clear()
-        self.bpm_hbr_plot_widget.plotItem.clear()
-        self.bpm_ventilation_plot_widget.plotItem.clear()
-
     @Slot()
     def reset_plots(self) -> None:
-        if hasattr(self, "hbr_signal_line"):
-            self.hbr_plot_widget.removeItem(self.hbr_signal_line)
-        if hasattr(self, "ventilation_signal_line"):
-            self.ventilation_plot_widget.removeItem(self.ventilation_signal_line)
-        if hasattr(self, "hbr_peaks_scatter"):
-            self.hbr_plot_widget.removeItem(self.hbr_peaks_scatter)
-        if hasattr(self, "ventilation_peaks_scatter"):
-            self.ventilation_plot_widget.removeItem(self.ventilation_peaks_scatter)
-        if hasattr(self, "bpm_hbr_signal_line"):
-            self.bpm_hbr_plot_widget.removeItem(self.bpm_hbr_signal_line)
-        if hasattr(self, "bpm_hbr_mean_hline"):
-            self.bpm_hbr_plot_widget.removeItem(self.bpm_hbr_mean_hline)
-        if hasattr(self, "bpm_ventilation_signal_line"):
-            self.bpm_ventilation_plot_widget.removeItem(
-                self.bpm_ventilation_signal_line
-            )
-        if hasattr(self, "bpm_ventilation_mean_hline"):
-            self.bpm_ventilation_plot_widget.removeItem(self.bpm_ventilation_mean_hline)
+        self.hbr_plot_widget.getPlotItem().clear()
+        self.ventilation_plot_widget.getPlotItem().clear()
+        self.bpm_hbr_plot_widget.getPlotItem().clear()
+        self.bpm_ventilation_plot_widget.getPlotItem().clear()
+        self._prepare_plot_items()
+        # if hasattr(self, "hbr_signal_line"):
+        #     self.hbr_plot_widget.removeItem(self.hbr_signal_line)
+        # if hasattr(self, "ventilation_signal_line"):
+        #     self.ventilation_plot_widget.removeItem(self.ventilation_signal_line)
+        # if hasattr(self, "hbr_peaks_scatter"):
+        #     self.hbr_plot_widget.removeItem(self.hbr_peaks_scatter)
+        # if hasattr(self, "ventilation_peaks_scatter"):
+        #     self.ventilation_plot_widget.removeItem(self.ventilation_peaks_scatter)
+        # if hasattr(self, "bpm_hbr_signal_line"):
+        #     self.bpm_hbr_plot_widget.removeItem(self.bpm_hbr_signal_line)
+        # if hasattr(self, "bpm_hbr_mean_hline"):
+        #     self.bpm_hbr_plot_widget.removeItem(self.bpm_hbr_mean_hline)
+        # if hasattr(self, "bpm_ventilation_signal_line"):
+        #     self.bpm_ventilation_plot_widget.removeItem(
+        #         self.bpm_ventilation_signal_line
+        #     )
+        # if hasattr(self, "bpm_ventilation_mean_hline"):
+        #     self.bpm_ventilation_plot_widget.removeItem(self.bpm_ventilation_mean_hline)
 
     def draw_signal(
         self,
@@ -166,13 +166,22 @@ class PlotManager(QWidget):
         signal_line.curve.setSegmentedLineMode("on")
         signal_line.curve.setClickable(True, width=self.click_tolerance)
 
-        if hasattr(self, f"{signal_name}_signal_line"):
-            getattr(self, f"{signal_name}_signal_line").sigClicked.disconnect(
-                self.add_clicked_point
-            )
-            plot_widget.removeItem(getattr(self, f"{signal_name}_signal_line"))
-        if hasattr(self, f"{signal_name}_peaks_scatter"):
-            plot_widget.removeItem(getattr(self, f"{signal_name}_peaks_scatter"))
+        bpm_plot_widget = getattr(self, f"bpm_{signal_name}_plot_widget")
+
+        line_ref = getattr(self, f"{signal_name}_signal_line")
+        scatter_ref = getattr(self, f"{signal_name}_peaks_scatter")
+        bpm_line_ref = getattr(self, f"bpm_{signal_name}_signal_line")
+        bpm_mean_line_ref = getattr(self, f"bpm_{signal_name}_mean_hline")
+        if line_ref is not None:
+            line_ref.sigClicked.disconnect(self.add_clicked_point)
+            plot_widget.removeItem(line_ref)
+        if scatter_ref is not None:
+            # scatter_ref.sigClicked.disconnect(self.remove_clicked_point)
+            plot_widget.removeItem(scatter_ref)
+        if bpm_line_ref is not None:
+            bpm_plot_widget.removeItem(bpm_line_ref)
+        if bpm_mean_line_ref is not None:
+            bpm_plot_widget.removeItem(bpm_mean_line_ref)
 
         plot_widget.addItem(signal_line)
         setattr(self, f"{signal_name}_signal_line", signal_line)
@@ -206,11 +215,11 @@ class PlotManager(QWidget):
         )
         peaks_scatter.setZValue(20)
 
-        if hasattr(self, f"{signal_name}_peaks_scatter"):
-            getattr(self, f"{signal_name}_peaks_scatter").sigClicked.disconnect(
-                self.remove_clicked_point
-            )
-            plot_widget.removeItem(getattr(self, f"{signal_name}_peaks_scatter"))
+        scatter_ref = getattr(self, f"{signal_name}_peaks_scatter")
+
+        if scatter_ref is not None:
+            scatter_ref.sigClicked.disconnect(self.remove_clicked_point)
+            plot_widget.removeItem(scatter_ref)
 
         plot_widget.addItem(peaks_scatter)
 
@@ -243,11 +252,11 @@ class PlotManager(QWidget):
             label=f"Mean BPM: {int(mean_bpm)}",
         )
 
-        if hasattr(self, f"bpm_{signal_name}_signal_line") and hasattr(
-            self, f"bpm_{signal_name}_mean_hline"
-        ):
-            plot_widget.removeItem(getattr(self, f"bpm_{signal_name}_signal_line"))
-            plot_widget.removeItem(getattr(self, f"bpm_{signal_name}_mean_hline"))
+        bpm_line_ref = getattr(self, f"bpm_{signal_name}_signal_line")
+        bpm_mean_line_ref = getattr(self, f"bpm_{signal_name}_mean_hline")
+        if bpm_line_ref is not None and bpm_mean_line_ref is not None:
+            plot_widget.removeItem(bpm_line_ref)
+            plot_widget.removeItem(bpm_mean_line_ref)
 
         plot_widget.addItem(bpm_line)
         plot_widget.addItem(bpm_mean_line)
@@ -285,7 +294,7 @@ class PlotManager(QWidget):
         self, sender: pg.PlotCurveItem, ev: mouseEvents.MouseClickEvent
     ) -> None:
         ev.accept()
-        x_new = np.rint(ev.pos().x()).astype(np.int32)
+        x_new = int(ev.pos().x())
         signal_map = {
             "hbr_signal": getattr(self, "hbr_signal_line", None),
             "ventilation_signal": getattr(self, "ventilation_signal_line", None),
@@ -298,6 +307,8 @@ class PlotManager(QWidget):
         if signal_name in signal_map:
             y_new = signal_map[signal_name].yData[x_new]
             scatter_map[signal_name].addPoints(x=x_new, y=y_new)
+            # scatter_map[signal_name].addPoints(x_new, y_new)
             self.sig_peaks_edited.emit()
             name = "hbr" if "hbr" in signal_name else "ventilation"
+            logger.debug(f"{x_new=}, {y_new=}, {self.added_points=}")
             self.added_points[name].append(x_new)

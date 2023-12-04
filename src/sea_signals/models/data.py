@@ -215,12 +215,13 @@ class DataHandler:
             raise NotImplementedError(
                 f"Peak finding method {peak_find_method} not implemented."
             )
+        pl_peak_indices = pl.Series(name="peaks", values=peak_indices, dtype=pl.Int32)
         setattr(self, f"{signal_name}_peaks", peak_indices)
         self.data = (
             self.data.lazy()
             .with_columns(
                 (
-                    pl.when(pl.col("index").is_in(peak_indices))
+                    pl.when(pl.col("index").is_in(pl_peak_indices))
                     .then(pl.lit(1))
                     .otherwise(pl.lit(0))
                     .shrink_dtype()
@@ -240,15 +241,21 @@ class DataHandler:
                 desired_length=len(self.data),
                 interpolation_method="monotone_cubic",
             ),
-            dtype=np.int32,
-        )
+            dtype=np.float32,
+        ).round(4)
         col_name = f"{signal_name}_rate"
 
-        self.data = self.data.with_columns(
-            pl.Series(name=col_name, values=rate, dtype=pl.Int32)
+        if col_name in self.data.columns:
+            self.data = self.data.drop(col_name)
+        self.data.hstack(
+            pl.Series(name=col_name, values=rate, dtype=pl.Int32).to_frame(),
+            in_place=True
         )
+        # self.data = self.data.with_columns(
+        #     pl.Series(name=col_name, values=rate, dtype=pl.Int32)
+        # )
 
-        setattr(self, f"{col_name}_len_signal", rate)
+        setattr(self, f"{signal_name}_rate_len_signal", rate)
 
     @staticmethod
     def compute_stats(
@@ -406,6 +413,8 @@ class CompactDFModel(QAbstractTableModel):
                 return f"{int(self._data[row][column]):_}"
             elif "time" in col_name:
                 return f"{float(self._data[row][column]):_.4f}"
+            elif "rate" in col_name:
+                return f"{int(self._data[row][column]):_}"
             elif (
                 "temp" not in col_name
                 and "hb" in col_name
