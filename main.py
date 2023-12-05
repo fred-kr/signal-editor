@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 
@@ -11,4 +12,11 @@ else:
 APP_WORKING_DIR = working_dir
 
 if __name__ == "__main__":
-    main(app_wd=APP_WORKING_DIR, dev_mode=False)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--dev", action="store_true")
+    args = parser.parse_args()
+
+    if args.dev:
+        main(app_wd=APP_WORKING_DIR, dev_mode=True)
+    else:
+        main(app_wd=APP_WORKING_DIR, dev_mode=False)

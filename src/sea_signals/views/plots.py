@@ -130,24 +130,6 @@ class PlotManager(QWidget):
         self.bpm_hbr_plot_widget.getPlotItem().clear()
         self.bpm_ventilation_plot_widget.getPlotItem().clear()
         self._prepare_plot_items()
-        # if hasattr(self, "hbr_signal_line"):
-        #     self.hbr_plot_widget.removeItem(self.hbr_signal_line)
-        # if hasattr(self, "ventilation_signal_line"):
-        #     self.ventilation_plot_widget.removeItem(self.ventilation_signal_line)
-        # if hasattr(self, "hbr_peaks_scatter"):
-        #     self.hbr_plot_widget.removeItem(self.hbr_peaks_scatter)
-        # if hasattr(self, "ventilation_peaks_scatter"):
-        #     self.ventilation_plot_widget.removeItem(self.ventilation_peaks_scatter)
-        # if hasattr(self, "bpm_hbr_signal_line"):
-        #     self.bpm_hbr_plot_widget.removeItem(self.bpm_hbr_signal_line)
-        # if hasattr(self, "bpm_hbr_mean_hline"):
-        #     self.bpm_hbr_plot_widget.removeItem(self.bpm_hbr_mean_hline)
-        # if hasattr(self, "bpm_ventilation_signal_line"):
-        #     self.bpm_ventilation_plot_widget.removeItem(
-        #         self.bpm_ventilation_signal_line
-        #     )
-        # if hasattr(self, "bpm_ventilation_mean_hline"):
-        #     self.bpm_ventilation_plot_widget.removeItem(self.bpm_ventilation_mean_hline)
 
     def draw_signal(
         self,
@@ -176,7 +158,6 @@ class PlotManager(QWidget):
             line_ref.sigClicked.disconnect(self.add_clicked_point)
             plot_widget.removeItem(line_ref)
         if scatter_ref is not None:
-            # scatter_ref.sigClicked.disconnect(self.remove_clicked_point)
             plot_widget.removeItem(scatter_ref)
         if bpm_line_ref is not None:
             bpm_plot_widget.removeItem(bpm_line_ref)
