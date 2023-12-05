@@ -142,12 +142,12 @@ def read_edf(
             schema=schema,
         )
         .with_columns(
-            pl.col("time_s").round(4).cast(pl.Float64),
-            pl.col("temperature").round(1).cast(pl.Float32),
-            pl.col("hbr").round(4).cast(pl.Float32),
-            pl.col("ventilation").round(4).cast(pl.Float32),
+            pl.col("time_s").cast(pl.Float64).round(4),
+            pl.col("temperature").cast(pl.Float32).round(1),
+            pl.col("hbr").cast(pl.Float32).round(4),
+            pl.col("ventilation").cast(pl.Float32).round(4),
         )
-        .filter(
+        .filter(  # This gets rid of the ending sections where the sensor was already disconnected from power
             (pl.col("temperature") != 0)
             & (pl.col("hbr") != 0)
             & (pl.col("ventilation") != 0)

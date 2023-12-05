@@ -412,7 +412,7 @@ class CompactDFModel(QAbstractTableModel):
             if "index" in col_name or "peak" in col_name:
                 return f"{int(self._data[row][column]):_}"
             elif "time" in col_name:
-                return f"{float(self._data[row][column]):_.4f}"
+                return f"{float(self._data[row][column]):_.5f}"
             elif "rate" in col_name:
                 return f"{int(self._data[row][column]):_}"
             elif (

@@ -16,13 +16,13 @@ from PySide6.QtCore import (
     QByteArray,
     QDate,
     QSettings,
-    QStandardPaths,
     Qt,
     Signal,
     Slot,
 )
 from PySide6.QtGui import QCloseEvent, QStandardItemModel
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QApplication,
     QFileDialog,
     QHeaderView,
@@ -188,7 +188,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.action_select_file.triggered.connect(self.handle_select_file)
         self.action_exit.triggered.connect(self.closeEvent)
 
-        self.sig_lazy_ready.connect(self.on_filter_column_changed)
+        self.sig_lazy_ready.connect(self.handle_filter_column_changed)
         self.sig_data_loaded.connect(self.handle_plot_draw)
         self.sig_data_loaded.connect(self.handle_table_view_data)
         self.sig_peaks_updated.connect(self.handle_draw_results)
@@ -201,6 +201,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def handle_browse_output_dir(self) -> None:
+        """
+        Prompt user to select a directory for storing the exported results.
+        """
         if path := QFileDialog.getExistingDirectory(
             self,
             "Select Output Directory",
@@ -211,10 +214,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def handle_select_file(self) -> None:
-        if hasattr(self, "dm") and self.dm.file_path:
-            default_dir = Path(self.dm.file_path).parent.as_posix()
-        else:
-            default_dir = Path(".").resolve().as_posix()
+        """
+        Handles loading a new file into the editor via multiple helper methods.
+        """
+        if path := self.select_file_dialog():
+            self.sig_prepare_new_data.emit()
+            self._update_active_file_display(path)
+            self._initialize_data_handler(path)
+            self._update_data_selection_ui(path)
+
+    def select_file_dialog(self) -> str:
+        """
+        Prompt user to select a file.
+
+        Returns:
+            str: The selected file path.
+        """
+        default_dir = self.get_default_directory()
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Select File",
@@ -222,58 +238,106 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             filter="EDF (*.edf);;CSV (*.csv);;TXT (*.txt);;Feather (*.feather);;All Files (*)",
             selectedFilter="EDF (*.edf)",
         )
-        if path:
-            self.sig_prepare_new_data.emit()
+        return path
 
-            # Show the active file's name in the line edit field
-            self.line_edit_active_file.setText(Path(path).name)
+    def get_default_directory(self) -> str:
+        """
+        Returns the default directory to use when selecting files.
 
-            # Block any updates during the file load
-            self.combo_box_filter_column.blockSignals(True)
+        If a file is already loaded, the directory of that file is returned. If no file
+        is loaded, the current working directory is returned.
 
-            # Initialize a DataHandler instance and use it to read the data into a polars LazyFrame, get min/max of each column to set range limits for filtering
-            sampling_rate = self.spin_box_fs.value()
-            self.dm = DataHandler(file_path=path, sampling_rate=sampling_rate)
-            self.dm.lazy_read()
-            self.dm.get_min_max()
-            # Set the UI elements to enabled and update them with the current data
-            self.group_box_subset_params.setEnabled(True)
+        Returns:
+            str: The default directory to use when selecting files.
+        """
+        if hasattr(self, "dm") and self.dm.file_path:
+            return Path(self.dm.file_path).parent.as_posix()
+        return Path(".").resolve().as_posix()
 
-            self.container_file_info.setEnabled(True)
-            parsed_date, parsed_id = parse_file_name(Path(path).name)
-            self.date_edit_file_info.setDate(
-                QDate(parsed_date.year, parsed_date.month, parsed_date.day)
-            )
-            self.line_edit_subject_id.setText(parsed_id)
+    def _update_active_file_display(self, path: str) -> None:
+        """
+        Updates the line edit widget with the name of the currently loaded file.
 
-            self.btn_load_selection.setEnabled(True)
+        Args:
+            path (str): The full path to the data file.
+        """
+        self.line_edit_active_file.setText(Path(path).name)
 
-            viable_filter_columns = ("index", "time_s", "temperature")
-            self.combo_box_filter_column.clear()
-            self.combo_box_filter_column.addItems(viable_filter_columns)
-            self.combo_box_filter_column.setCurrentIndex(0)
-            self.combo_box_filter_column.currentTextChanged.connect(
-                self.on_filter_column_changed
-            )
-            self.combo_box_filter_column.blockSignals(False)
+    def _initialize_data_handler(self, path: str) -> None:
+        """
+        Initializes a DataHandler object with the given file path and sampling rate.
 
-            self.sig_lazy_ready.emit(self.combo_box_filter_column.currentText())
+        Args:
+            path (str): The full path to the data file.
+        """
+        sampling_rate = self.spin_box_fs.value()
+        self.dm = DataHandler(file_path=path, sampling_rate=sampling_rate)
+        self.dm.lazy_read()
+        self.dm.get_min_max()
+
+    def _update_data_selection_ui(self, path: str) -> None:
+        """
+        Updates UI elements related to subsetting and file metadata.
+
+        Args:
+            path (str): The full path to the data file.
+        """
+        self.group_box_subset_params.setEnabled(True)
+        self.container_file_info.setEnabled(True)
+        parsed_date, parsed_id = parse_file_name(Path(path).name)
+        self.date_edit_file_info.setDate(
+            QDate(parsed_date.year, parsed_date.month, parsed_date.day)
+        )
+        self.line_edit_subject_id.setText(parsed_id)
+        self.btn_load_selection.setEnabled(True)
+        self._update_filter_columns()
+
+    def _update_filter_columns(self) -> None:
+        """
+        Updates the available columns in the filter combo box.
+
+        Note:
+            Currently assumes existence of `index`, `time_s`, and `temperature` columns.
+        """
+        # TODO: Don't hardcode viable filter columns
+        viable_filter_columns = ("index", "time_s", "temperature")
+        self.combo_box_filter_column.blockSignals(True)
+        self.combo_box_filter_column.clear()
+        self.combo_box_filter_column.addItems(viable_filter_columns)
+        self.combo_box_filter_column.setCurrentIndex(0)
+        self.combo_box_filter_column.currentTextChanged.connect(
+            self.handle_filter_column_changed
+        )
+        self.combo_box_filter_column.blockSignals(False)
+        self.sig_lazy_ready.emit(self.combo_box_filter_column.currentText())
 
     @Slot(str)
-    def on_filter_column_changed(self, text: str) -> None:
+    def handle_filter_column_changed(self, text: str) -> None:
+        """
+        Update the min and max spin boxes based on the selected column's min and max values.
+
+        Args:
+            text (str): The name of the column.
+        """
         lower = self.dm.min_max_mapping[text]["min"]
         upper = self.dm.min_max_mapping[text]["max"]
 
         if text == "index":
             self.dbl_spin_box_subset_min.setDecimals(0)
             self.dbl_spin_box_subset_max.setDecimals(0)
-        elif text == "time_s":
-            self.dbl_spin_box_subset_min.setDecimals(4)
-            self.dbl_spin_box_subset_max.setDecimals(4)
+            self.dbl_spin_box_subset_min.setSingleStep(1)
+            self.dbl_spin_box_subset_max.setSingleStep(1)
         elif text == "temperature":
             self.dbl_spin_box_subset_min.setDecimals(1)
             self.dbl_spin_box_subset_max.setDecimals(1)
+            self.dbl_spin_box_subset_min.setSingleStep(0.1)
+            self.dbl_spin_box_subset_max.setSingleStep(0.1)
 
+        elif text == "time_s":
+            self.dbl_spin_box_subset_min.setDecimals(4)
+            self.dbl_spin_box_subset_max.setDecimals(4)
+            self.dbl_spin_box_subset_min.setSingleStep(0.0025)
+            self.dbl_spin_box_subset_max.setSingleStep(0.0025)
         self.dbl_spin_box_subset_min.setMinimum(lower)
         self.dbl_spin_box_subset_min.setMaximum(upper)
         self.dbl_spin_box_subset_min.setValue(lower)
@@ -284,79 +348,165 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def prepare_new_data(self) -> None:
+        """
+        Reset all widgets to their initial state.
+        """
         self.tabWidget.setCurrentIndex(0)
+        method_mapping = {
+            "enabled": "setEnabled",
+            "checked": "setChecked",
+            "text": "setText",
+            "model": "setModel",
+            "value": "setValue",
+            "currentText": "setCurrentText",
+            "currentIndex": "setCurrentIndex",
+        }
         for widget_name, widget_state in INITIAL_STATE.items():
-            if "enabled" in widget_state:
-                getattr(self, widget_name).setEnabled(widget_state["enabled"])
-            if "checked" in widget_state:
-                getattr(self, widget_name).setChecked(widget_state["checked"])
-            if "text" in widget_state:
-                getattr(self, widget_name).setText(widget_state["text"])
-            if "model" in widget_state:
-                getattr(self, widget_name).setModel(widget_state["model"])
-            if "value" in widget_state:
-                getattr(self, widget_name).setValue(widget_state["value"])
-            if "currentText" in widget_state:
-                getattr(self, widget_name).setCurrentText(widget_state["currentText"])
-            if "currentIndex" in widget_state:
-                getattr(self, widget_name).setCurrentIndex(widget_state["currentIndex"])
+            for state_key, state_value in widget_state.items():
+                if state_key in method_mapping:
+                    getattr(self, widget_name).__getattribute__(
+                        method_mapping[state_key]
+                    )(state_value)
+
         self.plot.reset_plots()
         self.widgets.temperature_label_hbr.setText("Temperature: -")
         self.widgets.temperature_label_ventilation.setText("Temperature: -")
         self.statusbar.showMessage("Ready")
 
+    # @Slot()
+    # def handle_load_selection(self) -> None:
+    #     try:
+    #         filter_col = self.combo_box_filter_column.currentText()
+    #         lower = self.dbl_spin_box_subset_min.value()
+    #         upper = self.dbl_spin_box_subset_max.value()
+
+    #         if self.group_box_subset_params.isChecked():
+    #             # Because the temperature column values are not monotonically increasing/decreasing in value, just selecting all values where temperature > x leads to lots of missing values around the threshold whenever the temperature value dips below this limit.
+    #             # To counteract this, the filtering looks as follows:
+    #             # 1. Create a helper column thats set to 1 if the temperature is above the lower threshold, 0 otherwise
+    #             # 2. Create a second helper column thats set to 1 if the temperature is above the upper threshold, 0 otherwise
+    #             # 3. Filter the data frame to only keep the rows where the helper column is 1 and the second helper column is 0, i.e. between the first occurence of the lower threshold and the first occurence of the upper threshold
+    #             # 4. The resulting dataframe wont have a clean lower limit cutoff, but there also won't be any missing values that mess up the plot
+    #             lf_filtered = (
+    #                 self.dm.lazy.with_columns(
+    #                     above_lower=(
+    #                         pl.when(pl.col(filter_col).ge(pl.lit(lower)))
+    #                         .then(1)
+    #                         .otherwise(0)
+    #                     ),
+    #                     above_upper=(
+    #                         pl.when(pl.col(filter_col).ge(pl.lit(upper)))
+    #                         .then(1)
+    #                         .otherwise(0)
+    #                     ),
+    #                 )
+    #                 .inspect()
+    #                 .with_columns(
+    #                     [
+    #                         pl.col("above_lower").cum_max().alias("cum_above_lower"),
+    #                         pl.col("above_upper").cum_max().alias("cum_above_upper"),
+    #                     ]
+    #                 )
+    #                 .inspect()
+    #                 .filter(
+    #                     (pl.col("cum_above_lower") == 1)
+    #                     & (pl.col("cum_above_upper") == 0)
+    #                 )
+    #             )
+    #             self.dm.data = (
+    #                 lf_filtered.select(
+    #                     pl.all().exclude(
+    #                         "above_lower",
+    #                         "above_upper",
+    #                         "cum_above_lower",
+    #                         "cum_above_upper",
+    #                     )
+    #                 )
+    #                 .collect()
+    #                 .shrink_to_fit(in_place=True)
+    #             )
+    #         else:
+    #             self.dm.data = self.dm.lazy.collect().shrink_to_fit(in_place=True)
+
+    #         logger.info(
+    #             f"Loaded {self.dm.data.shape[0]} rows from {self.dm.data.shape[1]} columns, size {self.dm.data.estimated_size('mb'):.2f} MB"
+    #         )
+    #         self.sig_data_loaded.emit()
+    #     except Exception as e:
+    #         logger.error(e)
+    #         return
+
     @Slot()
     def handle_load_selection(self) -> None:
         try:
-            filter_col = self.combo_box_filter_column.currentText()
-            lower = self.dbl_spin_box_subset_min.value()
-            upper = self.dbl_spin_box_subset_max.value()
-
+            lazy_frame = self.dm.lazy
             if self.group_box_subset_params.isChecked():
-                # Because the temperature column values are not monotonically increasing/decreasing in value, just selecting all values where temperature > x leads to lots of missing values around the threshold whenever the temperature value dips below this limit.
-                # To counteract this, the filtering looks as follows:
-                # 1. Create a helper column thats set to 1 if the temperature is above the lower threshold, 0 otherwise
-                # 2. Create a second helper column thats set to 1 if the temperature is above the upper threshold, 0 otherwise
-                # 3. Filter the data frame to only keep the rows where the helper column is 1 and the second helper column is 0, i.e. between the first occurence of the lower threshold and the first occurence of the upper threshold
-                # 4. The resulting dataframe wont have a clean lower limit cutoff, but there also won't be any missing values that mess up the plot
-                lf_filtered = (
-                    self.dm.lazy.with_columns(
-                        above_lower=(
-                            pl.when(pl.col(filter_col).ge(pl.lit(lower)))
-                            .then(1)
-                            .otherwise(0)
-                        ),
-                        above_upper=(
-                            pl.when(pl.col(filter_col).ge(pl.lit(upper)))
-                            .then(1)
-                            .otherwise(0)
-                        ),
+                filter_col = self.combo_box_filter_column.currentText()
+                lower = self.dbl_spin_box_subset_min.value()
+                upper = self.dbl_spin_box_subset_max.value()
+
+                if filter_col == "temperature":
+                    lazy_frame = self.dm.lazy.with_columns(
+                        pl.col("temperature").round(1).alias("temperature")
                     )
-                    .with_columns(
-                        [
-                            pl.col("above_lower").cum_max().alias("cum_above_lower"),
-                            pl.col("above_upper").cum_max().alias("cum_above_upper"),
-                        ]
+
+                    lower_idx = (
+                        lazy_frame.filter(pl.col(filter_col) >= pl.lit(lower))
+                        .first()
+                        .collect()
+                        .get_column("index")[0]
                     )
-                    .filter(
-                        (pl.col("cum_above_lower") == 1)
-                        & (pl.col("cum_above_upper") == 0)
+                    upper_idx = (
+                        lazy_frame.filter(pl.col(filter_col) >= pl.lit(upper))
+                        .first()
+                        .collect()
+                        .get_column("index")[0]
                     )
-                )
-                self.dm.data = (
-                    lf_filtered.select(
-                        pl.all().exclude(
-                            "above_lower",
-                            "above_upper",
-                            "cum_above_lower",
-                            "cum_above_upper",
+
+                    if lower_idx is not None and upper_idx is not None:
+                        self.dm.data = (
+                            lazy_frame.slice(lower_idx, upper_idx - lower_idx + 1)
+                            .collect()
+                            .shrink_to_fit(in_place=True)
                         )
+                    else:
+                        logger.warning(
+                            "Could not find any data in the range specified."
+                        )
+                elif filter_col in {"index", "time_s"}:
+                    self.dm.data = (
+                        lazy_frame.filter(pl.col(filter_col).is_between(lower, upper))
+                        .collect()
+                        .shrink_to_fit(in_place=True)
                     )
-                    .collect()
-                    .shrink_to_fit(in_place=True)
-                )
-            else:
-                self.dm.data = self.dm.lazy.collect().shrink_to_fit(in_place=True)
+                else:
+                    self.dm.data = self.dm.lazy.collect().shrink_to_fit(in_place=True)
+
+                #     first_lower_exceed = lazy_frame.filter(
+                #         pl.col(filter_col) >= pl.lit(lower)
+                #     ).first()
+                #     first_upper_exceed = lazy_frame.filter(
+                #         pl.col(filter_col) >= pl.lit(upper)
+                #     ).first()
+
+                #     lower_idx = first_lower_exceed.collect().get_column("index")[0]
+                #     upper_idx = first_upper_exceed.collect().get_column("index")[0]
+                #     logger.debug(f"lower_idx: {lower_idx}, upper_idx: {upper_idx}, length: {upper_idx - lower_idx + 1}")
+
+                #     self.dm.data = (
+                #         lazy_frame.slice(lower_idx, upper_idx - lower_idx + 1)
+                #         .collect()
+                #         .shrink_to_fit(in_place=True)
+                #     )
+                # elif filter_col in {"index", "time_s"}:
+                #     self.dm.data = (
+                #         lazy_frame.filter(
+                #             (pl.col(filter_col) >= pl.lit(lower))
+                #             & (pl.col(filter_col) <= pl.lit(upper))
+                #         )
+                #         .collect()
+                #         .shrink_to_fit(in_place=True)
+                #     )
 
             logger.info(
                 f"Loaded {self.dm.data.shape[0]} rows from {self.dm.data.shape[1]} columns, size {self.dm.data.estimated_size('mb'):.2f} MB"
@@ -624,6 +774,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 def main(app_wd: str, dev_mode: bool = False) -> None:
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"
+    os.environ[
+        "LOGURU_FORMAT"
+    ] = "<magenta>{time:YYYY-MM-DD HH:mm:ss.SSS}</magenta> | <level>{level: <8}</level> | <yellow>{message}</yellow> | <blue>{name}</blue>.<cyan>{function}()</cyan>, l: <green>{line}</green>\n\n <red>{exception.type}: {exception.value}</red>\n\n{exception.traceback}"
 
     pg.setConfigOptions(
         useOpenGL=True,
