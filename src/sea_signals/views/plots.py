@@ -2,11 +2,11 @@ from typing import Any
 
 import numpy as np
 import pyqtgraph as pg
+from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtWidgets import QWidget
 from loguru import logger
 from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
-from PySide6.QtCore import Qt, Signal, Slot
-from PySide6.QtWidgets import QWidget
 
 
 class PlotManager(QWidget):
@@ -104,13 +104,13 @@ class PlotManager(QWidget):
         )
         self.set_plot_titles_and_labels(
             self.bpm_hbr_plot_widget.getPlotItem(),
-            title="<b>Estimated BPM from HBR peaks</b>",
+            title="<b>Estimated Rate</b>",
             left_label="beats per minute",
             bottom_label="n samples",
         )
         self.set_plot_titles_and_labels(
             self.bpm_ventilation_plot_widget.getPlotItem(),
-            title="<b>Estimated BPM from Ventilation peaks</b>",
+            title="<b>Estimated Rate</b>",
             left_label="beats per minute",
             bottom_label="n samples",
         )

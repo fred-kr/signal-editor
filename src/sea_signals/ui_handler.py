@@ -1,7 +1,7 @@
 import types
 from datetime import date
 from pathlib import Path
-from typing import cast, TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import polars as pl
@@ -19,6 +19,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtWidgets import (
     QDockWidget,
+    QMessageBox,
     QSizePolicy,
     QVBoxLayout,
 )
@@ -43,6 +44,7 @@ from .views.plots import PlotManager
 if TYPE_CHECKING:
     from .app import MainWindow
 
+
 class UIHandler(QObject):
     sig_filter_inputs_ready = Signal()
     sig_preprocess_pipeline_ready = Signal(str)
@@ -51,7 +53,7 @@ class UIHandler(QObject):
     sig_peak_detection_inputs = Signal(dict)
     sig_ready_for_export = Signal()
 
-    def __init__(self, window: 'MainWindow', plot: PlotManager) -> None:
+    def __init__(self, window: "MainWindow", plot: PlotManager) -> None:
         super(UIHandler, self).__init__()
         self.window = window
         self.plot = plot
@@ -67,7 +69,6 @@ class UIHandler(QObject):
 
         # File Info
         self._prepare_widgets()
-        # self.window.container_file_info.setEnabled(False)
 
         # Statusbar
         self.create_statusbar()
@@ -137,8 +138,7 @@ class UIHandler(QObject):
         self.window.btn_export_to_text.clicked.connect(self.export_to_text)
 
     # Export Methods +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-    @Slot()
-    def export_to_csv(self) -> None:
+    def get_export_params(self) -> tuple[str, str, str]:
         output_dir = self.window.line_edit_output_dir.text()
         signal_name = (
             "hbr"
@@ -150,7 +150,20 @@ class UIHandler(QObject):
                 self.window, f"{signal_name}_results"
             ).identifier.file_name
         except Exception as e:
-            logger.error(f"There are no results to export for `{signal_name}`: {e}")
+            error_dialog = QMessageBox(
+                QMessageBox.Icon.Information,
+                "Error",
+                f"There are no results to export for `{signal_name}`: {e}",
+            )
+            error_dialog.exec()
+            return "", "", ""
+
+        return output_dir, signal_name, original_file_name
+
+    @Slot()
+    def export_to_csv(self) -> None:
+        output_dir, signal_name, original_file_name = self.get_export_params()
+        if output_dir == "":
             return
         self.window.get_results_table(signal_name).write_csv(
             f"{output_dir}/results_{signal_name}_{Path(original_file_name).stem}.csv",
@@ -158,38 +171,17 @@ class UIHandler(QObject):
 
     @Slot()
     def export_to_excel(self) -> None:
-        output_dir = self.window.line_edit_output_dir.text()
-        signal_name = (
-            "hbr"
-            if self.window.tab_widget_results.currentIndex() == 0
-            else "ventilation"
-        )
-        try:
-            original_file_name = getattr(
-                self.window, f"{signal_name}_results"
-            ).identifier.file_name
-        except Exception as e:
-            logger.error(f"There are no results to export for `{signal_name}`: {e}")
+        output_dir, signal_name, original_file_name = self.get_export_params()
+        if output_dir == "":
             return
-        # requires xlsxwriter
         self.window.get_results_table(signal_name).write_excel(
             f"{output_dir}/results_{signal_name}_{Path(original_file_name).stem}.xlsx",
         )
 
     @Slot()
     def export_to_text(self) -> None:
-        output_dir = self.window.line_edit_output_dir.text()
-        signal_name = (
-            "hbr"
-            if self.window.tab_widget_results.currentIndex() == 0
-            else "ventilation"
-        )
-        try:
-            original_file_name = getattr(
-                self.window, f"{signal_name}_results"
-            ).identifier.file_name
-        except Exception as e:
-            logger.error(f"There are no results to export for `{signal_name}`: {e}")
+        output_dir, signal_name, original_file_name = self.get_export_params()
+        if output_dir == "":
             return
         self.window.get_results_table(signal_name).write_csv(
             f"{output_dir}/results_{signal_name}_{Path(original_file_name).stem}.txt",

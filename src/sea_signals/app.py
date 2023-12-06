@@ -9,8 +9,6 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 import qdarkstyle
-from loguru import logger
-from numpy.typing import NDArray
 from PySide6.QtCore import (
     QAbstractTableModel,
     QByteArray,
@@ -22,7 +20,6 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QCloseEvent, QStandardItemModel
 from PySide6.QtWidgets import (
-    QAbstractSpinBox,
     QApplication,
     QFileDialog,
     QHeaderView,
@@ -30,6 +27,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTableView,
 )
+from loguru import logger
+from numpy.typing import NDArray
 
 from .custom_types import (
     NormMethod,
@@ -479,34 +478,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                         .collect()
                         .shrink_to_fit(in_place=True)
                     )
-                else:
-                    self.dm.data = self.dm.lazy.collect().shrink_to_fit(in_place=True)
-
-                #     first_lower_exceed = lazy_frame.filter(
-                #         pl.col(filter_col) >= pl.lit(lower)
-                #     ).first()
-                #     first_upper_exceed = lazy_frame.filter(
-                #         pl.col(filter_col) >= pl.lit(upper)
-                #     ).first()
-
-                #     lower_idx = first_lower_exceed.collect().get_column("index")[0]
-                #     upper_idx = first_upper_exceed.collect().get_column("index")[0]
-                #     logger.debug(f"lower_idx: {lower_idx}, upper_idx: {upper_idx}, length: {upper_idx - lower_idx + 1}")
-
-                #     self.dm.data = (
-                #         lazy_frame.slice(lower_idx, upper_idx - lower_idx + 1)
-                #         .collect()
-                #         .shrink_to_fit(in_place=True)
-                #     )
-                # elif filter_col in {"index", "time_s"}:
-                #     self.dm.data = (
-                #         lazy_frame.filter(
-                #             (pl.col(filter_col) >= pl.lit(lower))
-                #             & (pl.col(filter_col) <= pl.lit(upper))
-                #         )
-                #         .collect()
-                #         .shrink_to_fit(in_place=True)
-                #     )
+            else:
+                self.dm.data = self.dm.lazy.collect().shrink_to_fit(in_place=True)
 
             logger.info(
                 f"Loaded {self.dm.data.shape[0]} rows from {self.dm.data.shape[1]} columns, size {self.dm.data.estimated_size('mb'):.2f} MB"

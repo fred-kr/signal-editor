@@ -51,7 +51,7 @@ class Identifier:
     oxygen_condition: OxygenCondition
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(slots=True, kw_only=True, frozen=True)
 class Results:
     signal_name: SignalName
     identifier: Identifier
@@ -110,8 +110,9 @@ class DataHandler:
             if "hbr" not in column and "ventilation" not in column
         }
 
+    @staticmethod
     def normalize_signal(
-        self, sig: NDArray[np.float32 | np.float64], norm_method: NormMethod
+        sig: NDArray[np.float32 | np.float64], norm_method: NormMethod
     ) -> NDArray[np.float32]:
         if norm_method == "mad":
             return np.asarray(nk.standardize(sig, robust=True), dtype=np.float32)
@@ -251,9 +252,6 @@ class DataHandler:
             pl.Series(name=col_name, values=rate, dtype=pl.Int32).to_frame(),
             in_place=True
         )
-        # self.data = self.data.with_columns(
-        #     pl.Series(name=col_name, values=rate, dtype=pl.Int32)
-        # )
 
         setattr(self, f"{signal_name}_rate_len_signal", rate)
 
