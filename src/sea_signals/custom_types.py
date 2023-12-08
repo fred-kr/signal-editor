@@ -18,10 +18,32 @@ type Pipeline = Literal[
     "ecg_engzeemod2012",
 ]
 type PeakDetectionMethod = Literal[
-    "elgendi",
-    "neurokit2",
+    "elgendi_ppg",
     "local",
-    "xqrs",
+    "wfdb_xqrs",
+    "wfdb_local",
+    "neurokit2",
+    "promac",
+    "pantompkins",
+    "nabian",
+    "gamboa",
+    "slopesumfunction",
+    "zong",
+    "hamilton",
+    "christov",
+    "engzeemod",
+    "elgendi",
+    "kalidas",
+    "martinez",
+    "rodrigues",
+    "vgraph",
+]
+type WFDBPeakDirection = Literal[
+    "up",
+    "down",
+    "both",
+    "compare",
+    "None",
 ]
 type FilterMethod = Literal[
     "butterworth",
@@ -51,21 +73,11 @@ class MinMaxMapping(TypedDict):
     max: float
 
 
-class PeaksPPGElgendi(TypedDict):
-    peakwindow: float  # seconds
-    beatwindow: float  # seconds
-    beatoffset: float  # percentage as a fraction
-    mindelay: float  # seconds
-
-
-class PeaksLocalMax(TypedDict):
-    window_size: int
-
-
-class PeaksXQRS(TypedDict):
-    window_size: int
-    correction_direction: Literal["up", "down", "both", "compare", "None"]
-
+class PeakAlgorithmInputsDict(TypedDict):
+    method: PeakDetectionMethod
+    input_values: dict[str, float] | dict[str, WFDBPeakDirection | int] | dict[
+        str, int
+    ] | dict[str, float | int | bool] | dict[str, float | bool] | dict[str, bool]
 
 class PeakIntervalStats(TypedDict):
     signal_name: SignalName
@@ -105,7 +117,7 @@ class InfoProcessingParams(TypedDict):
     filter_parameters: SignalFilterParameters
     standardization_method: NormMethod
     peak_detection_method: PeakDetectionMethod
-    peak_method_parameters: PeaksPPGElgendi | PeaksLocalMax | PeaksXQRS
+    peak_method_parameters: PeakAlgorithmInputsDict
 
 
 class InfoWorkingData(TypedDict):
@@ -131,7 +143,6 @@ class ParamsType(TypedDict, total=False):
 
 
 class ParameterOpts(TypedDict, total=False):
-    name: str
     type: str
     value: str | int | float | bool | None
     default: str | int | float | bool | None
@@ -146,7 +157,8 @@ class ParameterOpts(TypedDict, total=False):
     title: str | None
 
 
-class GeneralParameterOptions(TypedDict):
+class GeneralParameterOptions(TypedDict, total=False):
+    name: str
     readonly: bool
     removable: bool
     visible: bool

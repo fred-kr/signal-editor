@@ -731,13 +731,19 @@ li.checked::marker { content: &quot;\2612&quot;; }
              </layout>
             </widget>
            </item>
-           <item row="4" column="0" alignment="Qt::AlignTop">
+           <item row="4" column="0">
             <widget class="QToolBox" name="sidebar_plots_signal_filtering">
              <property name="sizePolicy">
-              <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                <horstretch>0</horstretch>
                <verstretch>0</verstretch>
               </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>303</height>
+              </size>
              </property>
              <property name="frameShape">
               <enum>QFrame::Panel</enum>
@@ -751,7 +757,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                 <x>0</x>
                 <y>0</y>
                 <width>328</width>
-                <height>277</height>
+                <height>331</height>
                </rect>
               </property>
               <attribute name="icon">
@@ -762,10 +768,10 @@ li.checked::marker { content: &quot;\2612&quot;; }
                <string>Signal Filtering</string>
               </attribute>
               <layout class="QVBoxLayout" name="verticalLayout_2">
-               <item>
+               <item alignment="Qt::AlignTop">
                 <widget class="QWidget" name="container_signal_filtering_sidebar" native="true">
                  <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
@@ -1141,6 +1147,18 @@ li.checked::marker { content: &quot;\2612&quot;; }
                         </sizepolicy>
                        </property>
                        <layout class="QHBoxLayout" name="horizontalLayout_5">
+                        <property name="leftMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="topMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="rightMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="bottomMargin">
+                         <number>0</number>
+                        </property>
                         <item>
                          <widget class="QSlider" name="slider_order">
                           <property name="sizePolicy">
@@ -1216,6 +1234,18 @@ li.checked::marker { content: &quot;\2612&quot;; }
                      <item row="3" column="1">
                       <widget class="QWidget" name="layout_window_size" native="true">
                        <layout class="QHBoxLayout" name="horizontalLayout_4">
+                        <property name="leftMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="topMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="rightMargin">
+                         <number>0</number>
+                        </property>
+                        <property name="bottomMargin">
+                         <number>0</number>
+                        </property>
                         <item>
                          <widget class="QSlider" name="slider_window_size">
                           <property name="sizePolicy">
@@ -1296,8 +1326,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>162</width>
-                <height>323</height>
+                <width>328</width>
+                <height>331</height>
                </rect>
               </property>
               <attribute name="icon">
@@ -1311,33 +1341,41 @@ li.checked::marker { content: &quot;\2612&quot;; }
                <item>
                 <widget class="QWidget" name="container_peak_detection_sidebar" native="true">
                  <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
                    <horstretch>0</horstretch>
                    <verstretch>0</verstretch>
                   </sizepolicy>
                  </property>
                  <layout class="QGridLayout" name="gridLayout_5">
-                  <item row="1" column="0" colspan="2">
-                   <widget class="QStackedWidget" name="stacked_widget_peak_detection">
+                  <property name="leftMargin">
+                   <number>0</number>
+                  </property>
+                  <property name="topMargin">
+                   <number>0</number>
+                  </property>
+                  <property name="rightMargin">
+                   <number>0</number>
+                  </property>
+                  <property name="bottomMargin">
+                   <number>0</number>
+                  </property>
+                  <item row="0" column="1">
+                   <widget class="QComboBox" name="combo_box_peak_detection_method">
                     <property name="sizePolicy">
-                     <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                     <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                       <horstretch>0</horstretch>
                       <verstretch>0</verstretch>
                      </sizepolicy>
                     </property>
-                    <property name="minimumSize">
-                     <size>
-                      <width>0</width>
-                      <height>259</height>
-                     </size>
+                    <property name="maxVisibleItems">
+                     <number>10</number>
                     </property>
-                    <property name="currentIndex">
-                     <number>0</number>
+                    <property name="maxCount">
+                     <number>50</number>
                     </property>
-                    <widget class="QWidget" name="page_peak_detection_elgendi"/>
-                    <widget class="QWidget" name="page_peak_detection_neurokit2"/>
-                    <widget class="QWidget" name="page_peak_detection_localmax"/>
-                    <widget class="QWidget" name="page_peak_detection_xqrs"/>
+                    <property name="insertPolicy">
+                     <enum>QComboBox::NoInsert</enum>
+                    </property>
                    </widget>
                   </item>
                   <item row="0" column="0">
@@ -1356,43 +1394,14 @@ li.checked::marker { content: &quot;\2612&quot;; }
                     </property>
                    </widget>
                   </item>
-                  <item row="0" column="1">
-                   <widget class="QComboBox" name="combo_box_peak_detection_method">
+                  <item row="1" column="0" colspan="2">
+                   <widget class="QWidget" name="container_peak_detection_trees" native="true">
                     <property name="sizePolicy">
-                     <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                     <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
                       <horstretch>0</horstretch>
                       <verstretch>0</verstretch>
                      </sizepolicy>
                     </property>
-                    <property name="maxVisibleItems">
-                     <number>5</number>
-                    </property>
-                    <property name="maxCount">
-                     <number>5</number>
-                    </property>
-                    <property name="insertPolicy">
-                     <enum>QComboBox::NoInsert</enum>
-                    </property>
-                    <item>
-                     <property name="text">
-                      <string>elgendi</string>
-                     </property>
-                    </item>
-                    <item>
-                     <property name="text">
-                      <string>neurokit2</string>
-                     </property>
-                    </item>
-                    <item>
-                     <property name="text">
-                      <string>local</string>
-                     </property>
-                    </item>
-                    <item>
-                     <property name="text">
-                      <string>xqrs</string>
-                     </property>
-                    </item>
                    </widget>
                   </item>
                  </layout>
@@ -1421,7 +1430,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
               <enum>Qt::Vertical</enum>
              </property>
              <property name="sizeType">
-              <enum>QSizePolicy::Expanding</enum>
+              <enum>QSizePolicy::Preferred</enum>
              </property>
              <property name="sizeHint" stdset="0">
               <size>
@@ -2259,34 +2268,18 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </hints>
   </connection>
   <connection>
-   <sender>combo_box_peak_detection_method</sender>
-   <signal>currentIndexChanged(int)</signal>
-   <receiver>stacked_widget_peak_detection</receiver>
-   <slot>setCurrentIndex(int)</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>259</x>
-     <y>284</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>119</x>
-     <y>314</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
    <sender>slider_order</sender>
    <signal>valueChanged(int)</signal>
    <receiver>spin_box_order</receiver>
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>185</x>
-     <y>449</y>
+     <x>287</x>
+     <y>427</y>
     </hint>
     <hint type="destinationlabel">
-     <x>299</x>
-     <y>449</y>
+     <x>338</x>
+     <y>424</y>
     </hint>
    </hints>
   </connection>
@@ -2297,12 +2290,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>292</x>
-     <y>455</y>
+     <x>338</x>
+     <y>424</y>
     </hint>
     <hint type="destinationlabel">
-     <x>253</x>
-     <y>458</y>
+     <x>287</x>
+     <y>427</y>
     </hint>
    </hints>
   </connection>
@@ -2313,12 +2306,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>231</x>
-     <y>480</y>
+     <x>287</x>
+     <y>473</y>
     </hint>
     <hint type="destinationlabel">
-     <x>284</x>
-     <y>480</y>
+     <x>338</x>
+     <y>473</y>
     </hint>
    </hints>
   </connection>
@@ -2329,12 +2322,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>292</x>
-     <y>489</y>
+     <x>338</x>
+     <y>473</y>
     </hint>
     <hint type="destinationlabel">
-     <x>260</x>
-     <y>485</y>
+     <x>287</x>
+     <y>473</y>
     </hint>
    </hints>
   </connection>

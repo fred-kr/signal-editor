@@ -25,12 +25,13 @@ from PySide6.QtWidgets import (
 )
 
 from .custom_types import (
+    FilterMethod,
     InfoProcessingParams,
     InfoWorkingData,
     NormMethod,
     OxygenCondition,
+    PeakAlgorithmInputsDict,
     PeakDetectionMethod,
-    PeaksPPGElgendi,
     Pipeline,
     SignalFilterParameters,
     SignalName,
@@ -38,7 +39,7 @@ from .custom_types import (
 from .models.data import (
     Identifier,
 )
-from .models.peaks import ElgendiPPGPeaks
+from .models.peaks import PeakDetectionParameter
 from .views.plots import PlotManager
 
 if TYPE_CHECKING:
@@ -64,7 +65,8 @@ class UIHandler(QObject):
         # Signal Filtering
         self._prepare_inputs()
 
-        # # Peak Detection
+        # Peak Detection
+        self.fill_combo_box_peak_detection_method()
         self.create_peak_detection_trees()
 
         # File Info
@@ -99,9 +101,9 @@ class UIHandler(QObject):
         self.window.slider_order.setValue(3)
         self.window.spin_box_window_size.setValue(251)
         self.window.slider_window_size.setValue(251)
+        
         # Peak Detection
         self.window.combo_box_peak_detection_method.setCurrentIndex(0)
-        self.window.stacked_widget_peak_detection.setCurrentIndex(0)
 
     def _prepare_plots(self) -> None:
         self.window.stacked_hbr_vent.setCurrentIndex(0)
@@ -115,6 +117,9 @@ class UIHandler(QObject):
         )
         self.window.combo_box_preprocess_pipeline.currentTextChanged.connect(
             self.handle_preprocess_pipeline_changed
+        )
+        self.window.combo_box_peak_detection_method.currentTextChanged.connect(
+            self.handle_peak_detection_method_changed
         )
 
         self.window.btn_group_plot_view.idClicked.connect(
@@ -137,8 +142,33 @@ class UIHandler(QObject):
         self.window.btn_export_to_excel.clicked.connect(self.export_to_excel)
         self.window.btn_export_to_text.clicked.connect(self.export_to_text)
 
+    def fill_combo_box_peak_detection_method(self) -> None:
+        method_names = [
+            "elgendi_ppg",
+            "local",
+            "wfdb_xqrs",
+            "wfdb_local",
+            "neurokit2",
+            "promac",
+            "pantompkins",
+            "nabian",
+            "gamboa",
+            "slopesumfunction",
+            "zong",
+            "hamilton",
+            "christov",
+            "engzeemod",
+            "elgendi_ecg",
+            "kalidas",
+            "martinez",
+            "rodrigues",
+            "vgraph",
+        ]
+        for method in method_names:
+            self.window.combo_box_peak_detection_method.addItem(method)
+
     # Export Methods +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-    def get_export_params(self) -> tuple[str, str, str]:
+    def get_export_params(self) -> tuple[str, SignalName, str]:
         output_dir = self.window.line_edit_output_dir.text()
         signal_name = (
             "hbr"
@@ -156,7 +186,7 @@ class UIHandler(QObject):
                 f"There are no results to export for `{signal_name}`: {e}",
             )
             error_dialog.exec()
-            return "", "", ""
+            return "", "", ""  # type: ignore
 
         return output_dir, signal_name, original_file_name
 
@@ -200,36 +230,34 @@ class UIHandler(QObject):
 
         self.sig_ready_for_export.emit()
 
-    def get_peak_detection_inputs(self) -> PeaksPPGElgendi:
-        group_name = "Peak Detection (Elgendi PPG)"
-        return {
-            "peakwindow": self.elgendi_params.child(group_name)
-            .child("peakwindow")
-            .value(),
-            "beatwindow": self.elgendi_params.child(group_name)
-            .child("beatwindow")
-            .value(),
-            "beatoffset": self.elgendi_params.child(group_name)
-            .child("beatoffset")
-            .value(),
-            "mindelay": self.elgendi_params.child(group_name).child("mindelay").value(),
-        }
+    def get_peak_detection_inputs(self) -> PeakAlgorithmInputsDict:
+        return self.peak_params.get_values()
 
     @Slot()
     def emit_peak_detection_inputs(self) -> None:
-        logger.debug(
-            f"Emitting peak detection inputs: {self.get_peak_detection_inputs()}"
-        )
         self.sig_peak_detection_inputs.emit(self.get_peak_detection_inputs())
 
     def create_peak_detection_trees(self) -> None:
-        self.elgendi_layout = QVBoxLayout()
-        self.elgendi_tree = ParameterTree()
-        self.elgendi_params = ElgendiPPGPeaks().make_parameters()
-        self.elgendi_tree.setParameters(self.elgendi_params, showTop=False)
-        self.elgendi_layout.addWidget(self.elgendi_tree)
+        method = "elgendi_ppg"
+        self.layout_peak_trees = QVBoxLayout(self.window.container_peak_detection_trees)
+        self.peak_tree = ParameterTree()
+        self.peak_params = PeakDetectionParameter(name="Adjustable Parameters")
+        self.peak_params.set_method(method)
+        self.peak_tree.setParameters(self.peak_params, showTop=True)
+        self.layout_peak_trees.addWidget(self.peak_tree)
 
-        self.window.page_peak_detection_elgendi.setLayout(self.elgendi_layout)
+    @Slot(str)
+    def handle_peak_detection_method_changed(self, method: PeakDetectionMethod) -> None:
+        try:
+            self.peak_params.set_method(method)
+        except Exception:
+            error_dialog = QMessageBox(
+                QMessageBox.Icon.Information,
+                "Method not implemented",
+                f"Method `{method}` not implemented.",
+            )
+            error_dialog.exec()
+            return
 
     @Slot(int)
     def handle_tab_changed(self, index: int) -> None:
@@ -434,28 +462,31 @@ class UIHandler(QObject):
         self.sig_preprocess_pipeline_ready.emit(pipeline)
 
     def get_filter_settings(self) -> SignalFilterParameters:
-        current_pipeline = self.window.combo_box_preprocess_pipeline.currentText()
+        current_pipeline = self.get_preprocess_pipeline()
 
-        current_method = self.window.combo_box_filter_method.currentText()
+        current_method = self.get_filter_method()
         if current_pipeline != "custom":
             current_method = "None"
 
-        if current_method not in [
-            "butterworth",
-            "butterworth_ba",
-            "savgol",
-            "fir",
-            "bessel",
-            "None",
-        ]:
-            logger.error(f"Unknown filter method: {current_method}")
-            raise ValueError(f"Unknown filter method: {current_method}")
+        # if current_method not in [
+        #     "butterworth",
+        #     "butterworth_ba",
+        #     "savgol",
+        #     "fir",
+        #     "bessel",
+        #     "None",
+        # ]:
+        #     logger.error(f"Unknown filter method: {current_method}")
+        #     raise ValueError(f"Unknown filter method: {current_method}")
 
-        filter_settings = cast(
-            SignalFilterParameters,
-            {
-                "method": current_method,
-            },
+        # filter_settings = cast(
+        #     SignalFilterParameters,
+        #     {
+        #         "method": current_method,
+        #     },
+        # )
+        filter_settings = SignalFilterParameters(
+            method=current_method
         )
 
         if filter_settings["method"] != "None":
@@ -488,6 +519,9 @@ class UIHandler(QObject):
 
     def get_preprocess_pipeline(self) -> Pipeline:
         return cast(Pipeline, self.window.combo_box_preprocess_pipeline.currentText())
+
+    def get_filter_method(self) -> FilterMethod:
+        return cast(FilterMethod, self.window.combo_box_filter_method.currentText())
 
     def get_identifier(self) -> Identifier:
         signal_name = self.window.get_signal_name()

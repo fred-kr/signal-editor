@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
-from typing import Any, Unpack
+from typing import Any
 
 import neurokit2 as nk
 import numpy as np
@@ -24,9 +24,8 @@ from ..custom_types import (
     MinMaxMapping,
     NormMethod,
     OxygenCondition,
-    PeakDetectionMethod,
+    PeakAlgorithmInputsDict,
     PeakIntervalStats,
-    PeaksPPGElgendi,
     Pipeline,
     SignalName,
     SignalRateStats,
@@ -39,7 +38,7 @@ from .filters import (
     filter_elgendi,
 )
 from .io import read_edf
-from .peaks import find_ppg_peaks_elgendi
+from .peaks import find_local_peaks, find_ppg_peaks_elgendi, neurokit2_peak_algorithms
 
 
 @dataclass(slots=True, frozen=True)
@@ -199,23 +198,49 @@ class DataHandler:
         )
 
     def find_peaks(
-        self,
-        signal_name: SignalName,
-        peak_find_method: PeakDetectionMethod = "elgendi",
-        **kwargs: Unpack[PeaksPPGElgendi],
+        self, signal_name: SignalName, peak_algorithm_inputs: PeakAlgorithmInputsDict
     ) -> None:
         sig_array = self.data.get_column(f"processed_{signal_name}").to_numpy(
             zero_copy_only=True
         )
 
-        if peak_find_method == "elgendi":
+        method = peak_algorithm_inputs["method"]
+        algorithm_inputs = peak_algorithm_inputs["input_values"]
+        logger.debug(
+            f"Finding peaks with method {method} and inputs {algorithm_inputs}."
+        )
+        if method == "elgendi_ppg":
             peak_indices = find_ppg_peaks_elgendi(
-                sig_array, sampling_rate=self.sampling_rate, **kwargs
+                sig_array,
+                sampling_rate=self.sampling_rate,
+                **algorithm_inputs,  # type: ignore
+            )
+        elif method == "local":
+            peak_indices = find_local_peaks(sig_array, **algorithm_inputs)  # type: ignore
+        elif method == "neurokit2":
+            peak_indices = neurokit2_peak_algorithms(
+                sig_array,
+                sampling_rate=self.sampling_rate,
+                algorithm="neurokit2",
+                **algorithm_inputs,
+            )
+        elif method == "pantompkins":
+            peak_indices = neurokit2_peak_algorithms(
+                sig_array,
+                sampling_rate=self.sampling_rate,
+                algorithm="pantompkins",
+                **algorithm_inputs,
+            )
+        elif method == "promac":
+            # TODO: Make promac method multithreaded (if possible)
+            peak_indices = neurokit2_peak_algorithms(
+                sig_array,
+                sampling_rate=self.sampling_rate,
+                algorithm="promac",
+                **algorithm_inputs,
             )
         else:
-            raise NotImplementedError(
-                f"Peak finding method {peak_find_method} not implemented."
-            )
+            raise NotImplementedError(f"Peak finding method {method} not implemented.")
         pl_peak_indices = pl.Series(name="peaks", values=peak_indices, dtype=pl.Int32)
         setattr(self, f"{signal_name}_peaks", peak_indices)
         self.data = (
@@ -250,7 +275,7 @@ class DataHandler:
             self.data = self.data.drop(col_name)
         self.data.hstack(
             pl.Series(name=col_name, values=rate, dtype=pl.Int32).to_frame(),
-            in_place=True
+            in_place=True,
         )
 
         setattr(self, f"{signal_name}_rate_len_signal", rate)

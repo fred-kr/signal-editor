@@ -3,12 +3,13 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import cast
 
 import numpy as np
 import polars as pl
 import pyqtgraph as pg
 import qdarkstyle
+from loguru import logger
+from numpy.typing import NDArray
 from PySide6.QtCore import (
     QAbstractTableModel,
     QByteArray,
@@ -27,14 +28,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTableView,
 )
-from loguru import logger
-from numpy.typing import NDArray
 
 from .custom_types import (
-    NormMethod,
-    PeakDetectionMethod,
-    PeaksPPGElgendi,
-    Pipeline,
+    PeakAlgorithmInputsDict,
     SignalFilterParameters,
     SignalName,
 )
@@ -122,7 +118,7 @@ INITIAL_STATE = {
         "value": 251,
     },
     "combo_box_peak_detection_method": {
-        "currentText": "elgendi",
+        "currentText": "elgendi_ppg",
     },
     "btn_find_peaks": {
         "enabled": False,
@@ -368,72 +364,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     )(state_value)
 
         self.plot.reset_plots()
+        self.plot.hbr_signal_line = None
+        self.plot.ventilation_signal_line = None
         self.widgets.temperature_label_hbr.setText("Temperature: -")
         self.widgets.temperature_label_ventilation.setText("Temperature: -")
         self.statusbar.showMessage("Ready")
-
-    # @Slot()
-    # def handle_load_selection(self) -> None:
-    #     try:
-    #         filter_col = self.combo_box_filter_column.currentText()
-    #         lower = self.dbl_spin_box_subset_min.value()
-    #         upper = self.dbl_spin_box_subset_max.value()
-
-    #         if self.group_box_subset_params.isChecked():
-    #             # Because the temperature column values are not monotonically increasing/decreasing in value, just selecting all values where temperature > x leads to lots of missing values around the threshold whenever the temperature value dips below this limit.
-    #             # To counteract this, the filtering looks as follows:
-    #             # 1. Create a helper column thats set to 1 if the temperature is above the lower threshold, 0 otherwise
-    #             # 2. Create a second helper column thats set to 1 if the temperature is above the upper threshold, 0 otherwise
-    #             # 3. Filter the data frame to only keep the rows where the helper column is 1 and the second helper column is 0, i.e. between the first occurence of the lower threshold and the first occurence of the upper threshold
-    #             # 4. The resulting dataframe wont have a clean lower limit cutoff, but there also won't be any missing values that mess up the plot
-    #             lf_filtered = (
-    #                 self.dm.lazy.with_columns(
-    #                     above_lower=(
-    #                         pl.when(pl.col(filter_col).ge(pl.lit(lower)))
-    #                         .then(1)
-    #                         .otherwise(0)
-    #                     ),
-    #                     above_upper=(
-    #                         pl.when(pl.col(filter_col).ge(pl.lit(upper)))
-    #                         .then(1)
-    #                         .otherwise(0)
-    #                     ),
-    #                 )
-    #                 .inspect()
-    #                 .with_columns(
-    #                     [
-    #                         pl.col("above_lower").cum_max().alias("cum_above_lower"),
-    #                         pl.col("above_upper").cum_max().alias("cum_above_upper"),
-    #                     ]
-    #                 )
-    #                 .inspect()
-    #                 .filter(
-    #                     (pl.col("cum_above_lower") == 1)
-    #                     & (pl.col("cum_above_upper") == 0)
-    #                 )
-    #             )
-    #             self.dm.data = (
-    #                 lf_filtered.select(
-    #                     pl.all().exclude(
-    #                         "above_lower",
-    #                         "above_upper",
-    #                         "cum_above_lower",
-    #                         "cum_above_upper",
-    #                     )
-    #                 )
-    #                 .collect()
-    #                 .shrink_to_fit(in_place=True)
-    #             )
-    #         else:
-    #             self.dm.data = self.dm.lazy.collect().shrink_to_fit(in_place=True)
-
-    #         logger.info(
-    #             f"Loaded {self.dm.data.shape[0]} rows from {self.dm.data.shape[1]} columns, size {self.dm.data.estimated_size('mb'):.2f} MB"
-    #         )
-    #         self.sig_data_loaded.emit()
-    #     except Exception as e:
-    #         logger.error(e)
-    #         return
 
     @Slot()
     def handle_load_selection(self) -> None:
@@ -492,9 +427,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot(str)
     def _update_plot_view(self, signal_name: SignalName) -> None:
         widget: pg.PlotWidget = getattr(self.plot, f"{signal_name}_plot_widget")
-        widget.autoRange()
-        widget.enableAutoRange(y=True, enable=0.95)
-        widget.setAutoVisible(y=True)
+        bpm_widget: pg.PlotWidget = getattr(self.plot, f"bpm_{signal_name}_plot_widget")
+        for plot_widget in [widget, bpm_widget]:
+            plot_widget.getPlotItem().getViewBox().autoRange()
+            plot_widget.getPlotItem().getViewBox().enableAutoRange(
+                axis=pg.ViewBox.YAxis, enable=True
+            )
+            plot_widget.getPlotItem().getViewBox().setAutoVisible(y=True)
 
     @Slot()
     def handle_plot_draw(self) -> None:
@@ -521,15 +460,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._set_x_ranges()
 
     def _set_x_ranges(self) -> None:
-        data_length = self.dm.data.shape[0]
-        self.plot.hbr_plot_widget.setXRange(0, data_length)
-        self.plot.ventilation_plot_widget.setXRange(0, data_length)
-        self.plot.hbr_plot_widget.getPlotItem().getViewBox().setLimits(
-            xMin=-0.5 * data_length, xMax=1.5 * data_length
-        )
-        self.plot.ventilation_plot_widget.getPlotItem().getViewBox().setLimits(
-            xMin=-0.5 * data_length, xMax=1.5 * data_length
-        )
+        data_length = self.dm.data.height
+        plot_widgets = [
+            self.plot.hbr_plot_widget,
+            self.plot.bpm_hbr_plot_widget,
+            self.plot.ventilation_plot_widget,
+            self.plot.bpm_ventilation_plot_widget,
+        ]
+        for widget in plot_widgets:
+            widget.getPlotItem().getViewBox().setLimits(
+                xMin=-0.5 * data_length, xMax=1.5 * data_length
+            )
+            widget.getPlotItem().getViewBox().setXRange(0, data_length)
+        self._update_plot_view("hbr")
+        self._update_plot_view("ventilation")
 
     def _update_signal(self, signal_name: SignalName) -> None:
         signal_data = self.dm.data.get_column(signal_name).to_numpy(zero_copy_only=True)
@@ -592,11 +536,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot(dict)
     def handle_apply_filter(self, filter_params: SignalFilterParameters) -> None:
         with pg.BusyCursor():
-            norm_method = self.combo_box_standardizing_method.currentText()
-            norm_method = cast(NormMethod, norm_method)
+            norm_method = self.widgets.get_standardizing_method()
 
-            pipeline = self.combo_box_preprocess_pipeline.currentText()
-            pipeline = cast(Pipeline, pipeline)
+            pipeline = self.widgets.get_preprocess_pipeline()
 
             signal_name = self.get_signal_name()
 
@@ -617,7 +559,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.sig_data_filtered.emit(signal_name)
 
     @Slot(dict)
-    def handle_peak_detection(self, peak_params: PeaksPPGElgendi) -> None:
+    def handle_peak_detection(self, peak_params: PeakAlgorithmInputsDict) -> None:  # noqa: F821
         signal_name = self.get_signal_name()
         if f"processed_{signal_name}" not in self.dm.data.columns:
             info_msg = (
@@ -630,16 +572,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 QMessageBox.StandardButton.Ok,
                 parent=self,
             )
-            popup.show()
+            popup.exec()
             return
-        peak_detection_method = self.combo_box_peak_detection_method.currentText()
-        peak_detection_method = cast(PeakDetectionMethod, peak_detection_method)
 
         with pg.BusyCursor():
             self.dm.find_peaks(
                 signal_name=signal_name,
-                peak_find_method=peak_detection_method,
-                **peak_params,
+                peak_algorithm_inputs=peak_params,
             )
             peaks: NDArray[np.int32] = getattr(self.dm, f"{signal_name}_peaks")
 

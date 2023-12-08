@@ -148,3 +148,4 @@ persisted.ini
 *.pickle
 persisted_values.json
 _parameter_tree_schemas.py
+comment-files

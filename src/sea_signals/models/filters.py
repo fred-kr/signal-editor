@@ -3,6 +3,7 @@ from typing import Unpack
 import neurokit2 as nk
 import numpy as np
 import polars as pl
+from loguru import logger
 from numpy.typing import NDArray
 
 from ..custom_types import (
@@ -83,6 +84,7 @@ def auto_correct_fir_length(
     """
     while True:
         try:
+            logger.info(f"Attempting FIR filtering with length {kwargs['window_size']}")
             return filter_custom(
                 sig,
                 sampling_rate=sampling_rate,
@@ -93,6 +95,9 @@ def auto_correct_fir_length(
             if "which requires" in message:
                 required_samples = int(
                     message.split("requires")[1].split("samples")[0].strip()
+                )
+                logger.info(
+                    f"Initial window size ({kwargs['window_size']}) too small, setting to {required_samples}"
                 )
                 kwargs["window_size"] = required_samples
             else:

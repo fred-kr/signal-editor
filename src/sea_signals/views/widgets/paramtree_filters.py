@@ -10,7 +10,9 @@ from ...custom_types import GeneralParameterOptions, PeakDetectionMethod
 
 
 class PeakDetectionParameter(pTypes.GroupParameter):
-    def __init__(self, method: PeakDetectionMethod, **opts: Unpack[GeneralParameterOptions]) -> None:
+    def __init__(
+        self, method: PeakDetectionMethod, **opts: Unpack[GeneralParameterOptions]
+    ) -> None:
         pTypes.GroupParameter.__init__(self, **opts)
 
         self._method = method
@@ -62,6 +64,30 @@ class PeakDetectionParameter(pTypes.GroupParameter):
             ]
         )
 
+    def set_wfdb_find_peaks_parameters(self) -> None:
+        self.clearChildren()
+        self.addChildren(
+            [
+                pTypes.ListParameter(
+                    name="peaktype",
+                    title="Type of peak",
+                    limits=["soft", "hard"],
+                ),
+                pTypes.TextParameter(
+                    name="wfdbfindpeaksinfo",
+                    title="Info",
+                    readonly=True,
+                    value=(
+                        "Using soft peak detection includes plateaus in the signal "
+                        "(i.e. a maximum where multiple points share the same "
+                        "maximum value) by assigning the middle point as the peak. With "
+                        "hard peak detection, a value needs to be higher than both his "
+                        "left and right neighbours to be considered a peak.",
+                    )
+                ),
+            ]
+        )
+
     def set_localmax_parameters(self) -> None:
         self.clearChildren()
         self.addChildren(
@@ -91,6 +117,22 @@ class PeakDetectionParameter(pTypes.GroupParameter):
                     step=0.01,
                     limits=(0.01, 1.0),
                     precision=2,
+                )
+            ]
+        )
+
+    def set_xqrs_parameters(self) -> None:
+        self.clearChildren()
+        self.addChildren(
+            [
+                pTypes.SliderParameter(
+                    name="windowsize",
+                    title="Window size",
+                    type="int",
+                    value=110,
+                    default=110,
+                    step=2,
+                    limits=(5, 9999),
                 )
             ]
         )

@@ -2,11 +2,11 @@ from typing import Any
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt, Signal, Slot
-from PySide6.QtWidgets import QWidget
 from loguru import logger
 from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
+from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtWidgets import QWidget
 
 
 class PlotManager(QWidget):
@@ -77,11 +77,11 @@ class PlotManager(QWidget):
         for pw, name in plot_widgets:
             plot_item = pw.getPlotItem()
             plot_item.showGrid(x=True, y=True)
-            plot_item.enableAutoRange(y=True, enable=0.95)
+            plot_item.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis, enable=True)
             plot_item.setDownsampling(auto=True)
             plot_item.setClipToView(True)
             plot_item.addLegend(
-                offset=(0.5, 1),
+                offset=(0, 1),
                 pen=pg.mkPen(color="w"),  # type: ignore
                 brush=pg.mkBrush(color="k"),  # type: ignore
                 colCount=2,
@@ -118,17 +118,23 @@ class PlotManager(QWidget):
         self.hbr_plot_widget.setXLink("bpm_hbr")
         self.ventilation_plot_widget.setXLink("bpm_ventilation")
 
-        self.hbr_plot_widget.plotItem.getViewBox().setCursor(Qt.CursorShape.CrossCursor)  # type: ignore
+        self.hbr_plot_widget.plotItem.getViewBox().setCursor(
+            Qt.CursorShape.UpArrowCursor
+        )  # type: ignore
         self.ventilation_plot_widget.plotItem.getViewBox().setCursor(  # type: ignore
-            Qt.CursorShape.CrossCursor
+            Qt.CursorShape.UpArrowCursor
         )
 
     @Slot()
     def reset_plots(self) -> None:
-        self.hbr_plot_widget.getPlotItem().clear()
-        self.ventilation_plot_widget.getPlotItem().clear()
-        self.bpm_hbr_plot_widget.getPlotItem().clear()
-        self.bpm_ventilation_plot_widget.getPlotItem().clear()
+        plot_widgets = [
+            "hbr_plot_widget",
+            "ventilation_plot_widget",
+            "bpm_hbr_plot_widget",
+            "bpm_ventilation_plot_widget",
+        ]
+        for pw in plot_widgets:
+            getattr(self, pw).getPlotItem().clear()
         self._prepare_plot_items()
 
     def draw_signal(
@@ -191,7 +197,7 @@ class PlotManager(QWidget):
             hoverPen=pg.mkPen(color="k", width=1),  # type: ignore
             hoverSymbol="x",
             hoverBrush=pg.mkBrush(color="red"),  # type: ignore
-            hoverSize=14,
+            hoverSize=15,
             tip=None,
         )
         peaks_scatter.setZValue(20)
@@ -216,7 +222,7 @@ class PlotManager(QWidget):
         signal_name: str,
     ) -> None:
         mean_bpm = np.mean(bpm_data)
-        color = "lightgreen"
+        color = "limegreen"
 
         bpm_line = pg.PlotDataItem(
             bpm_data,
@@ -228,19 +234,36 @@ class PlotManager(QWidget):
         bpm_mean_line = pg.InfiniteLine(
             pos=mean_bpm,
             angle=0,
-            pen=pg.mkPen(color="orange", width=2, style=Qt.PenStyle.DashLine),  # type: ignore
+            pen=pg.mkPen(color="yellow", width=2, style=Qt.PenStyle.DashLine),  # type: ignore
             name=f"mean_bpm_{signal_name}",
-            label=f"Mean BPM: {int(mean_bpm)}",
+            label="Mean BPM: {value:0.0f}",
+            labelOpts={
+                "movable": False,
+                "position": 0.9,
+                "rotateAxis": (1, 0),
+                "fill": (0, 0, 0, 100),
+                "color": (255, 255, 255),
+            },
         )
 
         bpm_line_ref = getattr(self, f"bpm_{signal_name}_signal_line")
         bpm_mean_line_ref = getattr(self, f"bpm_{signal_name}_mean_hline")
+
         if bpm_line_ref is not None and bpm_mean_line_ref is not None:
             plot_widget.removeItem(bpm_line_ref)
             plot_widget.removeItem(bpm_mean_line_ref)
+            plot_widget.getPlotItem().legend.clear()
 
         plot_widget.addItem(bpm_line)
         plot_widget.addItem(bpm_mean_line)
+        plot_widget.getPlotItem().legend.addItem(
+            pg.PlotDataItem(
+                np.array([0, 1], dtype=np.float32),
+                pen=pg.mkPen(color="yellow", width=2, style=Qt.PenStyle.DotLine),
+                skipFiniteCheck=True,
+            ),
+            f"Mean BPM: {int(mean_bpm)}",
+        )
 
         setattr(self, f"bpm_{signal_name}_signal_line", bpm_line)
         setattr(self, f"bpm_{signal_name}_mean_hline", bpm_mean_line)
@@ -288,7 +311,6 @@ class PlotManager(QWidget):
         if signal_name in signal_map:
             y_new = signal_map[signal_name].yData[x_new]
             scatter_map[signal_name].addPoints(x=x_new, y=y_new)
-            # scatter_map[signal_name].addPoints(x_new, y_new)
             self.sig_peaks_edited.emit()
             name = "hbr" if "hbr" in signal_name else "ventilation"
             logger.debug(f"{x_new=}, {y_new=}, {self.added_points=}")
