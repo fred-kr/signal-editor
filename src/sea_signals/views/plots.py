@@ -5,8 +5,10 @@ import pyqtgraph as pg
 from loguru import logger
 from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import QPointF, Qt, Signal, Slot
 from PySide6.QtWidgets import QWidget
+
+from ..custom_types import SignalName
 
 
 class PlotManager(QWidget):
@@ -66,6 +68,15 @@ class PlotManager(QWidget):
         plot_item.setLabel(axis="left", text=left_label)
         plot_item.setLabel(axis="bottom", text=bottom_label)
 
+    @staticmethod
+    def target_pos(x: float, y: float) -> str:
+        x = max(x, 0)
+        time_seconds = x / 400
+        hours = time_seconds // 3600
+        minutes = (time_seconds % 3600) // 60
+        seconds = time_seconds % 60
+        return f"time: {int(hours):02}:{int(minutes):02}:{int(seconds):02}\namplitude: {y:.4f}"
+
     def _prepare_plot_items(self) -> None:  # sourcery skip: extract-method
         self._init_plot_items()
         plot_widgets = [
@@ -76,7 +87,7 @@ class PlotManager(QWidget):
         ]
         for pw, name in plot_widgets:
             plot_item = pw.getPlotItem()
-            plot_item.showGrid(x=True, y=True)
+            plot_item.showGrid(x=False, y=True)
             plot_item.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis, enable=True)
             plot_item.setDownsampling(auto=True)
             plot_item.setClipToView(True)
@@ -118,12 +129,41 @@ class PlotManager(QWidget):
         self.hbr_plot_widget.setXLink("bpm_hbr")
         self.ventilation_plot_widget.setXLink("bpm_ventilation")
 
-        self.hbr_plot_widget.plotItem.getViewBox().setCursor(
-            Qt.CursorShape.UpArrowCursor
-        )  # type: ignore
-        self.ventilation_plot_widget.plotItem.getViewBox().setCursor(  # type: ignore
-            Qt.CursorShape.UpArrowCursor
+        self.hbr_target = pg.TargetItem(
+            pos=(0, 0),
+            size=18,
+            label=self.target_pos,
+            labelOpts={"fill": (0, 0, 0, 120)},
+            movable=False,
         )
+        self.ventilation_target = pg.TargetItem(
+            pos=(0, 0), size=18, label=self.target_pos, labelOpts={"fill": (0, 0, 0, 120)}, movable=False
+        )
+
+        self.hbr_target.setZValue(65)
+        self.ventilation_target.setZValue(65)
+
+        self.hbr_plot_widget.addItem(self.hbr_target)
+        self.ventilation_plot_widget.addItem(self.ventilation_target)
+
+        self.hbr_plot_widget.plotItem.scene().sigMouseMoved.connect(
+            lambda pos: self.update_target_pos("hbr", pos)
+        )
+        self.ventilation_plot_widget.plotItem.scene().sigMouseMoved.connect(
+            lambda pos: self.update_target_pos("ventilation", pos)
+        )
+
+        self.hbr_plot_widget.plotItem.getViewBox().setCursor(Qt.CursorShape.BlankCursor)  # type: ignore
+        self.ventilation_plot_widget.plotItem.getViewBox().setCursor(  # type: ignore
+            Qt.CursorShape.BlankCursor
+        )
+
+    @Slot(QPointF)
+    def update_target_pos(self, signal_name: SignalName, pos: QPointF) -> None:
+        scene_pos = getattr(
+            self, f"{signal_name}_plot_widget"
+        ).plotItem.vb.mapSceneToView(pos)
+        getattr(self, f"{signal_name}_target").setPos(scene_pos)
 
     @Slot()
     def reset_plots(self) -> None:
@@ -135,6 +175,7 @@ class PlotManager(QWidget):
         ]
         for pw in plot_widgets:
             getattr(self, pw).getPlotItem().clear()
+            getattr(self, pw).getPlotItem().legend.clear()
         self._prepare_plot_items()
 
     def draw_signal(
@@ -200,7 +241,7 @@ class PlotManager(QWidget):
             hoverSize=15,
             tip=None,
         )
-        peaks_scatter.setZValue(20)
+        peaks_scatter.setZValue(60)
 
         scatter_ref = getattr(self, f"{signal_name}_peaks_scatter")
 
@@ -236,14 +277,6 @@ class PlotManager(QWidget):
             angle=0,
             pen=pg.mkPen(color="yellow", width=2, style=Qt.PenStyle.DashLine),  # type: ignore
             name=f"mean_bpm_{signal_name}",
-            label="Mean BPM: {value:0.0f}",
-            labelOpts={
-                "movable": False,
-                "position": 0.9,
-                "rotateAxis": (1, 0),
-                "fill": (0, 0, 0, 100),
-                "color": (255, 255, 255),
-            },
         )
 
         bpm_line_ref = getattr(self, f"bpm_{signal_name}_signal_line")
@@ -313,5 +346,4 @@ class PlotManager(QWidget):
             scatter_map[signal_name].addPoints(x=x_new, y=y_new)
             self.sig_peaks_edited.emit()
             name = "hbr" if "hbr" in signal_name else "ventilation"
-            logger.debug(f"{x_new=}, {y_new=}, {self.added_points=}")
             self.added_points[name].append(x_new)

@@ -38,7 +38,13 @@ from .filters import (
     filter_elgendi,
 )
 from .io import read_edf
-from .peaks import find_local_peaks, find_ppg_peaks_elgendi, neurokit2_peak_algorithms
+from .peaks import (
+    find_local_peaks,
+    find_local_peaks_wfdb,
+    find_peaks_xqrs,
+    find_ppg_peaks_elgendi,
+    neurokit2_peak_algorithms,
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -131,12 +137,16 @@ class DataHandler:
         pipeline: Pipeline,
         filter_params: SignalFilterParameters,
     ) -> None:
+        if not hasattr(self, "data"):
+            return
         processed_name = f"processed_{signal_name}"
         to_process = self.data.get_column(signal_name).to_numpy(zero_copy_only=True)
         to_process = np.asarray(to_process, dtype=np.float64)
 
-        if pipeline == "custom" and filter_params["method"] != "None":
-            if filter_params["method"] == "fir":
+        if pipeline == "custom":
+            if filter_params["method"] == "None":
+                processed = to_process
+            elif filter_params["method"] == "fir":
                 processed = auto_correct_fir_length(
                     to_process, sampling_rate=self.sampling_rate, **filter_params
                 )
@@ -153,34 +163,28 @@ class DataHandler:
             )
         elif pipeline == "ecg_neurokit2":
             processed = to_process
-            logger.warning(
-                f"Selected pipeline {pipeline} not yet implemented, using unchanged input values."
-            )
+            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
+            return
         elif pipeline == "ecg_biosppy":
             processed = to_process
-            logger.warning(
-                f"Selected pipeline {pipeline} not yet implemented, using unchanged input values."
-            )
+            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
+            return
         elif pipeline == "ecg_pantompkins1985":
             processed = to_process
-            logger.warning(
-                f"Selected pipeline {pipeline} not yet implemented, using unchanged input values."
-            )
+            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
+            return
         elif pipeline == "ecg_hamilton2002":
             processed = to_process
-            logger.warning(
-                f"Selected pipeline {pipeline} not yet implemented, using unchanged input values."
-            )
+            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
+            return
         elif pipeline == "ecg_elgendi2010":
             processed = to_process
-            logger.warning(
-                f"Selected pipeline {pipeline} not yet implemented, using unchanged input values."
-            )
+            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
+            return
         elif pipeline == "ecg_engzeemod2012":
             processed = to_process
-            logger.warning(
-                f"Selected pipeline {pipeline} not yet implemented, using unchanged input values."
-            )
+            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
+            return
         else:
             raise ValueError(f"Invalid pipeline: {pipeline}")
 
@@ -200,8 +204,10 @@ class DataHandler:
     def find_peaks(
         self, signal_name: SignalName, peak_algorithm_inputs: PeakAlgorithmInputsDict
     ) -> None:
-        sig_array = self.data.get_column(f"processed_{signal_name}").to_numpy(
-            zero_copy_only=True
+        sig_array = (
+            self.data.get_column(f"processed_{signal_name}")
+            .cast(pl.Float64)
+            .to_numpy(zero_copy_only=True)
         )
 
         method = peak_algorithm_inputs["method"]
@@ -232,11 +238,25 @@ class DataHandler:
                 **algorithm_inputs,
             )
         elif method == "promac":
-            # TODO: Make promac method multithreaded (if possible)
             peak_indices = neurokit2_peak_algorithms(
                 sig_array,
                 sampling_rate=self.sampling_rate,
                 algorithm="promac",
+                **algorithm_inputs,
+            )
+        elif method == "wfdb_local":
+            peak_indices = find_local_peaks_wfdb(
+                sig_array,
+                **algorithm_inputs,
+            )
+        elif method == "wfdb_xqrs":
+            peak_indices = find_peaks_xqrs(
+                # the XQRS detection seems to not work with a filtered signal, so we use the original signal instead
+                self.data.get_column(signal_name)
+                .cast(pl.Float64)
+                .to_numpy(zero_copy_only=True),
+                processed_sig=sig_array,
+                sampling_rate=self.sampling_rate,
                 **algorithm_inputs,
             )
         else:

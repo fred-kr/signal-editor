@@ -2,6 +2,7 @@ import types
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
+from PySide6.QtGui import QPalette
 
 import numpy as np
 import polars as pl
@@ -44,7 +45,6 @@ from .views.plots import PlotManager
 
 if TYPE_CHECKING:
     from .app import MainWindow
-
 
 class UIHandler(QObject):
     sig_filter_inputs_ready = Signal()
@@ -101,7 +101,7 @@ class UIHandler(QObject):
         self.window.slider_order.setValue(3)
         self.window.spin_box_window_size.setValue(251)
         self.window.slider_window_size.setValue(251)
-        
+
         # Peak Detection
         self.window.combo_box_peak_detection_method.setCurrentIndex(0)
 
@@ -300,6 +300,7 @@ class UIHandler(QObject):
             lambda pos: self.update_temperature_label("ventilation", pos)  # type: ignore
         )
 
+
     @Slot(QPointF)
     def update_temperature_label(self, signal_name: SignalName, pos: QPointF) -> None:
         if not hasattr(self.window, "dm"):
@@ -351,32 +352,38 @@ class UIHandler(QObject):
             "rich": rich,
         }
         startup_message = f"Available namespaces: {*module_names,=}"
-        self.window.console = ConsoleWidget(
-            namespace=namespace, historyFile="history.pickle", text=startup_message
+        self.console = ConsoleWidget(
+            parent=self.window,
+            namespace=namespace,
+            historyFile="history.pickle",
+            text=startup_message,
         )
-        dock = QDockWidget("Console", parent=self.window, flags=Qt.WindowType.SubWindow)
-        dock.setWidget(self.window.console)
-        dock.setFloating(True)
-        dock.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        dock.setMinimumSize(200, 100)
-        dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-        dock.setFeatures(
+        self.console_dock = QDockWidget("Console")
+        self.console_dock.setWidget(self.console)
+        self.console_dock.setMinimumSize(600, 300)
+        self.console_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
+        self.console_dock.setFeatures(
             QDockWidget.DockWidgetFeature.DockWidgetFloatable
             | QDockWidget.DockWidgetFeature.DockWidgetMovable
             | QDockWidget.DockWidgetFeature.DockWidgetClosable
         )
-        self.console_dock = dock
-        self.console_dock.setObjectName("console_dock")
-        self.window.addDockWidget(
-            Qt.DockWidgetArea.RightDockWidgetArea, self.console_dock
-        )
-        self.console_dock.setVisible(False)
+        # dock.setFloating(True)
+        # self.console_dock.setObjectName("console_dock")
+        # self.window.addDockWidget(
+        #     Qt.DockWidgetArea.RightDockWidgetArea, self.console_dock
+        # )
 
     @Slot()
     def show_console_widget(self) -> None:
-        self.console_dock.setVisible(not self.console_dock.isVisible())
         if self.console_dock.isVisible():
-            self.console_dock.setFocus()
+            # self.console_dock.setFloating(False)
+            self.console_dock.close()
+        else:
+            self.console_dock.show()
+            # self.console_dock.setFloating(True)
+            self.console.input.setFocus()
+        # if self.console_dock.isVisible():
+            # self.console_dock.setFocus()
 
     def create_statusbar(self) -> None:
         self.window.statusbar.showMessage("Ready")
@@ -451,7 +458,14 @@ class UIHandler(QObject):
         else:
             # TODO: add UI and logic for other signal cleaning pipelines
             self.window.container_standard_filter_method.setEnabled(False)
-            logger.warning(f"Pipeline {pipeline} not implemented yet.")
+            self.window.container_signal_filter_inputs.setEnabled(False)
+            info_box = QMessageBox(
+                QMessageBox.Icon.Information,
+                "Info",
+                f"Selected pipeline {pipeline} not yet implemented, use either 'custom' or 'ppg_elgendi'.",
+            )
+            info_box.exec()
+            # logger.warning(f"Pipeline {pipeline} not implemented yet.")
             # "ecg_neurokit2"
             # "ecg_biosppy"
             # "ecg_pantompkins1985"
@@ -485,9 +499,7 @@ class UIHandler(QObject):
         #         "method": current_method,
         #     },
         # )
-        filter_settings = SignalFilterParameters(
-            method=current_method
-        )
+        filter_settings = SignalFilterParameters(method=current_method)
 
         if filter_settings["method"] != "None":
             if self.window.dbl_spin_box_lowcut.isEnabled():

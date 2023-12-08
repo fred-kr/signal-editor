@@ -1,3 +1,4 @@
+import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from typing import Any, Callable, Literal, Unpack
@@ -5,6 +6,7 @@ from typing import Any, Callable, Literal, Unpack
 import neurokit2 as nk
 import numpy as np
 import pyqtgraph as pg
+import wfdb.processing as wfproc
 from loguru import logger
 from neurokit2.ecg.ecg_findpeaks import _ecg_findpeaks_findmethod
 from neurokit2.signal.signal_fixpeaks import _signal_fixpeaks_kubios
@@ -31,13 +33,13 @@ class PeaksElgendiPPG:
         return asdict(self)
 
 
-@dataclass(slots=True, frozen=True, kw_only=True)
-class PeaksWFDBLocal:
-    peak_type: WFDBPeakDirection
-    radius: int
+# @dataclass(slots=True, frozen=True, kw_only=True)
+# class PeaksWFDBLocal:
+#     peak_type: WFDBPeakDirection
+#     radius: int
 
-    def as_dict(self) -> dict[str, WFDBPeakDirection | int]:
-        return asdict(self)
+#     def as_dict(self) -> dict[str, WFDBPeakDirection | int]:
+#         return asdict(self)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -83,6 +85,7 @@ class PeaksPantompkins:
 class PeaksWFDBXQRS:
     sampfrom: int
     sampto: int
+    radius: int
     peak_dir: WFDBPeakDirection
 
     def as_dict(self) -> dict[str, int | WFDBPeakDirection]:
@@ -92,7 +95,6 @@ class PeaksWFDBXQRS:
 type PeaksInputValues = (
     PeaksElgendiPPG
     | PeaksLocalMax
-    | PeaksWFDBLocal
     | PeaksNeurokit2
     | PeaksPromac
     | PeaksPantompkins
@@ -131,7 +133,6 @@ class PeakDetectionParameter(pTypes.GroupParameter):
     def make_method_map(self) -> None:
         self._method_map = {
             "elgendi_ppg": self._set_elgendi_ppg_parameters,
-            "wfdb_local": self._set_wfdb_find_peaks_parameters,
             "local": self._set_localmax_parameters,
             "neurokit2": self._set_neurokit2_parameters,
             "promac": self._set_promac_parameters,
@@ -154,7 +155,6 @@ class PeakDetectionParameter(pTypes.GroupParameter):
     def make_values_map(self) -> None:
         self._values_map = {
             "elgendi_ppg": PeaksElgendiPPG,
-            "wfdb_local": PeaksWFDBLocal,
             "local": PeaksLocalMax,
             "neurokit2": PeaksNeurokit2,
             "promac": PeaksPromac,
@@ -229,44 +229,55 @@ class PeakDetectionParameter(pTypes.GroupParameter):
             "mindelay",
         ]
 
-    def _set_wfdb_find_peaks_parameters(self) -> None:
-        self.addChildren(
-            [
-                pTypes.TextParameter(
-                    name="wfdbfindpeaksinfo",
-                    title="Info",
-                    readonly=True,
-                    value=(
-                        "Using `soft` peak detection includes plateaus in the signal "
-                        "(i.e. a maximum where multiple points share the same "
-                        "maximum value) by assigning the middle point as the peak. With "
-                        "`hard` peak detection, a value needs to be higher than both his "
-                        "left and right neighbours to be considered a peak."
-                        "`all` looks for any type of peak without factoring in its shape.",
-                    ),
-                ),
-                pTypes.ListParameter(
-                    name="peak_type",
-                    title="Peak Type",
-                    limits=["all", "soft", "hard"],
-                ),
-                pTypes.SliderParameter(
-                    name="radius",
-                    title="Search radius",
-                    type="int",
-                    value=110,
-                    default=110,
-                    step=1,
-                    limits=(5, 5555),
-                    expanded=True,
-                ),
-            ]
-        )
-        self._relevant_children = ["peak_type", "radius"]
+    # XXX: Takes ages and gives bad results
+    # def _set_wfdb_find_peaks_parameters(self) -> None:
+    #     self.addChildren(
+    #         [
+    #             pTypes.TextParameter(
+    #                 name="wfdbfindpeaksinfo",
+    #                 title="Info",
+    #                 readonly=True,
+    #                 value=(
+    #                     "Using `soft` peak detection includes plateaus in the signal "
+    #                     "(i.e. a maximum where multiple points share the same "
+    #                     "maximum value) by assigning the middle point as the peak. With "
+    #                     "`hard` peak detection, a value needs to be higher than both his "
+    #                     "left and right neighbours to be considered a peak."
+    #                     "`all` looks for any type of peak without factoring in its shape."
+    #                 ),
+    #             ),
+    #             pTypes.ListParameter(
+    #                 name="peak_type",
+    #                 title="Peak Type",
+    #                 limits=["all", "soft", "hard"],
+    #             ),
+    #             pTypes.SliderParameter(
+    #                 name="radius",
+    #                 title="Search radius",
+    #                 type="int",
+    #                 value=110,
+    #                 default=110,
+    #                 step=1,
+    #                 limits=(5, 3333),
+    #                 expanded=True,
+    #             ),
+    #         ]
+    #     )
+    #     self._relevant_children = ["peak_type", "radius"]
 
     def _set_localmax_parameters(self) -> None:
         self.addChildren(
             [
+                pTypes.TextParameter(
+                    name="localmaxinfo",
+                    title="Info",
+                    readonly=True,
+                    value=(
+                        "Finds local maxima in the signal. The search radius is the "
+                        "amount of samples before and after a given point that a value "
+                        "needs to be higher than to be considered a peak."
+                    ),
+                ),
                 pTypes.SliderParameter(
                     name="radius",
                     title="Search radius",
@@ -274,8 +285,8 @@ class PeakDetectionParameter(pTypes.GroupParameter):
                     value=110,
                     default=110,
                     step=1,
-                    limits=(5, 5555),
-                )
+                    limits=(5, 3333),
+                ),
             ]
         )
         self._relevant_children = ["radius"]
@@ -283,6 +294,18 @@ class PeakDetectionParameter(pTypes.GroupParameter):
     def _set_neurokit2_parameters(self) -> None:
         self.addChildren(
             [
+                pTypes.TextParameter(
+                    name="neurokit2info",
+                    title="Info",
+                    readonly=True,
+                    value=(
+                        "QRS complexes are detected based on the steepness of the "
+                        "absolute gradient of the ECG signal. Subsequently, R-peaks "
+                        "are detected as local maxima in the QRS complexes. See "
+                        "https://github.com/neuropsychology/NeuroKit/issues/476 for more "
+                        "details."
+                    ),
+                ),
                 pTypes.SliderParameter(
                     name="smoothwindow",
                     title="Smoothing window",
@@ -359,9 +382,16 @@ class PeakDetectionParameter(pTypes.GroupParameter):
                     title="Info",
                     readonly=True,
                     value=(
-                        "Runs multiple peak detection algorithms in a row and "
-                        "returns the best result. Using `neurokit2` implementation. "
-                        "Very slow."
+                        "SLOW ALGORITHM."
+                        "ProMAC combines the result of several R-peak detectors in a "
+                        "probabilistic way. For a given peak detector, the binary signal "
+                        "representing the peak locations is convolved with a Gaussian "
+                        "distribution, resulting in a probabilistic representation of each "
+                        "peak location. This procedure is repeated for all selected methods "
+                        "and the resulting signals are accumulated. Finally, a threshold is "
+                        "used to accept or reject the peak locations. See this discussion for "
+                        "more information on the origins of the method:"
+                        "https://github.com/neuropsychology/NeuroKit/issues/222"
                     ),
                 ),
                 pTypes.SimpleParameter(
@@ -401,10 +431,7 @@ class PeakDetectionParameter(pTypes.GroupParameter):
                     name="pantompkinsinfo",
                     title="Info",
                     readonly=True,
-                    value=(
-                        "Pantompkins (1985) Algorithm for Peak Detection in ECG signals. "
-                        "Using `neurokit2` implementation."
-                    ),
+                    value="Algorithm by Pan & Tompkins (1985).",
                 ),
                 pTypes.SimpleParameter(
                     name="correct_artifacts",
@@ -420,6 +447,21 @@ class PeakDetectionParameter(pTypes.GroupParameter):
     def _set_wfdb_xqrs_parameters(self) -> None:
         self.addChildren(
             [
+                pTypes.TextParameter(
+                    name="wfdbxqrsinfo",
+                    title="Info",
+                    readonly=True,
+                    value=(
+                        "CAN BE SLOW IF THE SIGNAL IS LARGE. "
+                        "Uses wavelet "
+                        "Adjust a set of detected peaks to coincide with local signal maxima."
+                        " - up: peaks are shifted to local maxima"
+                        " - down: peaks are shifted to local minima"
+                        " - both: peaks are shifted to local maxima of the rectified (absolute) signal"
+                        " - compare: tries both up and down and selects the direction with the largest mean distance from the signal"
+                        " - None: no adjustment"
+                    ),
+                ),
                 pTypes.SimpleParameter(
                     name="sampfrom",
                     title="Starting point",
@@ -436,14 +478,39 @@ class PeakDetectionParameter(pTypes.GroupParameter):
                     default=0,
                     limits=(0, None),
                 ),
+                pTypes.SliderParameter(
+                    name="radius",
+                    title="Max adjustment radius",
+                    type="int",
+                    value=90,
+                    default=90,
+                    step=1,
+                    limits=(5, 999),
+                ),
                 pTypes.ListParameter(
                     name="peak_dir",
                     title="Adjustment direction",
                     limits=["compare", "up", "down", "both", "None"],
                 ),
+                pTypes.TextParameter(
+                    name="detailed_xqrs_info",
+                    title="Detailed info",
+                    readonly=True,
+                    value=(
+                        "1. Load the signal and configuration parameters.\n"
+                        "2. Bandpass filter the signal between 5 and 20 Hz, to get the filtered signal.\n"
+                        "3. Apply moving wave integration (MWI) with a Ricker (Mexican hat) wavelet onto the filtered signal, and save the square of the integrated signal.\n"
+                        "4. Conduct learning if specified, to initialize running parameters of noise and QRS amplitudes, the QRS detection threshold, and recent R-R intervals. If learning is unspecified or fails, use default parameters. See the docstring for the _learn_init_params method of this class for details.\n"
+                        "5. Run the main detection. Iterate through the local maxima of the MWI signal. For each local maxima:\n"
+                        "6. Check if it is a QRS complex. To be classified as a QRS, it must come after the refractory period, cross the QRS detection threshold, and not be classified as a T-wave if it comes close enough to the previous QRS. If successfully classified, update running detection threshold and heart rate parameters.\n"
+                        "7. If not a QRS, classify it as a noise peak and update running parameters.\n"
+                        "8. Before continuing to the next local maxima, if no QRS was detected within 1.66 times the recent R-R interval, perform backsearch QRS detection. This checks previous peaks using a lower QRS detection threshold.\n"
+                    ),
+                    expanded=False,
+                ),
             ]
         )
-        self._relevant_children = ["sampfrom", "sampto", "peak_dir"]
+        self._relevant_children = ["sampfrom", "sampto", "radius", "peak_dir"]
 
     def get_values(self) -> PeakAlgorithmInputsDict:
         """
@@ -638,7 +705,7 @@ def neurokit2_peak_algorithms(
 ) -> NDArray[np.int32]:
     artifact_correction = options.pop("correct_artifacts", False)
     if algorithm == "promac":
-        return _ecg_findpeaks_promac_parallel(
+        return _ecg_findpeaks_promac_sequential(
             sig, sampling_rate, artifact_correction, **options
         )
     peak_finder = _ecg_findpeaks_findmethod(algorithm)
@@ -694,7 +761,7 @@ def _ecg_findpeaks_promac_parallel(
             "rodrigues",
         ]
 
-        with ProcessPoolExecutor() as executor:
+        with ProcessPoolExecutor(max_workers=min(4, os.cpu_count() // 2)) as executor:
             futures = {
                 executor.submit(
                     _ecg_findpeaks_promac_addconvolve,
@@ -732,3 +799,179 @@ def _ecg_findpeaks_promac_parallel(
         progress.setValue(9)
 
         return np.asarray(peaks, dtype=np.int32)
+
+
+def _ecg_findpeaks_promac_sequential(
+    sig: NDArray[np.float32 | np.float64],
+    sampling_rate: int,
+    correct_artifacts: bool,
+    threshold: float = 0.33,
+    gaussian_sd: int = 100,
+    **kwargs: Any,
+) -> NDArray[np.int32]:
+    with pg.ProgressDialog("Running ProMAC...", wait=0, cancelText=None) as progress:
+        progress.setMaximum(9)
+        x = np.zeros_like(sig)
+        promac_methods = [
+            "neurokit",
+            "gamboa",
+            "ssf",
+            "elgendi",
+            "manikandan",
+            "kalidas",
+            "rodrigues",
+        ]
+
+        for method in promac_methods:
+            progress.setLabelText(
+                f"Computing probability density function\nfor method: {method}"
+            )
+            func = _ecg_findpeaks_findmethod(method)
+            x = _ecg_findpeaks_promac_addconvolve(
+                sig, sampling_rate, x, func, gaussian_sd=gaussian_sd, **kwargs
+            )
+            progress += 1
+
+        x = x / np.max(x)
+
+        x[x < threshold] = 0
+
+        progress.setLabelText("Finding peaks...")
+        peaks = nk.signal_findpeaks(x, height_min=threshold)["Peaks"]
+
+        progress += 1
+
+        if correct_artifacts:
+            progress.setLabelText("Fixing artifacts...")
+            peaks = _signal_fixpeaks_kubios(peaks, sampling_rate)[1]
+
+        progress.setLabelText("Done!")
+        progress += 1
+
+        return np.asarray(peaks, dtype=np.int32)
+
+
+def _handle_close_peaks(
+    sig: NDArray[np.float32 | np.float64],
+    peak_idx: NDArray[np.int32],
+    find_peak_fn: Callable[[NDArray[np.float32 | np.float64]], int],
+) -> NDArray[np.int32]:
+    qrs_diffs = np.diff(peak_idx)
+    close_inds = np.where(qrs_diffs <= 40)[0]
+
+    if not close_inds.size:
+        return peak_idx
+
+    to_remove = []
+    for ind in close_inds:
+        if find_peak_fn == np.argmax:
+            comparison_fn = np.less_equal
+        elif find_peak_fn == np.argmin:
+            comparison_fn = np.greater_equal
+        else:
+            raise ValueError(f"find_peak_fn {find_peak_fn} not supported.")
+
+        to_remove.append(
+            ind
+            if comparison_fn(sig[peak_idx[ind]], sig[peak_idx[ind + 1]])
+            else ind + 1
+        )
+
+    peak_idx = np.delete(peak_idx, to_remove)
+    return peak_idx
+
+
+def remove_outliers(
+    sig: NDArray[np.float32 | np.float64],
+    peak_idx: NDArray[np.int32],
+    n_std: float,
+    find_peak_fn: Callable[[NDArray[np.float32 | np.float64]], int],
+) -> NDArray[np.int32]:
+    outliers = []
+    window_size = 5
+    for i, peak in enumerate(peak_idx):
+        if i < 3:
+            start_ind = 0
+            end_ind = max(window_size, i + 3)
+        else:
+            start_ind = max(0, i - 2)
+            end_ind = min(peak_idx.size, i + 3)
+
+        surrounding_peaks = peak_idx[start_ind:end_ind]
+        surrounding_vals = sig[surrounding_peaks]
+
+        local_mean = np.mean(surrounding_vals)
+        local_std = np.std(surrounding_vals)
+
+        if find_peak_fn == np.argmax:
+            threshold = local_mean - n_std * local_std
+            comparison_fn = np.less_equal
+        elif find_peak_fn == np.argmin:
+            threshold = local_mean + n_std * local_std
+            comparison_fn = np.greater_equal
+        else:
+            raise ValueError("find_peak_fn must be np.argmax or np.argmin")
+
+        if comparison_fn(sig[peak], threshold):
+            outliers.append(i)
+
+    peak_idx = np.delete(peak_idx, outliers)
+    return _handle_close_peaks(sig, peak_idx, find_peak_fn)
+
+
+def sanitize_qrs_inds(
+    sig: NDArray[np.float32 | np.float64],
+    qrs_inds: NDArray[np.int32],
+    n_std: float = 4.0,
+) -> NDArray[np.int32]:
+    peak_idx = qrs_inds
+    if np.mean(sig) < np.mean(sig[peak_idx]):
+        find_peak_fn = np.argmax
+    else:
+        find_peak_fn = np.argmin
+
+    peak_idx = remove_outliers(sig, peak_idx, n_std, find_peak_fn)
+
+    sorted_indices = np.argsort(peak_idx)
+
+    sorted_indices = sorted_indices[peak_idx[sorted_indices] >= 0]
+
+    return peak_idx[sorted_indices]
+
+
+def find_peaks_xqrs(
+    sig: NDArray[np.float64],
+    processed_sig: NDArray[np.float64],
+    sampling_rate: int,
+    radius: int,
+    peak_dir: WFDBPeakDirection,
+    sampfrom: int = 0,
+    sampto: int = 0,
+) -> NDArray[np.int32]:
+    if sampto == 0:
+        sampto = sig.size
+    xqrs_out = wfproc.XQRS(sig=sig, fs=sampling_rate)
+    xqrs_out.detect(sampfrom=sampfrom, sampto=sampto)
+    qrs_inds = np.array(xqrs_out.qrs_inds, dtype=np.int32)
+    peak_inds = adjust_peak_positions(
+        processed_sig, peaks=qrs_inds, radius=radius, direction=peak_dir
+    )
+    return sanitize_qrs_inds(processed_sig, peak_inds)
+
+
+def find_local_peaks_wfdb(
+    sig: NDArray[np.float32 | np.float64],
+    radius: int | None = None,
+    peak_type: Literal["all", "soft", "hard"] = "all",
+) -> NDArray[np.int32]:
+    if peak_type in {"soft", "hard"}:
+        hard_peaks, soft_peaks = wfproc.find_peaks(sig)
+        return (
+            np.asarray(soft_peaks, dtype=np.int32)
+            if peak_type == "soft"
+            else np.asarray(hard_peaks, dtype=np.int32)
+        )
+    if radius is None:
+        radius = 30
+
+    return np.asarray(wfproc.find_local_peaks(sig, radius), dtype=np.int32)

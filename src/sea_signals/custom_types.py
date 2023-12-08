@@ -79,6 +79,7 @@ class PeakAlgorithmInputsDict(TypedDict):
         str, int
     ] | dict[str, float | int | bool] | dict[str, float | bool] | dict[str, bool]
 
+
 class PeakIntervalStats(TypedDict):
     signal_name: SignalName
     peak_interval_mean: np.float_

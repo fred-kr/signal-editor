@@ -615,10 +615,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.dm.calculate_rate(signal_name, peaks)
         self.handle_draw_results(signal_name)
 
-    @Slot(bool)
+    @Slot()
     def closeEvent(self, event: QCloseEvent) -> None:
         self._write_settings()
-        super().closeEvent(event)
+        if self.widgets.console_dock.isVisible():
+            self.widgets.console_dock.close()
+        QMainWindow.closeEvent(self, event)
 
     def _read_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
@@ -678,11 +680,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return getattr(self, f"{signal_name}_results").processed_data
 
 
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-# Main Method                                                                          #
-# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-
-
+# ==================================================================================== #
+#                                      MAIN METHOD                                     #
+# ==================================================================================== #
 def main(app_wd: str, dev_mode: bool = False) -> None:
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"
