@@ -1,392 +1,433 @@
-from dataclasses import dataclass, field
-from datetime import date
+import datetime
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Unpack, cast
 
 import neurokit2 as nk
 import numpy as np
 import polars as pl
-import polars.selectors as cs
-from loguru import logger
+import wfdb.processing
 from numpy.typing import NDArray
+import pyqtgraph as pg
 from PySide6.QtCore import (
     QAbstractTableModel,
     QModelIndex,
+    QObject,
     QPersistentModelIndex,
     Qt,
+    Signal,
+    Slot,
 )
 from PySide6.QtWidgets import QWidget
 
-from ..custom_types import (
-    ComputedResults,
-    InfoProcessingParams,
-    InfoWorkingData,
-    MinMaxMapping,
-    NormMethod,
+from ..type_aliases import (
     OxygenCondition,
-    PeakAlgorithmInputsDict,
-    PeakIntervalStats,
+    PeakDetectionElgendiPPG,
+    PeakDetectionLocalMaxima,
+    PeakDetectionNeurokit2,
+    PeakDetectionPantompkins,
+    PeakDetectionParameters,
+    PeakDetectionProMAC,
+    PeakDetectionXQRS,
     Pipeline,
+    ScaleMethod,
     SignalName,
-    SignalRateStats,
-    StatsDict,
+    StandardizeParameters,
 )
 from .filters import (
     SignalFilterParameters,
     auto_correct_fir_length,
     filter_custom,
     filter_elgendi,
+    scale_signal,
 )
 from .io import read_edf
 from .peaks import (
     find_local_peaks,
-    find_local_peaks_wfdb,
-    find_peaks_xqrs,
     find_ppg_peaks_elgendi,
-    neurokit2_peak_algorithms,
+    neurokit2_find_peaks,
 )
 
-
-@dataclass(slots=True, frozen=True)
-class Identifier:
-    signal_name: SignalName
-    file_name: str
-    subject_id: str
-    date_of_recording: date
-    oxygen_condition: OxygenCondition
+if TYPE_CHECKING:
+    from ..app import MainWindow
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
-class Results:
-    signal_name: SignalName
-    identifier: Identifier
-    working_data_metadata: InfoWorkingData
-    processing_metadata: InfoProcessingParams
-    computed: ComputedResults
-    processed_data: pl.DataFrame = field(default_factory=pl.DataFrame)
+class PeakStatistics:
+    pass
 
 
-@dataclass
-class DataHandler:
-    file_path: str | Path
-    sampling_rate: int = 400
-    lazy: pl.LazyFrame = field(init=False)
-    data: pl.DataFrame = field(init=False)
-    min_max_mapping: dict[str, MinMaxMapping] = field(init=False)
-    _results: Results = field(init=False)
+@dataclass(slots=True, kw_only=True, frozen=True)
+class PeakIntervalStatistics:
+    mean: float
+    median: float
+    std: float
+    mad: float
+    var: float
 
-    def __post_init__(self) -> None:
-        path = Path(self.file_path).resolve()
 
-        self.file_path = path
-        self.posix_path = path.as_posix()
-        self.file_extension = path.suffix
+@dataclass(slots=True, kw_only=True, frozen=True)
+class RateStatistics:
+    mean: float
+    median: float
+    std: float
+    mad: float
+    var: float
 
-    def lazy_read(self) -> None:
-        if self.file_extension not in {".csv", ".txt", ".edf", ".feather"}:
-            logger.error(f"File extension {self.file_extension} not supported.")
-            raise ValueError(f"File extension {self.file_extension} not supported.")
 
-        if self.file_extension == ".edf":
-            self.lazy = read_edf(self.posix_path)
-        elif self.file_extension == ".feather":
-            self.lazy = pl.scan_ipc(self.posix_path)
-        else:
-            self.lazy = pl.scan_csv(
-                self.posix_path,
-                try_parse_dates=True,
-                new_columns=["time_s", "temperature", "hbr", "ventilation"],
-            )
+@dataclass(slots=True, kw_only=True, frozen=True)
+class DescriptiveStatistics:
+    peaks: PeakStatistics
+    peak_intervals: PeakIntervalStatistics
+    rate: RateStatistics
 
-    def get_min_max(self) -> None:
-        min_values = (
-            self.lazy.select(~cs.contains(["hbr", "ventilation"])).min().collect()
-        )
-        max_values = (
-            self.lazy.select(~cs.contains(["hbr", "ventilation"])).max().collect()
-        )
 
-        self.min_max_mapping = {
-            column: {
-                "min": min_values[column][0],
-                "max": max_values[column][0],
-            }
-            for column in self.lazy.columns
-            if "hbr" not in column and "ventilation" not in column
-        }
+@dataclass(slots=True, kw_only=True, frozen=True)
+class ProcessingParameters:
+    sampling_rate: int
+    pipeline: Pipeline
+    filter_parameters: SignalFilterParameters
+    standardization_parameters: StandardizeParameters
+    peak_detection_parameters: PeakDetectionParameters
+
+
+@dataclass(slots=True, kw_only=True, frozen=True)
+class SelectionParameters:
+    subset_column: str | None = None
+    lower_limit: int | float
+    upper_limit: int | float
+    selection_size: int
+
+
+@dataclass(slots=True, kw_only=True, frozen=True)
+class ResultIdentifier:
+    name: SignalName
+    animal_id: str
+    environmental_condition: OxygenCondition
+    data_file_name: str
+    data_measured_date: datetime.datetime | None
+    result_file_name: str
+    result_creation_date: datetime.datetime
+
+
+@dataclass(slots=True, kw_only=True, frozen=True)
+class Result:
+    identifier: ResultIdentifier
+    info_data_selection: SelectionParameters
+    info_data_processing: ProcessingParameters
+    statistics: DescriptiveStatistics
+    result_data: pl.DataFrame
+    additional_data: dict[str, NDArray[np.float64]]
+
+
+def standardize(
+    sig: NDArray[np.float64], method: ScaleMethod, window_size: int | Literal["None"] = "None"
+) -> NDArray[np.float64]:
+    if method == "None":
+        return sig
+    is_robust = method == "mad"
+    
+    return scale_signal(sig, robust=is_robust, window_size=window_size).to_numpy()
+
+
+def signal_period(
+    peaks: NDArray[np.int32],
+    sampling_rate: int,
+    desired_length: int | None = None,
+    interpolation_method: str = "monotone_cubic",
+) -> NDArray[np.float64]:
+    return np.asarray(nk.signal_period(peaks, sampling_rate, desired_length, interpolation_method), dtype=np.float64)
+    # if peaks.size <= 3:
+    #     return np.full(peaks, np.nan)
+
+    # if desired_length is None:
+    #     desired_length = peaks.size
+        
+    # if desired_length <= peaks[-1]:
+    #     raise ValueError(
+    #         "`desired_length` must be either `None` or larger than the index of the last peak."
+    #     )
+
+    # period = np.ediff1d(peaks, to_begin=0) / sampling_rate
+    # period[0] = np.mean(period[1:])
+
+    # if desired_length is not None:
+    #     period = np.asarray(
+    #         nk.signal_interpolate(
+    #             peaks,
+    #             period,
+    #             x_new=np.arange(desired_length),
+    #             method=interpolation_method,
+    #         ),
+    #         dtype=np.float64,
+    #     )
+
+    # return period
+
+
+class DataHandler(QObject):
+    """
+    Handles storing and operating on data.
+    """
+
+    sig_dh_new_data = Signal()
+    sig_dh_error = Signal(str)
+    sig_dh_peaks_updated = Signal(str)
+    sig_dh_rate_updated = Signal(str)
+
+    def __init__(
+        self,
+        parent: "MainWindow",
+    ) -> None:
+        super().__init__(parent)
+        self._parent = parent
+        self.df: pl.DataFrame = pl.DataFrame()
+        self._sampling_rate: int = 400
+        self.processed_suffix = "processed"
+        self.peaks_suffix = "peaks"
+        self.rate_suffix = "rate"
+        self.rate_interp_suffix = "rate_interpolated"
+
+    @property
+    def fs(self) -> int:
+        return self._sampling_rate
+
+    @fs.setter
+    def fs(self, value: int | float) -> None:
+        self._sampling_rate = int(value)
+
+    @Slot(int)
+    def update_fs(self, value: int) -> None:
+        self.fs = value
+        
+    def read(self, path: str | Path) -> None:
+        path = Path(path)
+        suffix = path.suffix
+        if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx"}:
+            info_msg = "Currently only .csv, .txt, .xlsx, .feather and .edf files are supported"
+            self._parent.sig_show_message.emit(info_msg, "info")
+            return
+
+        if suffix == ".edf":
+            df, meas_date, sampling_rate = read_edf(path.as_posix())
+            self._lazy_df = df
+            self.df = df.collect()
+            self.meas_date = meas_date
+            self.fs = sampling_rate
+        elif suffix == ".csv":
+            self.df = pl.read_csv(path)
+        elif suffix == ".txt":
+            self.df = pl.read_csv(path, separator="\t")
+        elif suffix == ".feather":
+            self.df = pl.read_ipc(path)
+        elif suffix == ".xlsx":
+            self.df = pl.read_excel(path)
+
+        self.calc_minmax()
 
     @staticmethod
-    def normalize_signal(
-        sig: NDArray[np.float32 | np.float64], norm_method: NormMethod
-    ) -> NDArray[np.float32]:
-        if norm_method == "mad":
-            return np.asarray(nk.standardize(sig, robust=True), dtype=np.float32)
-        elif norm_method == "zscore":
-            return np.asarray(nk.standardize(sig, robust=False), dtype=np.float32)
-        elif norm_method == "minmax":
-            return np.asarray(
-                (sig - sig.min()) / (sig.max() - sig.min()), dtype=np.float32
-            )
-        elif norm_method == "None":
-            return np.asarray(sig, dtype=np.float32)
+    def get_slice_indices(
+        lf: pl.LazyFrame, filter_col: str, lower: float, upper: float
+    ) -> tuple[int, int]:
+        lf = lf.with_columns(pl.col("temperature").round(1))
+        b1 = (
+            lf.sort(pl.col(filter_col), maintain_order=True)
+            .filter(pl.col(filter_col) >= pl.lit(lower))
+            .collect()
+            .get_column("index")[0]
+        )
+        b2 = (
+            lf.sort(pl.col(filter_col), maintain_order=True)
+            .filter(pl.col(filter_col) >= pl.lit(upper))
+            .collect()
+            .get_column("index")[0]
+        )
+        l_index = min(b1, b2)
+        u_index = max(b1, b2)
+        return l_index, u_index
 
-    def preprocess_signal(
+    def get_subset(self, subset_col: str, lower: float, upper: float) -> None:
+        lf = self._lazy_df
+        if lower == self.minmax_map[subset_col]["min"] and upper == self.minmax_map[subset_col]["max"]:
+            return
+        if subset_col in {"time_s", "temperature"}:
+            lower, upper = self.get_slice_indices(lf, subset_col, lower, upper)
+        self.df = lf.filter(pl.col("index").is_between(lower, upper)).collect()
+
+    def calc_minmax(self, col_names: Iterable[str] | None = None) -> None:
+        if col_names is None:
+            col_names = ["index", "time_s", "temperature"]
+
+        self.minmax_map = {
+            name: {
+                "min": self.df.get_column(name).min(),
+                "max": self.df.get_column(name).max(),
+            }
+            for name in col_names
+        }
+
+    def run_preprocessing(
         self,
-        signal_name: SignalName,
-        norm_method: NormMethod,
+        name: SignalName,
         pipeline: Pipeline,
         filter_params: SignalFilterParameters,
+        standardize_params: StandardizeParameters,
     ) -> None:
-        if not hasattr(self, "data"):
+        if not hasattr(self, "df"):
+            error_msg = "Data not loaded. Please load data first."
+            self.sig_dh_error.emit(error_msg)
             return
-        processed_name = f"processed_{signal_name}"
-        to_process = self.data.get_column(signal_name).to_numpy(zero_copy_only=True)
-        to_process = np.asarray(to_process, dtype=np.float64)
 
-        if pipeline == "custom":
-            if filter_params["method"] == "None":
-                processed = to_process
-            elif filter_params["method"] == "fir":
-                processed = auto_correct_fir_length(
-                    to_process, sampling_rate=self.sampling_rate, **filter_params
-                )
+        with pg.ProgressDialog("Filtering...", 0, 100, cancelText=None, wait=0) as dlg:
+            processed_name = f"{name}_{self.processed_suffix}"
+
+            if processed_name in self.df.columns:
+                self.df = self.df.drop(processed_name)
+
+            sig: NDArray[np.float64] = self.df.get_column(name).cast(pl.Float64).to_numpy()
+            dlg.setValue(20)
+            filter_method = filter_params.get("method", "None")
+            standardize_method = standardize_params.get("method", "None")
+            standardize_window_size = standardize_params.get("window_size", "None")
+            
+            if pipeline == "custom":
+                if filter_method == "None":
+                    filtered = sig
+                elif filter_method == "fir":
+                    filtered = auto_correct_fir_length(sig, self.fs, **filter_params)
+                else:
+                    filtered = filter_custom(sig, self.fs, **filter_params)
+            elif pipeline == "ppg_elgendi":
+                filtered = filter_elgendi(sig, self.fs)
             else:
-                processed = filter_custom(
-                    sig=to_process,
-                    sampling_rate=self.sampling_rate,
-                    **filter_params,
-                )
-        elif pipeline == "ppg_elgendi":
-            processed = filter_elgendi(
-                sig=to_process,
-                sampling_rate=self.sampling_rate,
+                msg = f"Pipeline {pipeline} not implemented. Choose 'custom' or 'ppg_elgendi'."
+                self._parent.sig_show_message.emit(msg, "info")
+                return
+
+            dlg.setValue(70)
+            standardized = standardize(
+                filtered,
+                method=standardize_method,
+                window_size=standardize_window_size,
             )
-        elif pipeline == "ecg_neurokit2":
-            processed = to_process
-            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
-            return
-        elif pipeline == "ecg_biosppy":
-            processed = to_process
-            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
-            return
-        elif pipeline == "ecg_pantompkins1985":
-            processed = to_process
-            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
-            return
-        elif pipeline == "ecg_hamilton2002":
-            processed = to_process
-            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
-            return
-        elif pipeline == "ecg_elgendi2010":
-            processed = to_process
-            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
-            return
-        elif pipeline == "ecg_engzeemod2012":
-            processed = to_process
-            logger.info("Pipeline not yet implemented. Use `custom` or `ppg_elgendi`.")
-            return
-        else:
-            raise ValueError(f"Invalid pipeline: {pipeline}")
+            dlg.setValue(99)
+            self.df.hstack([pl.Series(processed_name, standardized)], in_place=True)
+            dlg.setValue(100)
 
-        if processed_name in self.data.columns:
-            self.data = self.data.drop(processed_name)
-        self.data.hstack(
-            [
-                pl.Series(
-                    name=processed_name,
-                    values=self.normalize_signal(processed, norm_method).round(4),
-                    dtype=pl.Float32,
-                )
-            ],
-            in_place=True,
-        )
-
-    def find_peaks(
-        self, signal_name: SignalName, peak_algorithm_inputs: PeakAlgorithmInputsDict
+    def run_peak_detection(
+        self, name: SignalName, **kwargs: Unpack[PeakDetectionParameters]
     ) -> None:
-        sig_array = (
-            self.data.get_column(f"processed_{signal_name}")
-            .cast(pl.Float64)
-            .to_numpy(zero_copy_only=True)
-        )
+        processed_name = f"{name}_{self.processed_suffix}"
+        peaks_name = f"{name}_{self.peaks_suffix}"
+        sig = self.df.get_column(processed_name).to_numpy(zero_copy_only=True)
+        method = kwargs["method"]
+        method_params = kwargs["input_values"]
 
-        method = peak_algorithm_inputs["method"]
-        algorithm_inputs = peak_algorithm_inputs["input_values"]
-        logger.debug(
-            f"Finding peaks with method {method} and inputs {algorithm_inputs}."
-        )
         if method == "elgendi_ppg":
-            peak_indices = find_ppg_peaks_elgendi(
-                sig_array,
-                sampling_rate=self.sampling_rate,
-                **algorithm_inputs,  # type: ignore
-            )
+            method_params = cast(PeakDetectionElgendiPPG, method_params)
+            peaks = find_ppg_peaks_elgendi(sig, self.fs, **method_params)
         elif method == "local":
-            peak_indices = find_local_peaks(sig_array, **algorithm_inputs)  # type: ignore
+            method_params = cast(PeakDetectionLocalMaxima, method_params)
+            peaks = find_local_peaks(sig, **method_params)
         elif method == "neurokit2":
-            peak_indices = neurokit2_peak_algorithms(
-                sig_array,
-                sampling_rate=self.sampling_rate,
-                algorithm="neurokit2",
-                **algorithm_inputs,
-            )
+            method_params = cast(PeakDetectionNeurokit2, method_params)
+            peaks = neurokit2_find_peaks(sig, self.fs, method, **method_params)
         elif method == "pantompkins":
-            peak_indices = neurokit2_peak_algorithms(
-                sig_array,
-                sampling_rate=self.sampling_rate,
-                algorithm="pantompkins",
-                **algorithm_inputs,
-            )
+            method_params = cast(PeakDetectionPantompkins, method_params)
+            peaks = neurokit2_find_peaks(sig, self.fs, method, **method_params)
         elif method == "promac":
-            peak_indices = neurokit2_peak_algorithms(
-                sig_array,
-                sampling_rate=self.sampling_rate,
-                algorithm="promac",
-                **algorithm_inputs,
-            )
-        elif method == "wfdb_local":
-            peak_indices = find_local_peaks_wfdb(
-                sig_array,
-                **algorithm_inputs,
-            )
+            method_params = cast(PeakDetectionProMAC, method_params)
+            peaks = neurokit2_find_peaks(sig, self.fs, method, **method_params)
         elif method == "wfdb_xqrs":
-            peak_indices = find_peaks_xqrs(
-                # the XQRS detection seems to not work with a filtered signal, so we use the original signal instead
-                self.data.get_column(signal_name)
-                .cast(pl.Float64)
-                .to_numpy(zero_copy_only=True),
-                processed_sig=sig_array,
-                sampling_rate=self.sampling_rate,
-                **algorithm_inputs,
+            method_params = cast(PeakDetectionXQRS, method_params)
+            correction_params = method_params["corrections"]
+            xqrs = wfdb.processing.XQRS(sig, self.fs)
+            xqrs.detect(
+                sampfrom=method_params.get("sampfrom", 0),
+                sampto=method_params.get("sampto", "end"),
+            )
+            peaks = np.asarray(
+                wfdb.processing.correct_peaks(
+                    sig=sig, peak_inds=xqrs.qrs_inds, **correction_params
+                ),
+                dtype=np.int32,
             )
         else:
-            raise NotImplementedError(f"Peak finding method {method} not implemented.")
-        pl_peak_indices = pl.Series(name="peaks", values=peak_indices, dtype=pl.Int32)
-        setattr(self, f"{signal_name}_peaks", peak_indices)
-        self.data = (
-            self.data.lazy()
-            .with_columns(
-                (
-                    pl.when(pl.col("index").is_in(pl_peak_indices))
-                    .then(pl.lit(1))
-                    .otherwise(pl.lit(0))
-                    .shrink_dtype()
-                    .alias(f"{signal_name}_peaks")
-                )
+            error_msg = f"Peak detection method {method} not implemented. Choose one of 'elgendi_ppg', 'local', 'neurokit2', 'pantompkins', 'promac' or 'wfdb_xqrs'."
+            self._parent.sig_show_message.emit(error_msg, "warning")
+            return
+        
+
+        setattr(self, peaks_name, peaks)
+        self.sig_dh_peaks_updated.emit(name)
+        self.compute_rate(name)
+
+    def compute_rate(self, name: SignalName) -> None:
+        rate_interp_name = f"{name}_{self.rate_interp_suffix}"
+        rate_peaks_name = f"{name}_{self.rate_suffix}"
+        peak_attr_name = f"{name}_{self.peaks_suffix}"
+
+        peaks: NDArray[np.int32] = getattr(self, peak_attr_name)
+        period_interp = signal_period(
+            peaks,
+            self.fs,
+            desired_length=self.df.height,
+            interpolation_method="monotone_cubic",
+        )
+        if np.any(np.isnan(period_interp)):
+            return
+        rate_interp = 60 / period_interp
+
+        period_peaks = signal_period(
+            peaks, self.fs, desired_length=None, interpolation_method="monotone_cubic"
+        )
+        rate_peaks = 60 / period_peaks
+
+        if rate_interp_name in self.df.columns:
+            self.df = self.df.drop(rate_interp_name)
+        self.df.hstack([pl.Series(rate_interp_name, rate_interp, dtype=pl.Float64)], in_place=True)
+
+        setattr(self, rate_peaks_name, rate_peaks)
+        self.sig_dh_rate_updated.emit(name)
+
+    def get_descriptive_stats(self, name: SignalName) -> DescriptiveStatistics:
+        peak_attr_name = f"{name}_{self.peaks_suffix}"
+        rate_attr_name = f"{name}_{self.rate_suffix}"
+        peaks: NDArray[np.int32] | None = getattr(self, peak_attr_name, None)
+        rate: NDArray[np.floating[Any]] | None = getattr(self, rate_attr_name, None)
+        if peaks is None or rate is None:
+            raise ValueError(f"Missing {peak_attr_name} or {rate_attr_name}.")
+        return DescriptiveStatistics(
+            peaks=PeakStatistics(),
+            peak_intervals=PeakIntervalStatistics(
+                mean=np.mean(peaks),
+                median=np.median(peaks),
+                std=np.std(peaks),
+                mad=np.nanmedian(np.abs(peaks - np.nanmedian(peaks))),
+                var=np.var(peaks),
+            ),
+            rate=RateStatistics(
+                mean=np.mean(rate),
+                median=np.median(rate),
+                std=np.std(rate),
+                mad=np.nanmedian(np.abs(rate - np.nanmedian(rate))),
+                var=np.var(rate),
+            ),
+        )
+
+    def get_result_df(self, name: SignalName) -> pl.DataFrame:
+        peaks: NDArray[np.int32] = getattr(self, f"{name}_{self.peaks_suffix}")
+        rate: NDArray[np.floating[Any]] = getattr(self, f"{name}_{self.rate_suffix}")
+        return (
+            self.df.lazy()
+            .select(
+                pl.col("time_s").gather(peaks).round(4),
+                pl.Series("peak_index", peaks, pl.Int32),
+                pl.Series("peak_interval", peaks, pl.Int32).diff().fill_null(0),
+                pl.col("temperature").gather(peaks).round(1),
+                pl.Series("rate_bpm", rate, pl.Int32),
             )
             .collect()
-        )
-
-        self.calculate_rate(signal_name, peak_indices)
-
-    def calculate_rate(self, signal_name: str, peaks: NDArray[np.int32]) -> None:
-        rate = np.asarray(
-            nk.signal_rate(
-                peaks=peaks,
-                sampling_rate=self.sampling_rate,
-                desired_length=len(self.data),
-                interpolation_method="monotone_cubic",
-            ),
-            dtype=np.float32,
-        ).round(4)
-        col_name = f"{signal_name}_rate"
-
-        if col_name in self.data.columns:
-            self.data = self.data.drop(col_name)
-        self.data.hstack(
-            pl.Series(name=col_name, values=rate, dtype=pl.Int32).to_frame(),
-            in_place=True,
-        )
-
-        setattr(self, f"{signal_name}_rate_len_signal", rate)
-
-    @staticmethod
-    def compute_stats(
-        signal_name: SignalName, peaks: NDArray[np.int32], rate: NDArray[np.float32]
-    ) -> StatsDict:
-        return StatsDict(
-            signal_name=signal_name,
-            peak_stats=PeakIntervalStats(
-                signal_name=signal_name,
-                peak_interval_mean=np.mean(peaks),
-                peak_interval_median=np.median(peaks),
-                peak_interval_std=np.std(peaks),
-                peak_interval_var=np.var(peaks),
-            ),
-            signal_rate_stats=SignalRateStats(
-                signal_name=signal_name,
-                signal_rate_mean=np.mean(rate),
-                signal_rate_median=np.median(rate),
-                signal_rate_std=np.std(rate),
-                signal_rate_var=np.var(rate),
-            ),
-        )
-
-    def compute_results(
-        self,
-        signal_name: SignalName,
-    ) -> ComputedResults:
-        signals = {
-            "hbr": ("hbr_peaks", "hbr_rate_len_signal"),
-            "ventilation": ("ventilation_peaks", "ventilation_rate_len_signal"),
-        }
-
-        peaks_attr, rate_attr = signals[signal_name]
-        peaks: NDArray[np.int32] = getattr(self, peaks_attr)
-        rate: NDArray[np.float32] = getattr(self, rate_attr)
-
-        peak_intervals = np.ediff1d(peaks, to_begin=0)
-        stats = self.compute_stats(signal_name, peak_intervals, rate)
-        signal_rate_len_peaks = np.asarray(
-            nk.signal_rate(
-                peaks=peaks,
-                sampling_rate=self.sampling_rate,
-                desired_length=None,
-                interpolation_method="monotone_cubic",
-            ),
-            dtype=np.float32,
-        )
-
-        setattr(
-            self,
-            f"{signal_name}_rate_len_peaks",
-            signal_rate_len_peaks.astype(np.int32),
-        )
-
-        return ComputedResults(
-            signal_name=signal_name,
-            peak_intervals=peak_intervals,
-            signal_rate_len_peaks=signal_rate_len_peaks,
-            signal_rate_len_signal=rate,
-            peak_interval_stats=stats["peak_stats"],
-            signal_rate_stats=stats["signal_rate_stats"],
-        )
-
-    def make_results_df(
-        self,
-        peaks: NDArray[np.int32],
-        rate: NDArray[np.int32],
-    ) -> pl.DataFrame:
-        return pl.DataFrame(
-            [
-                pl.Series(
-                    name="time_s",
-                    values=self.data.get_column("time_s").gather(peaks).round(4),
-                    dtype=pl.Float64,
-                ),
-                pl.Series(name="peak_index", values=peaks, dtype=pl.Int32),
-                pl.Series(
-                    name="peak_interval",
-                    values=np.ediff1d(peaks, to_begin=0),
-                    dtype=pl.Int32,
-                ),
-                pl.Series(
-                    name="temperature",
-                    values=self.data.get_column("temperature").gather(peaks).round(1),
-                    dtype=pl.Float32,
-                ).shrink_dtype(),
-                pl.Series(name="bpm", values=rate, dtype=pl.Int32),
-            ]
         )
 
 

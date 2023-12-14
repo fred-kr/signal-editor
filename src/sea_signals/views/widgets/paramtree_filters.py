@@ -6,7 +6,7 @@ from loguru import logger
 from pyqtgraph.parametertree import Parameter, ParameterTree
 from PySide6.QtWidgets import QWidget
 
-from ...custom_types import GeneralParameterOptions, PeakDetectionMethod
+from ...type_aliases import GeneralParameterOptions, PeakDetectionMethod
 
 
 class PeakDetectionParameter(pTypes.GroupParameter):
@@ -83,7 +83,7 @@ class PeakDetectionParameter(pTypes.GroupParameter):
                         "maximum value) by assigning the middle point as the peak. With "
                         "hard peak detection, a value needs to be higher than both his "
                         "left and right neighbours to be considered a peak.",
-                    )
+                    ),
                 ),
             ]
         )

@@ -3,6 +3,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import polars as pl
@@ -14,6 +15,7 @@ from PySide6.QtCore import (
     QAbstractTableModel,
     QByteArray,
     QDate,
+    QFileInfo,
     QSettings,
     Qt,
     Signal,
@@ -28,401 +30,223 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTableView,
 )
+from typing_extensions import Literal
 
-from .custom_types import (
-    PeakAlgorithmInputsDict,
-    SignalFilterParameters,
-    SignalName,
-)
 from .models.data import (
     CompactDFModel,
     DataHandler,
     DescriptiveStatsModel,
     PolarsModel,
-    Results,
+    ProcessingParameters,
+    Result,
+    ResultIdentifier,
+    SelectionParameters,
 )
-from .models.io import parse_file_name
+from .type_aliases import (
+    FilterMethod,
+    OxygenCondition,
+    PeakDetectionParameters,
+    Pipeline,
+    ScaleMethod,
+    SignalFilterParameters,
+    SignalName,
+    StandardizeParameters,
+)
 from .ui_handler import UIHandler
 from .views.main_window import Ui_MainWindow
-from .views.plots import PlotManager
-
-INITIAL_STATE = {
-    "table_data_preview": {
-        "model": QStandardItemModel(),
-    },
-    "table_data_info": {
-        "model": QStandardItemModel(),
-    },
-    "line_edit_active_file": {"text": ""},
-    "group_box_subset_params": {
-        "enabled": False,
-        "checked": False,
-    },
-    "container_file_info": {
-        "enabled": False,
-    },
-    "date_edit_file_info": {
-        "date": QDate.currentDate(),
-    },
-    "line_edit_subject_id": {
-        "text": "",
-    },
-    "combo_box_oxygen_condition": {
-        "currentText": "normoxic",
-    },
-    "btn_load_selection": {
-        "enabled": False,
-    },
-    "stacked_hbr_vent": {
-        "currentIndex": 0,
-    },
-    "btn_view_hbr": {
-        "checked": True,
-    },
-    "btn_view_vent": {
-        "checked": False,
-    },
-    "spin_box_fs": {
-        "value": 400,
-    },
-    "combo_box_preprocess_pipeline": {
-        "currentText": "custom",
-    },
-    "combo_box_filter_method": {
-        "enabled": True,
-        "currentText": "None",
-    },
-    "combo_box_standardizing_method": {
-        "enabled": True,
-        "currentText": "None",
-    },
-    "container_signal_filter_inputs": {
-        "enabled": False,
-    },
-    "dbl_spin_box_lowcut": {
-        "value": 0.5,
-    },
-    "dbl_spin_box_highcut": {
-        "value": 8.0,
-    },
-    "spin_box_order": {
-        "value": 3,
-    },
-    "slider_order": {
-        "value": 3,
-    },
-    "spin_box_window_size": {
-        "value": 251,
-    },
-    "slider_window_size": {
-        "value": 251,
-    },
-    "combo_box_peak_detection_method": {
-        "currentText": "elgendi_ppg",
-    },
-    "btn_find_peaks": {
-        "enabled": False,
-    },
-    "btn_compute_results": {"enabled": False},
-    "table_view_results_hbr": {
-        "model": QStandardItemModel(),
-    },
-    "table_view_results_ventilation": {
-        "model": QStandardItemModel(),
-    },
-    "tab_widget_results": {
-        "currentIndex": 0,
-    },
-}
-
+from .views.plots import PlotHandler
 
 class MainWindow(QMainWindow, Ui_MainWindow):
-    sig_filter_column_changed = Signal()
-    sig_lazy_ready = Signal(str)
-    sig_data_loaded = Signal()
     sig_data_filtered = Signal(str)
+    sig_data_loaded = Signal()
+    sig_filter_column_changed = Signal()
     sig_peaks_updated = Signal(str)
     sig_plot_data_changed = Signal(str)
-    sig_init_complete = Signal()
-    sig_prepare_new_data = Signal()
     sig_results_updated = Signal(str)
+    sig_show_message = Signal(str, str)
 
-    def __init__(self, app_wd: str) -> None:
+    def __init__(self) -> None:
         super(MainWindow, self).__init__()
         self.setupUi(self)
         self.setWindowTitle("Signal Editor")
         self.setDockNestingEnabled(True)
-        self.plot = PlotManager()
+        self._app_dir: Path = Path.cwd()
+        self._output_dir: Path = Path(self._app_dir, "output")
+        self._output_dir.mkdir(exist_ok=True)
+        self.plot = PlotHandler()
+        self.data = DataHandler(self)
+        self.ui = UIHandler(self, self.plot)
+        self.file_info = QFileInfo()
         self.connect_signals()
         self._read_settings()
         # self._add_profiler()
-        self._wd = app_wd
-        self.sig_init_complete.emit()
+        self.line_edit_output_dir.setText(self._output_dir.as_posix())
+
+    @property
+    def output_dir(self) -> Path:
+        return self._output_dir
+
+    @output_dir.setter
+    def output_dir(self, value: Path) -> None:
+        self._output_dir = value
+
+    @property
+    def app_dir(self) -> Path:
+        return self._app_dir
+
+    @property
+    def data_dir(self) -> Path:
+        return self._data_dir if hasattr(self, "_data_dir") else self.app_dir
+
+    @data_dir.setter
+    def data_dir(self, value: Path) -> None:
+        self._data_dir = value
+
+    @property
+    def signal_name(self) -> SignalName:
+        return "hbr" if self.stacked_hbr_vent.currentIndex() == 0 else "ventilation"
+
+    @property
+    def result_name(self) -> SignalName:
+        return "hbr" if self.tabs_result.currentIndex() == 0 else "ventilation"
 
     def _add_profiler(self) -> None:
         self.menu_info.addAction("Start Profiler", self._start_profiler)
         self.menu_info.addAction("Stop Profiler", self._stop_profiler)
 
-    @Slot()
-    def _init_complete(self) -> None:
-        self.widgets = UIHandler(self, self.plot)
-        self.widgets.sig_apply_filter.connect(self.handle_apply_filter)
-        self.widgets.sig_peak_detection_inputs.connect(self.handle_peak_detection)
-        self.line_edit_output_dir.setText(self._wd)
-
-    def get_signal_name(self) -> SignalName:
-        return "hbr" if self.stacked_hbr_vent.currentIndex() == 0 else "ventilation"
-
     def connect_signals(self) -> None:
-        self.sig_init_complete.connect(self._init_complete)
-
-        self.btn_select_file.clicked.connect(self.handle_select_file)
-        self.btn_load_selection.clicked.connect(self.handle_load_selection)
-        self.btn_browse_output_dir.clicked.connect(self.handle_browse_output_dir)
-
-        self.action_select_file.triggered.connect(self.handle_select_file)
-        self.action_exit.triggered.connect(self.closeEvent)
-
-        self.sig_lazy_ready.connect(self.handle_filter_column_changed)
+        """
+        Connect signals to slots.
+        """
+        self.sig_data_filtered.connect(self.handle_table_view_data)
         self.sig_data_loaded.connect(self.handle_plot_draw)
         self.sig_data_loaded.connect(self.handle_table_view_data)
         self.sig_peaks_updated.connect(self.handle_draw_results)
         self.sig_peaks_updated.connect(self.handle_table_view_data)
         self.sig_plot_data_changed.connect(self._update_plot_view)
-        self.sig_data_filtered.connect(self.handle_table_view_data)
-        self.sig_prepare_new_data.connect(self.prepare_new_data)
+        self.sig_show_message.connect(self.show_message)
+
+        self.btn_apply_filter.clicked.connect(self.handle_apply_filter)
+        self.btn_detect_peaks.clicked.connect(self.handle_peak_detection)
+        
+        self.btn_browse_output_dir.clicked.connect(self.select_output_location)
+        self.btn_load_selection.clicked.connect(self.handle_load_selection)
+        self.btn_select_file.clicked.connect(self.select_data_file)
+        self.btn_export_to_csv.clicked.connect(lambda: self.export_results("csv"))
+        self.btn_export_to_excel.clicked.connect(lambda: self.export_results("excel"))
+        self.btn_export_to_text.clicked.connect(lambda: self.export_results("txt"))
+        self.btn_compute_results.clicked.connect(self.update_results)
+
+        self.btn_group_plot_view.idClicked.connect(
+            self.stacked_hbr_vent.setCurrentIndex
+        )
+
+        self.action_exit.triggered.connect(self.closeEvent)
+        self.action_select_file.triggered.connect(self.select_data_file)
+
+        self.spin_box_fs.valueChanged.connect(self.data.update_fs)
 
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
 
     @Slot()
-    def handle_browse_output_dir(self) -> None:
+    def update_results(self) -> None:
+        with pg.BusyCursor():
+            self.make_results(self.result_name)
+
+    @Slot(str)
+    def export_results(
+        self, file_type: Literal["csv", "excel", "txt", "feather"]
+    ) -> None:
+        if not hasattr(self, f"{self.result_name}_results"):
+            error_msg = f"No existing results for `{self.result_name}`. Results can be created using the `Compute Results` button in the `Plots` tab."
+            self.sig_show_message.emit(error_msg, "warning")
+            return
+
+        result_file_name = (
+            f"{self.output_dir}/results_{self.result_name}_{self.file_info.baseName()}"
+        )
+        result_table: pl.DataFrame = getattr(
+            self, f"{self.result_name}_results"
+        ).result_data
+        if file_type == "csv":
+            result_table.write_csv(f"{result_file_name}.csv")
+        elif file_type == "excel":
+            result_table.write_excel(f"{result_file_name}.xlsx")
+        elif file_type == "txt":
+            result_table.write_csv(f"{result_file_name}.txt", separator="\t")
+        elif file_type == "feather":
+            result_table.write_ipc(f"{result_file_name}.feather")
+        else:
+            warning_msg = f"Exporting to {file_type} is not supported."
+            self.sig_show_message.emit(warning_msg, "warning")
+
+    @Slot(str, str)
+    def show_message(
+        self, text: str, level: Literal["info", "warning", "critical"]
+    ) -> None:
+        icon_map = {
+            "info": QMessageBox.Icon.Information,
+            "warning": QMessageBox.Icon.Warning,
+            "critical": QMessageBox.Icon.Critical,
+        }
+        msg_box = QMessageBox(icon_map[level], "Notice", text)
+        msg_box.exec()
+
+    @Slot()
+    def select_output_location(self) -> None:
         """
         Prompt user to select a directory for storing the exported results.
         """
         if path := QFileDialog.getExistingDirectory(
             self,
-            "Select Output Directory",
-            dir=Path(".").resolve().as_posix(),
+            caption="Select Output Directory",
+            dir=self.output_dir.as_posix(),
             options=QFileDialog.Option.ShowDirsOnly,
         ):
             self.line_edit_output_dir.setText(path)
+            self.output_dir = Path(path)
 
     @Slot()
-    def handle_select_file(self) -> None:
-        """
-        Handles loading a new file into the editor via multiple helper methods.
-        """
-        if path := self.select_file_dialog():
-            self.sig_prepare_new_data.emit()
-            self._update_active_file_display(path)
-            self._initialize_data_handler(path)
-            self._update_data_selection_ui(path)
-
-    def select_file_dialog(self) -> str:
-        """
-        Prompt user to select a file.
-
-        Returns:
-            str: The selected file path.
-        """
-        default_dir = self.get_default_directory()
+    def select_data_file(self) -> None:
+        if not hasattr(self, "_data_dir"):
+            self._data_dir = (
+                Path(self.file_info.path())
+                if self.file_info.isFile()
+                else self._app_dir
+            )
         path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select File",
-            default_dir,
+            caption="Select File",
+            dir=self._data_dir.as_posix(),
             filter="EDF (*.edf);;CSV (*.csv);;TXT (*.txt);;Feather (*.feather);;All Files (*)",
-            selectedFilter="EDF (*.edf)",
+            selectedFilter="All Files (*)",
         )
-        return path
-
-    def get_default_directory(self) -> str:
-        """
-        Returns the default directory to use when selecting files.
-
-        If a file is already loaded, the directory of that file is returned. If no file
-        is loaded, the current working directory is returned.
-
-        Returns:
-            str: The default directory to use when selecting files.
-        """
-        if hasattr(self, "dm") and self.dm.file_path:
-            return Path(self.dm.file_path).parent.as_posix()
-        return Path(".").resolve().as_posix()
-
-    def _update_active_file_display(self, path: str) -> None:
-        """
-        Updates the line edit widget with the name of the currently loaded file.
-
-        Args:
-            path (str): The full path to the data file.
-        """
-        self.line_edit_active_file.setText(Path(path).name)
-
-    def _initialize_data_handler(self, path: str) -> None:
-        """
-        Initializes a DataHandler object with the given file path and sampling rate.
-
-        Args:
-            path (str): The full path to the data file.
-        """
-        sampling_rate = self.spin_box_fs.value()
-        self.dm = DataHandler(file_path=path, sampling_rate=sampling_rate)
-        self.dm.lazy_read()
-        self.dm.get_min_max()
-
-    def _update_data_selection_ui(self, path: str) -> None:
-        """
-        Updates UI elements related to subsetting and file metadata.
-
-        Args:
-            path (str): The full path to the data file.
-        """
-        self.group_box_subset_params.setEnabled(True)
-        self.container_file_info.setEnabled(True)
-        parsed_date, parsed_id = parse_file_name(Path(path).name)
-        self.date_edit_file_info.setDate(
-            QDate(parsed_date.year, parsed_date.month, parsed_date.day)
-        )
-        self.line_edit_subject_id.setText(parsed_id)
-        self.btn_load_selection.setEnabled(True)
-        self._update_filter_columns()
-
-    def _update_filter_columns(self) -> None:
-        """
-        Updates the available columns in the filter combo box.
-
-        Note:
-            Currently assumes existence of `index`, `time_s`, and `temperature` columns.
-        """
-        # TODO: Don't hardcode viable filter columns
-        viable_filter_columns = ("index", "time_s", "temperature")
-        self.combo_box_filter_column.blockSignals(True)
-        self.combo_box_filter_column.clear()
-        self.combo_box_filter_column.addItems(viable_filter_columns)
-        self.combo_box_filter_column.setCurrentIndex(0)
-        self.combo_box_filter_column.currentTextChanged.connect(
-            self.handle_filter_column_changed
-        )
-        self.combo_box_filter_column.blockSignals(False)
-        self.sig_lazy_ready.emit(self.combo_box_filter_column.currentText())
-
-    @Slot(str)
-    def handle_filter_column_changed(self, text: str) -> None:
-        """
-        Update the min and max spin boxes based on the selected column's min and max values.
-
-        Args:
-            text (str): The name of the column.
-        """
-        lower = self.dm.min_max_mapping[text]["min"]
-        upper = self.dm.min_max_mapping[text]["max"]
-
-        if text == "index":
-            self.dbl_spin_box_subset_min.setDecimals(0)
-            self.dbl_spin_box_subset_max.setDecimals(0)
-            self.dbl_spin_box_subset_min.setSingleStep(1)
-            self.dbl_spin_box_subset_max.setSingleStep(1)
-        elif text == "temperature":
-            self.dbl_spin_box_subset_min.setDecimals(1)
-            self.dbl_spin_box_subset_max.setDecimals(1)
-            self.dbl_spin_box_subset_min.setSingleStep(0.1)
-            self.dbl_spin_box_subset_max.setSingleStep(0.1)
-
-        elif text == "time_s":
-            self.dbl_spin_box_subset_min.setDecimals(4)
-            self.dbl_spin_box_subset_max.setDecimals(4)
-            self.dbl_spin_box_subset_min.setSingleStep(0.0025)
-            self.dbl_spin_box_subset_max.setSingleStep(0.0025)
-        self.dbl_spin_box_subset_min.setMinimum(lower)
-        self.dbl_spin_box_subset_min.setMaximum(upper)
-        self.dbl_spin_box_subset_min.setValue(lower)
-
-        self.dbl_spin_box_subset_max.setMinimum(lower)
-        self.dbl_spin_box_subset_max.setMaximum(upper)
-        self.dbl_spin_box_subset_max.setValue(upper)
-
-    @Slot()
-    def prepare_new_data(self) -> None:
-        """
-        Reset all widgets to their initial state.
-        """
-        self.tabWidget.setCurrentIndex(0)
-        method_mapping = {
-            "enabled": "setEnabled",
-            "checked": "setChecked",
-            "text": "setText",
-            "model": "setModel",
-            "value": "setValue",
-            "currentText": "setCurrentText",
-            "currentIndex": "setCurrentIndex",
-        }
-        for widget_name, widget_state in INITIAL_STATE.items():
-            for state_key, state_value in widget_state.items():
-                if state_key in method_mapping:
-                    getattr(self, widget_name).__getattribute__(
-                        method_mapping[state_key]
-                    )(state_value)
-
-        self.plot.reset_plots()
-        self.plot.hbr_signal_line = None
-        self.plot.ventilation_signal_line = None
-        self.widgets.temperature_label_hbr.setText("Temperature: -")
-        self.widgets.temperature_label_ventilation.setText("Temperature: -")
-        self.statusbar.showMessage("Ready")
+        if path:
+            self.file_info.setFile(path)
+            self.ui.reset_widget_state()
+            self.line_edit_active_file.setText(self.file_info.fileName())
+            self.data.read(path)
+            self.ui.update_data_selection_widgets(path)
 
     @Slot()
     def handle_load_selection(self) -> None:
         try:
-            lazy_frame = self.dm.lazy
             if self.group_box_subset_params.isChecked():
                 filter_col = self.combo_box_filter_column.currentText()
                 lower = self.dbl_spin_box_subset_min.value()
                 upper = self.dbl_spin_box_subset_max.value()
 
-                if filter_col == "temperature":
-                    lazy_frame = self.dm.lazy.with_columns(
-                        pl.col("temperature").round(1).alias("temperature")
-                    )
+                self.data.get_subset(filter_col, lower, upper)
 
-                    lower_idx = (
-                        lazy_frame.filter(pl.col(filter_col) >= pl.lit(lower))
-                        .first()
-                        .collect()
-                        .get_column("index")[0]
-                    )
-                    upper_idx = (
-                        lazy_frame.filter(pl.col(filter_col) >= pl.lit(upper))
-                        .first()
-                        .collect()
-                        .get_column("index")[0]
-                    )
-
-                    if lower_idx is not None and upper_idx is not None:
-                        self.dm.data = (
-                            lazy_frame.slice(lower_idx, upper_idx - lower_idx + 1)
-                            .collect()
-                            .shrink_to_fit(in_place=True)
-                        )
-                    else:
-                        logger.warning(
-                            "Could not find any data in the range specified."
-                        )
-                elif filter_col in {"index", "time_s"}:
-                    self.dm.data = (
-                        lazy_frame.filter(pl.col(filter_col).is_between(lower, upper))
-                        .collect()
-                        .shrink_to_fit(in_place=True)
-                    )
-            else:
-                self.dm.data = self.dm.lazy.collect().shrink_to_fit(in_place=True)
-
+            self.data.df.shrink_to_fit(in_place=True)
             logger.info(
-                f"Loaded {self.dm.data.shape[0]} rows from {self.dm.data.shape[1]} columns, size {self.dm.data.estimated_size('mb'):.2f} MB"
+                f"Loaded {self.data.df.shape[0]} rows from {self.data.df.shape[1]} columns, size {self.data.df.estimated_size('mb'):.2f} MB"
             )
+
             self.sig_data_loaded.emit()
         except Exception as e:
-            logger.error(e)
-            return
+            logger.error(f"Failed to load data: {e}")
+            self.statusbar.showMessage(f"Failed to load data: {e}")
 
     @Slot(str)
     def _update_plot_view(self, signal_name: SignalName) -> None:
@@ -438,18 +262,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot()
     def handle_plot_draw(self) -> None:
         with pg.BusyCursor():
-            signal_name = self.get_signal_name()
             hbr_line_exists = self.plot.hbr_signal_line is not None
             ventilation_line_exists = self.plot.ventilation_signal_line is not None
 
             if not hbr_line_exists and not ventilation_line_exists:
                 self._draw_initial_signals()
             else:
-                self._update_signal(signal_name)
+                self._update_signal(self.signal_name)
 
     def _draw_initial_signals(self) -> None:
-        hbr_data = self.dm.data.get_column("hbr").to_numpy(zero_copy_only=True)
-        ventilation_data = self.dm.data.get_column("ventilation").to_numpy(
+        hbr_data = self.data.df.get_column("hbr").to_numpy(zero_copy_only=True)
+        ventilation_data = self.data.df.get_column("ventilation").to_numpy(
             zero_copy_only=True
         )
 
@@ -460,7 +283,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._set_x_ranges()
 
     def _set_x_ranges(self) -> None:
-        data_length = self.dm.data.height
+        data_length = self.data.df.height
         plot_widgets = [
             self.plot.hbr_plot_widget,
             self.plot.bpm_hbr_plot_widget,
@@ -476,7 +299,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._update_plot_view("ventilation")
 
     def _update_signal(self, signal_name: SignalName) -> None:
-        signal_data = self.dm.data.get_column(signal_name).to_numpy(zero_copy_only=True)
+        signal_data = self.data.df.get_column(signal_name).to_numpy(zero_copy_only=True)
         plot_widget = getattr(self.plot, f"{signal_name}_plot_widget")
         self.plot.draw_signal(signal_data, plot_widget, signal_name)
         self.sig_plot_data_changed.emit(signal_name)
@@ -490,9 +313,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         # Get top and bottom parts of the data and its description
         n_rows = 15
-        df_head = self.dm.data.head(n_rows).shrink_to_fit(in_place=True)
-        df_tail = self.dm.data.tail(n_rows).shrink_to_fit(in_place=True)
-        df_description = self.dm.data.describe(percentiles=None).shrink_to_fit(
+        df_head = self.data.df.head(n_rows).shrink_to_fit(in_place=True)
+        df_tail = self.data.df.tail(n_rows).shrink_to_fit(in_place=True)
+        df_description = self.data.df.describe(percentiles=None).shrink_to_fit(
             in_place=True
         )
 
@@ -533,106 +356,114 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         for col in range(n_columns):
             table_view.horizontalHeader().setSectionResizeMode(col, resize_mode)
 
-    @Slot(dict)
-    def handle_apply_filter(self, filter_params: SignalFilterParameters) -> None:
+    @Slot()
+    def handle_apply_filter(self) -> None:
         with pg.BusyCursor():
-            norm_method = self.widgets.get_standardizing_method()
+            filter_params = self.get_filter_values()
+            standardize_params = self.get_standardization_values()
 
-            pipeline = self.widgets.get_preprocess_pipeline()
+            pipeline = cast(Pipeline, self.combo_box_preprocess_pipeline.value())
 
-            signal_name = self.get_signal_name()
+            signal_name = self.signal_name
+            processed_signal_name = f"{signal_name}_{self.data.processed_suffix}"
 
-            self.dm.preprocess_signal(
-                signal_name=signal_name,
-                norm_method=norm_method,
+            self.data.run_preprocessing(
+                name=signal_name,
                 pipeline=pipeline,
                 filter_params=filter_params,
+                standardize_params=standardize_params,
             )
             self.plot.draw_signal(
-                sig=self.dm.data.get_column(f"processed_{signal_name}").to_numpy(
-                    zero_copy_only=True
-                ),
+                sig=self.data.df.get_column(processed_signal_name).to_numpy(),
                 plot_widget=getattr(self.plot, f"{signal_name}_plot_widget"),
                 signal_name=signal_name,
             )
         self.sig_plot_data_changed.emit(signal_name)
         self.sig_data_filtered.emit(signal_name)
 
-    @Slot(dict)
-    def handle_peak_detection(self, peak_params: PeakAlgorithmInputsDict) -> None:  # noqa: F821
-        signal_name = self.get_signal_name()
-        if f"processed_{signal_name}" not in self.dm.data.columns:
+    @Slot()
+    def handle_peak_detection(self) -> None:
+        peak_params = self.get_peak_detection_values()
+        signal_name = self.signal_name
+        processed_signal_name = f"{signal_name}_{self.data.processed_suffix}"
+        peaks_name = f"{signal_name}_{self.data.peaks_suffix}"
+        plot_widget = getattr(self.plot, f"{signal_name}_plot_widget")
+        if processed_signal_name not in self.data.df.columns:
             info_msg = (
                 "Signal needs to be filtered before peak detection can be performed."
             )
-            popup = QMessageBox(
-                QMessageBox.Icon.Warning,
-                "Warning",
-                info_msg,
-                QMessageBox.StandardButton.Ok,
-                parent=self,
-            )
-            popup.exec()
+            self.sig_show_message.emit(info_msg, "info")
             return
 
         with pg.BusyCursor():
-            self.dm.find_peaks(
-                signal_name=signal_name,
-                peak_algorithm_inputs=peak_params,
+            self.data.run_peak_detection(
+                name=signal_name,
+                **peak_params,
             )
-            peaks: NDArray[np.int32] = getattr(self.dm, f"{signal_name}_peaks")
+            peaks: NDArray[np.int32] = getattr(self.data, peaks_name)
 
             self.plot.draw_peaks(
                 pos_x=peaks,
-                pos_y=self.dm.data.get_column(f"processed_{signal_name}").to_numpy(
-                    zero_copy_only=True
-                )[peaks],
-                plot_widget=getattr(self.plot, f"{signal_name}_plot_widget"),
+                pos_y=self.data.df.get_column(processed_signal_name).to_numpy()[peaks],
+                plot_widget=plot_widget,
                 signal_name=signal_name,
             )
         self.sig_peaks_updated.emit(signal_name)
 
     @Slot(str)
     def handle_draw_results(self, signal_name: SignalName) -> None:
-        instant_signal_rate: NDArray[np.float32] = getattr(
-            self.dm, f"{signal_name}_rate_len_signal"
-        )
+        rate_name = f"{signal_name}_{self.data.rate_interp_suffix}"
+        rate_plot_widget = getattr(self.plot, f"bpm_{signal_name}_plot_widget")
+        instant_signal_rate = self.data.df.get_column(rate_name).to_numpy()
+            
         self.plot.draw_bpm(
             instant_signal_rate,
-            plot_widget=getattr(self.plot, f"bpm_{signal_name}_plot_widget"),
+            plot_widget=rate_plot_widget,
             signal_name=signal_name,
         )
 
     @Slot()
     def handle_scatter_clicked(self) -> None:
-        signal_name = self.get_signal_name()
+        signal_name = self.signal_name
+        scatter_plot = getattr(self.plot, f"{signal_name}_peaks_scatter")
+        peaks_name = f"{signal_name}_{self.data.peaks_suffix}"
         peaks = np.asarray(
-            getattr(self.plot, f"{signal_name}_peaks_scatter").data["x"],
+            scatter_plot.data["x"],
             dtype=np.int32,
         )
         peaks.sort()
-        setattr(self.dm, f"{signal_name}_peaks", peaks)
-        self.dm.calculate_rate(signal_name, peaks)
+        setattr(self.data, peaks_name, peaks)
+        self.data.compute_rate(signal_name)
         self.handle_draw_results(signal_name)
 
     @Slot()
     def closeEvent(self, event: QCloseEvent) -> None:
         self._write_settings()
-        if self.widgets.console_dock.isVisible():
-            self.widgets.console_dock.close()
+        if self.ui.console_dock.isVisible():
+            self.ui.console_dock.close()
         QMainWindow.closeEvent(self, event)
 
+    # region Settings ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
     def _read_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
-        geometry: QByteArray = settings.value("geometry", QByteArray())  # type: ignore
+        geometry: QByteArray = settings.value("geometry", QByteArray())
         if geometry.size():
             self.restoreGeometry(geometry)
+        data_dir: str = settings.value("data_dir", self._app_dir.as_posix())  # type: ignore
+        self.data_dir = Path(data_dir)
+        output_dir: str = settings.value("output_dir", self._output_dir.as_posix())  # type: ignore
+        self.output_dir = Path(output_dir)
 
     def _write_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
         geometry = self.saveGeometry()
         settings.setValue("geometry", geometry)
+        settings.setValue("data_dir", self.data_dir.as_posix())
+        settings.setValue("output_dir", self.output_dir.as_posix())
 
+    # endregion
+
+    # region Profiler ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
     @Slot()
     def _start_profiler(self):
         self.profiler = cProfile.Profile()
@@ -648,42 +479,116 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             f"./logs/profiler_{int(datetime.timestamp(datetime.now()))}.pstats"
         )
 
-    def make_results(self, signal_name: SignalName) -> None:
-        identifier = self.widgets.get_identifier()
-        working_data_metadata = self.widgets.get_info_working_data()
-        processing_metadata = self.widgets.get_info_processing_params()
-        computed = self.dm.compute_results(signal_name)
-        results_df = self.dm.make_results_df(
-            peaks=getattr(self.dm, f"{signal_name}_peaks"),
-            rate=getattr(self.dm, f"{signal_name}_rate_len_peaks"),
+    # endregion
+
+    def get_identifier(self, result_name: SignalName) -> ResultIdentifier:
+        meas_date = self.data.meas_date if hasattr(self.data, "meas_date") else None
+        result_file_name = f"results_{result_name}_{self.file_info.baseName()}"
+        return ResultIdentifier(
+            name=result_name,
+            animal_id=self.line_edit_subject_id.text(),
+            environmental_condition=cast(
+                OxygenCondition, self.combo_box_oxygen_condition.currentText()
+            ),
+            data_file_name=self.file_info.fileName(),
+            data_measured_date=meas_date,
+            result_file_name=result_file_name,
+            result_creation_date=datetime.now(),
         )
-        results = Results(
-            signal_name=signal_name,
+
+    def get_data_info(self) -> SelectionParameters:
+        subset_col = self.combo_box_filter_column.currentText()
+        return SelectionParameters(
+            subset_column=subset_col,
+            lower_limit=cast(float, self.data.minmax_map[subset_col]["min"]),
+            upper_limit=cast(float, self.data.minmax_map[subset_col]["max"]),
+            selection_size=self.data.df.height,
+        )
+
+    def get_filter_values(self) -> SignalFilterParameters:
+        if self.combo_box_preprocess_pipeline.value() != "custom":
+            self.combo_box_filter_method.setValue("None")
+
+        method = cast(FilterMethod, self.combo_box_filter_method.value())
+
+        filter_params = SignalFilterParameters(method=method)
+        if filter_params["method"] != "None":
+            filter_widgets = {
+                "lowcut": self.dbl_spin_box_lowcut,
+                "highcut": self.dbl_spin_box_highcut,
+                "order": self.spin_box_order,
+                "window_size": self.spin_box_window_size,
+            }
+            for param, widget in filter_widgets.items():
+                if widget.isEnabled():
+                    filter_params[param] = widget.value()
+
+        return filter_params
+
+    def get_standardization_values(self) -> StandardizeParameters:
+        method = cast(ScaleMethod, self.combo_box_scale_method.value())
+        if self.container_scale_window_inputs.isChecked():
+            window_size = self.spin_box_scale_window_size.value()
+        else:
+            window_size = "None"
+
+        return StandardizeParameters(method=method, window_size=window_size)
+
+    def get_peak_detection_values(self) -> PeakDetectionParameters:
+        if hasattr(self.ui, "peak_params"):
+            return self.ui.peak_params.get_values()
+        else:
+            raise ValueError(
+                "Could not get peak detection values, make sure the UIHandler is properly configured."
+            )
+
+    def get_processing_info(self) -> ProcessingParameters:
+        filter_params = self.get_filter_values()
+        standardization_params = self.get_standardization_values()
+        peak_detection_params = self.get_peak_detection_values()
+        return ProcessingParameters(
+            sampling_rate=self.data.fs,
+            pipeline=cast(Pipeline, self.combo_box_preprocess_pipeline.value()),
+            filter_parameters=filter_params,
+            standardization_parameters=standardization_params,
+            peak_detection_parameters=peak_detection_params,
+        )
+
+    def make_results(self, result_name: SignalName) -> None:
+        identifier = self.get_identifier(result_name)
+        data_info = self.get_data_info()
+        processing_info = self.get_processing_info()
+        statistics = self.data.get_descriptive_stats(result_name)
+        results_df = self.data.get_result_df(result_name)
+        result_table: QTableView = getattr(self, f"table_view_results_{result_name}")
+        self._set_table_model(result_table, PolarsModel(results_df))
+        additional_data = {
+            "rate_bpm_interpolated": getattr(
+                self.data,
+                f"{result_name}_{self.data.rate_interp_suffix}",
+                np.empty(0, dtype=np.float64),
+            ),
+            "processed_signal": getattr(
+                self.data,
+                f"{result_name}_{self.data.processed_suffix}",
+                np.empty(0, dtype=np.float64),
+            ),
+        }
+        results = Result(
             identifier=identifier,
-            working_data_metadata=working_data_metadata,
-            processing_metadata=processing_metadata,
-            computed=computed,
-            processed_data=results_df,
+            info_data_selection=data_info,
+            info_data_processing=processing_info,
+            statistics=statistics,
+            result_data=results_df,
+            additional_data=additional_data,
         )
-        setattr(self, f"{signal_name}_results", results)
-
-    def make_results_table(self) -> None:
-        signal_name = self.get_signal_name()
-        main_table: pl.DataFrame = getattr(
-            self, f"{signal_name}_results"
-        ).processed_data
-        model = PolarsModel(main_table)
-        table_view: QTableView = getattr(self, f"table_view_results_{signal_name}")
-        self._set_table_model(table_view, model)
-
-    def get_results_table(self, signal_name: SignalName) -> pl.DataFrame:
-        return getattr(self, f"{signal_name}_results").processed_data
+        setattr(self, f"{result_name}_results", results)
 
 
 # ==================================================================================== #
 #                                      MAIN METHOD                                     #
 # ==================================================================================== #
-def main(app_wd: str, dev_mode: bool = False) -> None:
+def main(dev_mode: bool = False) -> None:
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"
     os.environ[
@@ -705,11 +610,10 @@ def main(app_wd: str, dev_mode: bool = False) -> None:
         level="DEBUG",
     )
     app = QApplication(sys.argv)
-    # app.setStyle(QStyleFactory.create("default"))
+    # app.setStyle("Fusion")
     app.setStyleSheet(
-        qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.DarkPalette)
+        qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.LightPalette)
     )
-
-    window = MainWindow(app_wd)
+    window = MainWindow()
     window.show()
     sys.exit(app.exec())

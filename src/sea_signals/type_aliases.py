@@ -1,12 +1,17 @@
-from typing import Any, Iterable, NotRequired, Sequence
+from datetime import date
+from pathlib import Path
+from typing import Any, NotRequired
 
 import numpy as np
-from numpy.typing import ArrayLike, NDArray
 from PySide6.QtGui import QBrush, QPainter, QPainterPath, QPen
+from numpy.typing import ArrayLike, NDArray
 from typing_extensions import Literal, TypedDict
 
+# ==================================================================================== #
+#                                     TYPE ALIASES                                     #
+# ==================================================================================== #
 type SignalName = Literal["hbr", "ventilation"]
-type NormMethod = Literal["mad", "zscore", "minmax", "None"]
+type ScaleMethod = Literal["mad", "zscore", "None"]
 type Pipeline = Literal[
     "custom",
     "ppg_elgendi",
@@ -21,7 +26,6 @@ type PeakDetectionMethod = Literal[
     "elgendi_ppg",
     "local",
     "wfdb_xqrs",
-    "wfdb_local",
     "neurokit2",
     "promac",
     "pantompkins",
@@ -56,6 +60,32 @@ type FilterMethod = Literal[
 type OxygenCondition = Literal["normoxic", "hypoxic"]
 
 
+# ==================================================================================== #
+#                                  TYPED DICTIONARIES                                  #
+# ==================================================================================== #
+
+
+# File readers +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
+class EDFReaderKwargs(TypedDict, total=False):
+    start: int
+    stop: int | None
+
+
+# Data Handler +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
+class DataHandlerKwargs(TypedDict):
+    path: Path | str
+    sampling_rate: int
+    subject_id: NotRequired[str]
+    oxygen_condition: NotRequired[OxygenCondition]
+    date_of_recording: NotRequired[date]
+
+
+class MinMaxMapping(TypedDict):
+    min: float
+    max: float
+
+
+# Signal Preprocessing +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
 class RequiredParameters(TypedDict):
     method: FilterMethod
 
@@ -68,47 +98,96 @@ class SignalFilterParameters(RequiredParameters, total=False):
     powerline: int
 
 
-class MinMaxMapping(TypedDict):
-    min: float
-    max: float
+class StandardizeParameters(TypedDict):
+    method: ScaleMethod
+    window_size: NotRequired[int | Literal["None"]]
 
 
-class PeakAlgorithmInputsDict(TypedDict):
+# Peak Detection +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
+class PeakDetectionElgendiPPG(TypedDict):
+    peakwindow: float
+    beatwindow: float
+    beatoffset: float
+    mindelay: float
+
+
+class PeakDetectionLocalMaxima(TypedDict):
+    radius: int
+
+
+class PeakDetectionNeurokit2(TypedDict):
+    smoothwindow: float
+    avgwindow: float
+    gradthreshweight: float
+    minlenweight: float
+    mindelay: float
+    correct_artifacts: bool
+
+
+class PeakDetectionProMAC(TypedDict):
+    threshold: float
+    gaussian_sd: int
+    correct_artifacts: bool
+
+
+class PeakDetectionPantompkins(TypedDict):
+    correct_artifacts: bool
+
+
+class CorrectXQRS(TypedDict):
+    search_radius: int
+    smooth_window_size: int
+    peak_dir: NotRequired[WFDBPeakDirection]
+
+
+class PeakDetectionXQRS(TypedDict):
+    sampfrom: int
+    sampto: int
+    corrections: CorrectXQRS
+
+
+type PeakDetectionInputValues = (
+    PeakDetectionElgendiPPG
+    | PeakDetectionLocalMaxima
+    | PeakDetectionNeurokit2
+    | PeakDetectionProMAC
+    | PeakDetectionPantompkins
+    | PeakDetectionXQRS
+)
+
+
+class PeakDetectionParameters(TypedDict):
     method: PeakDetectionMethod
-    input_values: dict[str, float] | dict[str, WFDBPeakDirection | int] | dict[
-        str, int
-    ] | dict[str, float | int | bool] | dict[str, float | bool] | dict[str, bool]
+    input_values: PeakDetectionInputValues
 
 
-class PeakIntervalStats(TypedDict):
-    signal_name: SignalName
-    peak_interval_mean: np.float_
-    peak_interval_median: np.float_
-    peak_interval_std: np.float_
-    peak_interval_var: np.float_
+# Results ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
+class PeakIntervalStatistics(TypedDict):
+    mean: np.float_
+    median: np.float_
+    std: np.float_
+    var: np.float_
 
 
-class SignalRateStats(TypedDict):
-    signal_name: SignalName
-    signal_rate_mean: np.float_
-    signal_rate_median: np.float_
-    signal_rate_std: np.float_
-    signal_rate_var: np.float_
+class RateStatistics(TypedDict):
+    mean: np.float_
+    median: np.float_
+    std: np.float_
+    var: np.float_
 
 
-class StatsDict(TypedDict):
-    signal_name: SignalName
-    peak_stats: PeakIntervalStats
-    signal_rate_stats: SignalRateStats
+class DescriptiveStatistics(TypedDict):
+    name: SignalName
+    interval: PeakIntervalStatistics
+    rate: RateStatistics
 
 
 class ComputedResults(TypedDict):
     signal_name: SignalName
     peak_intervals: NDArray[np.int32]
-    signal_rate_len_peaks: NDArray[np.float32]
-    signal_rate_len_signal: NDArray[np.float32]
-    peak_interval_stats: PeakIntervalStats
-    signal_rate_stats: SignalRateStats
+    signal_rate: NDArray[np.float64]
+    peak_interval_stats: PeakIntervalStatistics
+    signal_rate_stats: RateStatistics
 
 
 class InfoProcessingParams(TypedDict):
@@ -116,9 +195,9 @@ class InfoProcessingParams(TypedDict):
     sampling_rate: int
     preprocess_pipeline: Pipeline
     filter_parameters: SignalFilterParameters
-    standardization_method: NormMethod
+    standardization_method: ScaleMethod
     peak_detection_method: PeakDetectionMethod
-    peak_method_parameters: PeakAlgorithmInputsDict
+    peak_method_parameters: PeakDetectionParameters
 
 
 class InfoWorkingData(TypedDict):
@@ -127,35 +206,6 @@ class InfoWorkingData(TypedDict):
     subset_lower_bound: int | float
     subset_upper_bound: int | float
     n_samples: int
-
-
-class ParamChild(TypedDict, total=False):
-    name: str
-    type: str
-    value: str | int | float | bool
-    title: str | None
-
-
-class ParamsType(TypedDict, total=False):
-    name: str
-    type: str
-    readonly: bool
-    children: list[ParamChild]
-
-
-class ParameterOpts(TypedDict, total=False):
-    type: str
-    value: str | int | float | bool | None
-    default: str | int | float | bool | None
-    children: list[ParamsType]
-    readonly: bool
-    enabled: bool
-    visible: bool
-    renamable: bool
-    removable: bool
-    expanded: bool
-    syncExpanded: bool
-    title: str | None
 
 
 class GeneralParameterOptions(TypedDict, total=False):
@@ -167,14 +217,6 @@ class GeneralParameterOptions(TypedDict, total=False):
     title: str
     default: Any
     expanded: bool
-
-
-class SliderParameterOptions(GeneralParameterOptions):
-    limits: Iterable[int | float]
-    step: int | float
-    span: NotRequired[Sequence[int | float]]
-    format: str
-    precision: int
 
 
 type PGSymbols = (

@@ -1,60 +1,198 @@
 import types
-from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
-from PySide6.QtGui import QPalette
 
 import numpy as np
 import polars as pl
 import pyqtgraph as pg
 import rich
-from loguru import logger
 from pyqtgraph.console import ConsoleWidget
 from pyqtgraph.parametertree import ParameterTree
 from PySide6.QtCore import (
+    QDate,
     QObject,
     QPointF,
     Qt,
     Signal,
     Slot,
 )
+from PySide6.QtGui import QFont, QStandardItemModel
 from PySide6.QtWidgets import (
     QDockWidget,
     QMessageBox,
-    QSizePolicy,
     QVBoxLayout,
 )
 
-from .custom_types import (
+from .models.io import parse_file_name
+from .models.peaks import UIPeakDetection
+from .type_aliases import (
     FilterMethod,
-    InfoProcessingParams,
-    InfoWorkingData,
-    NormMethod,
-    OxygenCondition,
-    PeakAlgorithmInputsDict,
     PeakDetectionMethod,
     Pipeline,
-    SignalFilterParameters,
+    ScaleMethod,
     SignalName,
 )
-from .models.data import (
-    Identifier,
-)
-from .models.peaks import PeakDetectionParameter
-from .views.plots import PlotManager
+from .views.plots import PlotHandler
 
 if TYPE_CHECKING:
     from .app import MainWindow
+
+COMBO_BOX_ITEMS = {
+    "combo_box_peak_detection_method": {
+        "Elgendi (PPG, fast)": "elgendi_ppg",
+        "Local Maxima (Any, fast)": "local",
+        "XQRS (ECG, medium)": "wfdb_xqrs",
+        "Neurokit (ECG, fast)": "neurokit2",
+        "ProMAC (ECG, slow)": "promac",
+        "Pan and Tompkins (ECG, medium)": "pantompkins",
+        "Nabian (ECG)": "nabian",
+        "Gamboa (ECG)": "gamboa",
+        "Slope Sum Function (ECG)": "slopesumfunction",
+        "Zong (ECG)": "zong",
+        "Hamilton (ECG)": "hamilton",
+        "Christov (ECG)": "christov",
+        "Engzeemod (ECG)": "engzeemod",
+        "Elgendi (ECG)": "elgendi_ecg",
+        "Kalidas (ECG)": "kalidas",
+        "Martinez (ECG)": "martinez",
+        "Rodrigues (ECG)": "rodrigues",
+        "VGraph (ECG)": "vgraph",
+    },
+    "combo_box_filter_method": {
+        "Butterworth (SOS)": "butterworth",
+        "Butterworth (BA)": "butterworth_ba",
+        "Savitzky-Golay": "savgol",
+        "FIR": "fir",
+        "Bessel": "bessel",
+        "No Filter": "None",
+    },
+    "combo_box_oxygen_condition": {
+        "Normoxic": "normoxic",
+        "Hypoxic": "hypoxic",
+    },
+    "combo_box_scale_method": {
+        "No Standardization": "None",
+        "Z-Score": "zscore",
+        "Median Absolute Deviation": "mad",
+    },
+    "combo_box_preprocess_pipeline": {
+        "Custom": "custom",
+        "Elgendi (PPG)": "ppg_elgendi",
+        "Neurokit (ECG)": "ecg_neurokit2",
+    },
+}
+
+INITIAL_STATE = {
+    "table_data_preview": {
+        "model": QStandardItemModel(),
+    },
+    "table_data_info": {
+        "model": QStandardItemModel(),
+    },
+    "line_edit_active_file": {"text": ""},
+    "group_box_subset_params": {
+        "enabled": False,
+        "checked": False,
+    },
+    "container_file_info": {
+        "enabled": False,
+    },
+    "date_edit_file_info": {
+        "date": QDate.currentDate(),
+    },
+    "line_edit_subject_id": {
+        "text": "",
+    },
+    "combo_box_oxygen_condition": {
+        "currentText": "normoxic",
+    },
+    "btn_load_selection": {
+        "enabled": False,
+    },
+    "stacked_hbr_vent": {
+        "currentIndex": 0,
+    },
+    "btn_view_hbr": {
+        "checked": True,
+    },
+    "btn_view_vent": {
+        "checked": False,
+    },
+    "spin_box_fs": {
+        "value": 400,
+    },
+    "combo_box_preprocess_pipeline": {
+        "currentText": "custom",
+    },
+    "combo_box_filter_method": {
+        "enabled": True,
+        "currentText": "None",
+    },
+    "combo_box_scale_method": {
+        "enabled": True,
+        "currentText": "None",
+    },
+    "container_standardize": {
+        "enabled": True,
+    },
+    "container_scale_window_inputs": {
+        "enabled": True,
+        "checked": True,
+    },
+    "dbl_spin_box_lowcut": {
+        "value": 0.5,
+    },
+    "dbl_spin_box_highcut": {
+        "value": 8.0,
+    },
+    "spin_box_order": {
+        "value": 3,
+    },
+    "slider_order": {
+        "value": 3,
+    },
+    "spin_box_window_size": {
+        "value": 251,
+    },
+    "slider_window_size": {
+        "value": 251,
+    },
+    "combo_box_peak_detection_method": {
+        "currentText": "elgendi_ppg",
+    },
+    "btn_detect_peaks": {
+        "enabled": False,
+    },
+    "btn_compute_results": {"enabled": False},
+    "table_view_results_hbr": {
+        "model": QStandardItemModel(),
+    },
+    "table_view_results_ventilation": {
+        "model": QStandardItemModel(),
+    },
+    "tabs_result": {
+        "currentIndex": 0,
+    },
+}
+
+INITIAL_STATE_METHODS_MAPPING = {
+    "enabled": "setEnabled",
+    "checked": "setChecked",
+    "text": "setText",
+    "model": "setModel",
+    "value": "setValue",
+    "currentText": "setCurrentText",
+    "currentIndex": "setCurrentIndex",
+    "date": "setDate",
+}
+
 
 class UIHandler(QObject):
     sig_filter_inputs_ready = Signal()
     sig_preprocess_pipeline_ready = Signal(str)
     sig_ready_for_cleaning = Signal()
-    sig_apply_filter = Signal(dict)
-    sig_peak_detection_inputs = Signal(dict)
-    sig_ready_for_export = Signal()
 
-    def __init__(self, window: "MainWindow", plot: PlotManager) -> None:
+    def __init__(self, window: "MainWindow", plot: PlotHandler) -> None:
         super(UIHandler, self).__init__()
         self.window = window
         self.plot = plot
@@ -62,18 +200,19 @@ class UIHandler(QObject):
         self.connect_signals()
 
     def setup_widgets(self) -> None:
+        self._set_combo_box_items()
+
         # Signal Filtering
         self._prepare_inputs()
 
         # Peak Detection
-        self.fill_combo_box_peak_detection_method()
         self.create_peak_detection_trees()
 
         # File Info
         self._prepare_widgets()
 
         # Statusbar
-        self.create_statusbar()
+        self.window.statusbar.showMessage("Ready")
 
         # Toolbar Plots
         self._prepare_toolbars()
@@ -87,14 +226,22 @@ class UIHandler(QObject):
 
     def _prepare_widgets(self) -> None:
         self.window.container_file_info.setEnabled(False)
+        self._signal_filter_containers = [
+            self.window.dbl_spin_box_lowcut,
+            self.window.dbl_spin_box_highcut,
+            self.window.container_order_inputs,
+            self.window.container_window_size,
+        ]
+        for container in self._signal_filter_containers:
+            container.setEnabled(False)
 
     def _prepare_inputs(self) -> None:
         # Signal Filtering
         self.window.combo_box_preprocess_pipeline.setCurrentIndex(0)
-        self.window.container_standard_filter_method.setEnabled(True)
+        self.window.container_filter_pipeline.setEnabled(True)
         self.window.combo_box_filter_method.setCurrentIndex(0)
-        self.window.combo_box_standardizing_method.setCurrentIndex(0)
-        self.window.container_signal_filter_inputs.setEnabled(False)
+        self.window.combo_box_scale_method.setCurrentIndex(0)
+        self._prepare_widgets()
         self.window.dbl_spin_box_lowcut.setValue(0.5)
         self.window.dbl_spin_box_highcut.setValue(8.0)
         self.window.spin_box_order.setValue(3)
@@ -111,7 +258,7 @@ class UIHandler(QObject):
         self.window.btn_group_plot_view.setId(self.window.btn_view_vent, 1)
 
     def connect_signals(self) -> None:
-        self.window.tabWidget.currentChanged.connect(self.handle_tab_changed)
+        self.window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
         self.window.combo_box_filter_method.currentTextChanged.connect(
             self.handle_filter_method_changed
         )
@@ -119,152 +266,112 @@ class UIHandler(QObject):
             self.handle_preprocess_pipeline_changed
         )
         self.window.combo_box_peak_detection_method.currentTextChanged.connect(
-            self.handle_peak_detection_method_changed
+            self.on_peak_detection_method_changed
         )
 
-        self.window.btn_group_plot_view.idClicked.connect(
-            lambda index: self.window.stacked_hbr_vent.setCurrentIndex(index)  # type: ignore
-        )
-        self.window.btn_apply_filter.clicked.connect(self.emit_filter_settings)
         self.window.btn_apply_filter.clicked.connect(
-            lambda: self.window.btn_find_peaks.setEnabled(True)
+            lambda: self.window.btn_detect_peaks.setEnabled(True)
         )
-        self.window.btn_find_peaks.clicked.connect(self.emit_peak_detection_inputs)
-        self.window.btn_find_peaks.clicked.connect(
+        self.window.btn_detect_peaks.clicked.connect(
             lambda: self.window.btn_compute_results.setEnabled(True)
         )
 
         self.window.action_open_console.triggered.connect(self.show_console_widget)
-        self.window.tabWidget.currentChanged.connect(self.handle_tab_changed)
-
-        self.window.btn_compute_results.clicked.connect(self.update_results)
-        self.window.btn_export_to_csv.clicked.connect(self.export_to_csv)
-        self.window.btn_export_to_excel.clicked.connect(self.export_to_excel)
-        self.window.btn_export_to_text.clicked.connect(self.export_to_text)
-
-    def fill_combo_box_peak_detection_method(self) -> None:
-        method_names = [
-            "elgendi_ppg",
-            "local",
-            "wfdb_xqrs",
-            "wfdb_local",
-            "neurokit2",
-            "promac",
-            "pantompkins",
-            "nabian",
-            "gamboa",
-            "slopesumfunction",
-            "zong",
-            "hamilton",
-            "christov",
-            "engzeemod",
-            "elgendi_ecg",
-            "kalidas",
-            "martinez",
-            "rodrigues",
-            "vgraph",
-        ]
-        for method in method_names:
-            self.window.combo_box_peak_detection_method.addItem(method)
-
-    # Export Methods +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-    def get_export_params(self) -> tuple[str, SignalName, str]:
-        output_dir = self.window.line_edit_output_dir.text()
-        signal_name = (
-            "hbr"
-            if self.window.tab_widget_results.currentIndex() == 0
-            else "ventilation"
-        )
-        try:
-            original_file_name = getattr(
-                self.window, f"{signal_name}_results"
-            ).identifier.file_name
-        except Exception as e:
-            error_dialog = QMessageBox(
-                QMessageBox.Icon.Information,
-                "Error",
-                f"There are no results to export for `{signal_name}`: {e}",
-            )
-            error_dialog.exec()
-            return "", "", ""  # type: ignore
-
-        return output_dir, signal_name, original_file_name
-
-    @Slot()
-    def export_to_csv(self) -> None:
-        output_dir, signal_name, original_file_name = self.get_export_params()
-        if output_dir == "":
-            return
-        self.window.get_results_table(signal_name).write_csv(
-            f"{output_dir}/results_{signal_name}_{Path(original_file_name).stem}.csv",
-        )
-
-    @Slot()
-    def export_to_excel(self) -> None:
-        output_dir, signal_name, original_file_name = self.get_export_params()
-        if output_dir == "":
-            return
-        self.window.get_results_table(signal_name).write_excel(
-            f"{output_dir}/results_{signal_name}_{Path(original_file_name).stem}.xlsx",
-        )
-
-    @Slot()
-    def export_to_text(self) -> None:
-        output_dir, signal_name, original_file_name = self.get_export_params()
-        if output_dir == "":
-            return
-        self.window.get_results_table(signal_name).write_csv(
-            f"{output_dir}/results_{signal_name}_{Path(original_file_name).stem}.txt",
-            separator="\t",
-        )
+        self.window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
 
     def _prepare_toolbars(self) -> None:
         self.window.toolbar_plots.setVisible(False)
 
+    def _set_combo_box_items(self) -> None:
+        for key, value in COMBO_BOX_ITEMS.items():
+            getattr(self.window, key).clear()
+            getattr(self.window, key).setItems(value)
+
+    def update_data_selection_widgets(self, path: str) -> None:
+        self.window.container_file_info.setEnabled(True)
+        self.window.group_box_subset_params.setEnabled(True)
+        self.window.btn_load_selection.setEnabled(True)
+        viable_filter_columns = ("index", "time_s", "temperature")
+        column_box = self.window.combo_box_filter_column
+        column_box.blockSignals(True)
+        column_box.clear()
+        column_box.addItems(viable_filter_columns)
+        column_box.setCurrentIndex(0)
+        column_box.currentTextChanged.connect(self.update_subset_param_widgets)
+        self.update_subset_param_widgets(viable_filter_columns[0])
+        self.window.combo_box_filter_column.blockSignals(False)
+        try:
+            parsed_date, parsed_id = parse_file_name(Path(path).name)
+            self.window.date_edit_file_info.setDate(
+                QDate(parsed_date.year, parsed_date.month, parsed_date.day)
+            )
+            self.window.line_edit_subject_id.setText(parsed_id)
+        except Exception:
+            self.window.date_edit_file_info.setDate(QDate(1970, 1, 1))
+            self.window.line_edit_subject_id.setText("")
+
+    @Slot(str)
+    def update_subset_param_widgets(self, col_name: str) -> None:
+        lower = cast(float, self.window.data.minmax_map[col_name]["min"])
+        upper = cast(float, self.window.data.minmax_map[col_name]["max"])
+        fs = self.window.data.fs
+
+        widgets = [
+            self.window.dbl_spin_box_subset_min,
+            self.window.dbl_spin_box_subset_max,
+        ]
+        for w in widgets:
+            if col_name == "index":
+                w.setDecimals(0)
+                w.setSingleStep(1)
+            elif col_name == "temperature":
+                w.setDecimals(1)
+                w.setSingleStep(0.1)
+            elif col_name == "time_s":
+                w.setDecimals(4)
+                w.setSingleStep(np.round(np.divide(1, fs), 4))
+            w.setMinimum(lower)
+            w.setMaximum(upper)
+
+        widgets[0].setValue(lower)
+        widgets[1].setValue(upper)
+
     @Slot()
-    def update_results(self) -> None:
-        signal_name = self.window.get_signal_name()
-        with pg.BusyCursor():
-            self.window.make_results(signal_name)
-            self.window.make_results_table()
+    def reset_widget_state(self) -> None:
+        mw = self.window
+        mw.tabs_main.setCurrentIndex(0)
+        mapping = INITIAL_STATE_METHODS_MAPPING
+        for widget_name, state in INITIAL_STATE.items():
+            for attribute, value in state.items():
+                getattr(mw, widget_name).__getattribute__(mapping[attribute])(value)
 
-        self.sig_ready_for_export.emit()
-
-    def get_peak_detection_inputs(self) -> PeakAlgorithmInputsDict:
-        return self.peak_params.get_values()
-
-    @Slot()
-    def emit_peak_detection_inputs(self) -> None:
-        self.sig_peak_detection_inputs.emit(self.get_peak_detection_inputs())
+        self.plot.reset_plots()
+        self.temperature_label_hbr.setText("Temperature: -")
+        self.temperature_label_ventilation.setText("Temperature: -")
+        mw.statusbar.showMessage("Ready")
 
     def create_peak_detection_trees(self) -> None:
         method = "elgendi_ppg"
-        self.layout_peak_trees = QVBoxLayout(self.window.container_peak_detection_trees)
+
         self.peak_tree = ParameterTree()
-        self.peak_params = PeakDetectionParameter(name="Adjustable Parameters")
+        self.peak_params = UIPeakDetection(name="Adjustable Parameters")
         self.peak_params.set_method(method)
         self.peak_tree.setParameters(self.peak_params, showTop=True)
-        self.layout_peak_trees.addWidget(self.peak_tree)
+        self.peak_tree.setFont(QFont("Segoe UI", 9, QFont.Weight.Normal))
 
-    @Slot(str)
-    def handle_peak_detection_method_changed(self, method: PeakDetectionMethod) -> None:
+        self.window.layout_container_peak_detection_sidebar.addWidget(self.peak_tree)
+
+    @Slot()
+    def on_peak_detection_method_changed(self) -> None:
+        method = cast(PeakDetectionMethod, self.window.combo_box_peak_detection_method.value())
         try:
             self.peak_params.set_method(method)
-        except Exception:
-            error_dialog = QMessageBox(
-                QMessageBox.Icon.Information,
-                "Method not implemented",
-                f"Method `{method}` not implemented.",
-            )
-            error_dialog.exec()
-            return
+        except NotImplementedError as e:
+            self.window.sig_show_message.emit(str(e), "warning")
 
     @Slot(int)
-    def handle_tab_changed(self, index: int) -> None:
-        is_index_two = index == 2
+    def on_main_tab_changed(self, index: int) -> None:
         is_index_one = index == 1
-
-        self.window.widget_sidebar.setVisible(not is_index_two)
 
         self.window.toolbar_plots.setVisible(is_index_one)
         self.window.toolbar_plots.setEnabled(is_index_one)
@@ -293,19 +400,18 @@ class UIHandler(QObject):
             parent=self.plot.ventilation_plot_widget.plotItem,
             angle=0,
         )
-        self.plot.hbr_plot_widget.plotItem.scene().sigMouseMoved.connect(  # type: ignore
-            lambda pos: self.update_temperature_label("hbr", pos)  # type: ignore
+        self.plot.hbr_plot_widget.plotItem.scene().sigMouseMoved.connect(
+            lambda pos: self.update_temperature_label("hbr", pos)
         )
-        self.plot.ventilation_plot_widget.plotItem.scene().sigMouseMoved.connect(  # type: ignore
-            lambda pos: self.update_temperature_label("ventilation", pos)  # type: ignore
+        self.plot.ventilation_plot_widget.plotItem.scene().sigMouseMoved.connect(
+            lambda pos: self.update_temperature_label("ventilation", pos)
         )
-
 
     @Slot(QPointF)
     def update_temperature_label(self, signal_name: SignalName, pos: QPointF) -> None:
-        if not hasattr(self.window, "dm"):
+        if not hasattr(self.window, "data"):
             return
-        if not hasattr(self.window.dm, "data"):
+        if not hasattr(self.window.data, "df"):
             return
         data_pos = int(
             getattr(self.plot, f"{signal_name}_plot_widget")
@@ -313,17 +419,17 @@ class UIHandler(QObject):
             .x()
         )
         try:
-            temp_value = self.window.dm.data.get_column("temperature").to_numpy(
+            temp_value = self.window.data.df.get_column("temperature").to_numpy(
                 zero_copy_only=True
-            )[np.clip(data_pos, 0, self.window.dm.data.shape[0] - 1)]
+            )[np.clip(data_pos, 0, self.window.data.df.shape[0] - 1)]
         except Exception:
             if data_pos < 0:
                 default_index = 0
-            elif data_pos > self.window.dm.data.shape[0]:
+            elif data_pos > self.window.data.df.shape[0]:
                 default_index = -1
             else:
                 default_index = data_pos
-            temp_value = self.window.dm.data.get_column("temperature").to_numpy(
+            temp_value = self.window.data.df.get_column("temperature").to_numpy(
                 zero_copy_only=True
             )[default_index]
         if signal_name == "hbr":
@@ -367,62 +473,52 @@ class UIHandler(QObject):
             | QDockWidget.DockWidgetFeature.DockWidgetMovable
             | QDockWidget.DockWidgetFeature.DockWidgetClosable
         )
-        # dock.setFloating(True)
-        # self.console_dock.setObjectName("console_dock")
-        # self.window.addDockWidget(
-        #     Qt.DockWidgetArea.RightDockWidgetArea, self.console_dock
-        # )
 
     @Slot()
     def show_console_widget(self) -> None:
         if self.console_dock.isVisible():
-            # self.console_dock.setFloating(False)
             self.console_dock.close()
         else:
             self.console_dock.show()
-            # self.console_dock.setFloating(True)
             self.console.input.setFocus()
-        # if self.console_dock.isVisible():
-            # self.console_dock.setFocus()
-
-    def create_statusbar(self) -> None:
-        self.window.statusbar.showMessage("Ready")
 
     @Slot(str)
     def handle_filter_method_changed(self, method: str) -> None:
-        self.window.container_signal_filter_inputs.setEnabled(method != "None")
+        method = cast(FilterMethod, self.window.combo_box_filter_method.value())
+        # self.window.container_filter_pipeline.setEnabled(method != "None")
+        self.window.combo_box_filter_method.setEnabled(self.window.combo_box_preprocess_pipeline.value() == "custom")
 
         if method != "None":
             states = {
                 "butterworth": {
-                    "dbl_spin_box_lowcut": True,
-                    "dbl_spin_box_highcut": True,
-                    "spin_box_order": True,
-                    "spin_box_window_size": False,
+                    "container_lowcut": True,
+                    "container_highcut": True,
+                    "container_order_inputs": True,
+                    "container_window_size": False,
                 },
                 "butterworth_ba": {
-                    "dbl_spin_box_lowcut": True,
-                    "dbl_spin_box_highcut": True,
-                    "spin_box_order": True,
-                    "spin_box_window_size": False,
+                    "container_lowcut": True,
+                    "container_highcut": True,
+                    "container_order_inputs": True,
+                    "container_window_size": False,
                 },
                 "bessel": {
-                    "dbl_spin_box_lowcut": True,
-                    "dbl_spin_box_highcut": True,
-                    "spin_box_order": True,
-                    "spin_box_window_size": False,
+                    "container_lowcut": True,
+                    "container_highcut": True,
+                    "container_order_inputs": True,
+                    "container_window_size": False,
                 },
                 "fir": {
-                    "dbl_spin_box_lowcut": True,
-                    "dbl_spin_box_highcut": True,
-                    "spin_box_order": False,
-                    "spin_box_window_size": True,
+                    "container_lowcut": True,
+                    "container_highcut": True,
+                    "container_order_inputs": False,
+                    "container_window_size": True,
                 },
                 "savgol": {
-                    "dbl_spin_box_lowcut": False,
-                    "dbl_spin_box_highcut": False,
-                    "spin_box_order": True,
-                    "spin_box_window_size": True,
+                    "container_lowcut": False,
+                    "container_highcut": False,
+                    "container_order_inputs": True,
+                    "container_window_size": True,
                 },
             }
             for widget_name, enabled in states[method].items():
@@ -432,39 +528,36 @@ class UIHandler(QObject):
 
     def _set_elgendi_cleaning_params(self) -> None:
         self.window.combo_box_filter_method.blockSignals(True)
-        self.window.combo_box_filter_method.setCurrentText("butterworth")
+        self.window.combo_box_filter_method.setValue("butterworth")
         self.window.combo_box_filter_method.blockSignals(False)
         self.window.dbl_spin_box_lowcut.setValue(0.5)
         self.window.dbl_spin_box_highcut.setValue(8.0)
         self.window.spin_box_order.setValue(3)
-        self.window.dbl_spin_box_lowcut.setEnabled(False)
-        self.window.dbl_spin_box_highcut.setEnabled(False)
-        self.window.spin_box_order.setEnabled(False)
+        self.window.slider_order.setValue(3)
+        self.window.spin_box_window_size.setValue(250)
+        self.window.slider_window_size.setValue(250)
         self.sig_filter_inputs_ready.emit()
 
     @Slot(str)
     def handle_preprocess_pipeline_changed(self, pipeline: str) -> None:
-        logger.debug(f"Preprocess pipeline changed to {pipeline}.")
-        if pipeline == "custom":
-            self.window.container_standard_filter_method.setEnabled(True)
-            self.window.container_signal_filter_inputs.setEnabled(True)
-            selected_filter = self.window.combo_box_filter_method.currentText()
+        pipeline_value = cast(Pipeline, self.window.combo_box_preprocess_pipeline.value())
+        if pipeline_value == "custom":
+            for container in self._signal_filter_containers:
+                container.setEnabled(True)
+            selected_filter = cast(str, self.window.combo_box_filter_method.value())
             self.handle_filter_method_changed(selected_filter)
 
-        elif pipeline == "ppg_elgendi":
-            self.window.container_standard_filter_method.setEnabled(False)
-            self.window.container_signal_filter_inputs.setEnabled(False)
+        elif pipeline_value == "ppg_elgendi":
+            for container in self._signal_filter_containers:
+                container.setEnabled(False)
             self._set_elgendi_cleaning_params()
         else:
             # TODO: add UI and logic for other signal cleaning pipelines
-            self.window.container_standard_filter_method.setEnabled(False)
-            self.window.container_signal_filter_inputs.setEnabled(False)
-            info_box = QMessageBox(
-                QMessageBox.Icon.Information,
-                "Info",
-                f"Selected pipeline {pipeline} not yet implemented, use either 'custom' or 'ppg_elgendi'.",
-            )
-            info_box.exec()
+            for container in self._signal_filter_containers:
+                container.setEnabled(False)
+            msg = f"Selected pipeline {pipeline} not yet implemented, use either 'custom' or 'ppg_elgendi'."
+            self.window.sig_show_message.emit(msg, "info")
+            return
             # logger.warning(f"Pipeline {pipeline} not implemented yet.")
             # "ecg_neurokit2"
             # "ecg_biosppy"
@@ -474,114 +567,3 @@ class UIHandler(QObject):
             # "ecg_engzeemod2012"
 
         self.sig_preprocess_pipeline_ready.emit(pipeline)
-
-    def get_filter_settings(self) -> SignalFilterParameters:
-        current_pipeline = self.get_preprocess_pipeline()
-
-        current_method = self.get_filter_method()
-        if current_pipeline != "custom":
-            current_method = "None"
-
-        # if current_method not in [
-        #     "butterworth",
-        #     "butterworth_ba",
-        #     "savgol",
-        #     "fir",
-        #     "bessel",
-        #     "None",
-        # ]:
-        #     logger.error(f"Unknown filter method: {current_method}")
-        #     raise ValueError(f"Unknown filter method: {current_method}")
-
-        # filter_settings = cast(
-        #     SignalFilterParameters,
-        #     {
-        #         "method": current_method,
-        #     },
-        # )
-        filter_settings = SignalFilterParameters(method=current_method)
-
-        if filter_settings["method"] != "None":
-            if self.window.dbl_spin_box_lowcut.isEnabled():
-                filter_settings["lowcut"] = self.window.dbl_spin_box_lowcut.value()
-
-            if self.window.dbl_spin_box_highcut.isEnabled():
-                filter_settings["highcut"] = self.window.dbl_spin_box_highcut.value()
-
-            if self.window.spin_box_order.isEnabled():
-                filter_settings["order"] = self.window.spin_box_order.value()
-
-            if self.window.spin_box_window_size.isEnabled():
-                filter_settings[
-                    "window_size"
-                ] = self.window.spin_box_window_size.value()
-
-        logger.debug(f"Using filter settings: {filter_settings}")
-        return filter_settings
-
-    @Slot()
-    def emit_filter_settings(self) -> None:
-        logger.debug(f"Emitting filter settings: {self.get_filter_settings()}")
-        self.sig_apply_filter.emit(self.get_filter_settings())
-
-    def get_standardizing_method(self) -> NormMethod:
-        return cast(
-            NormMethod, self.window.combo_box_standardizing_method.currentText()
-        )
-
-    def get_preprocess_pipeline(self) -> Pipeline:
-        return cast(Pipeline, self.window.combo_box_preprocess_pipeline.currentText())
-
-    def get_filter_method(self) -> FilterMethod:
-        return cast(FilterMethod, self.window.combo_box_filter_method.currentText())
-
-    def get_identifier(self) -> Identifier:
-        signal_name = self.window.get_signal_name()
-        file_name = self.window.line_edit_active_file.text()
-        subject_id = self.window.line_edit_subject_id.text()
-        date_of_recording = self.window.date_edit_file_info.date().toPython()
-        date_of_recording = cast(date, date_of_recording)
-        oxygen_condition = self.window.combo_box_oxygen_condition.currentText()
-        oxygen_condition = cast(OxygenCondition, oxygen_condition)
-        return Identifier(
-            signal_name=signal_name,
-            file_name=file_name,
-            subject_id=subject_id,
-            date_of_recording=date_of_recording,
-            oxygen_condition=oxygen_condition,
-        )
-
-    def get_info_working_data(self) -> InfoWorkingData:
-        signal_name = self.window.get_signal_name()
-        subset_column = self.window.combo_box_filter_column.currentText()
-        subset_lower_bound = self.window.dbl_spin_box_subset_min.value()
-        subset_upper_bound = self.window.dbl_spin_box_subset_max.value()
-        n_samples = self.window.dm.data.shape[0]
-        return InfoWorkingData(
-            signal_name=signal_name,
-            subset_column=subset_column,
-            subset_lower_bound=subset_lower_bound,
-            subset_upper_bound=subset_upper_bound,
-            n_samples=n_samples,
-        )
-
-    def get_info_processing_params(self) -> InfoProcessingParams:
-        signal_name = self.window.get_signal_name()
-        sampling_rate = self.window.spin_box_fs.value()
-        preprocess_pipeline = self.get_preprocess_pipeline()
-        filter_parameters = self.get_filter_settings()
-        standardization_method = self.get_standardizing_method()
-        peak_detection_method = (
-            self.window.combo_box_peak_detection_method.currentText()
-        )
-        peak_detection_method = cast(PeakDetectionMethod, peak_detection_method)
-        peak_method_parameters = self.get_peak_detection_inputs()
-        return InfoProcessingParams(
-            signal_name=signal_name,
-            sampling_rate=sampling_rate,
-            preprocess_pipeline=preprocess_pipeline,
-            filter_parameters=filter_parameters,
-            standardization_method=standardization_method,
-            peak_detection_method=peak_detection_method,
-            peak_method_parameters=peak_method_parameters,
-        )

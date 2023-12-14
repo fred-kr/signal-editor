@@ -2,22 +2,21 @@ from typing import Any
 
 import numpy as np
 import pyqtgraph as pg
-from loguru import logger
 from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6.QtCore import QPointF, Qt, Signal, Slot
 from PySide6.QtWidgets import QWidget
 
-from ..custom_types import SignalName
+from ..type_aliases import SignalName
 
 
-class PlotManager(QWidget):
+class PlotHandler(QWidget):
     """
     Class that manages showing and updating plots.
     """
 
-    sig_peaks_edited = Signal()
     sig_bpm_updated = Signal(str)
+    sig_peaks_edited = Signal()
 
     def __init__(
         self,
@@ -128,7 +127,9 @@ class PlotManager(QWidget):
 
         self.hbr_plot_widget.setXLink("bpm_hbr")
         self.ventilation_plot_widget.setXLink("bpm_ventilation")
+        self._add_targets()
 
+    def _add_targets(self) -> None:
         self.hbr_target = pg.TargetItem(
             pos=(0, 0),
             size=18,
@@ -137,7 +138,11 @@ class PlotManager(QWidget):
             movable=False,
         )
         self.ventilation_target = pg.TargetItem(
-            pos=(0, 0), size=18, label=self.target_pos, labelOpts={"fill": (0, 0, 0, 120)}, movable=False
+            pos=(0, 0),
+            size=18,
+            label=self.target_pos,
+            labelOpts={"fill": (0, 0, 0, 120)},
+            movable=False,
         )
 
         self.hbr_target.setZValue(65)
@@ -176,6 +181,8 @@ class PlotManager(QWidget):
         for pw in plot_widgets:
             getattr(self, pw).getPlotItem().clear()
             getattr(self, pw).getPlotItem().legend.clear()
+        self.hbr_signal_line = None
+        self.ventilation_signal_line = None
         self._prepare_plot_items()
 
     def draw_signal(

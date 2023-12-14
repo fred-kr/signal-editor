@@ -1,10 +1,9 @@
 import re
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
-from typing import Iterable, Any
+from typing import Any, Iterable, cast
 
 import mne.io
-import numpy as np
 import polars as pl
 from loguru import logger
 
@@ -15,6 +14,8 @@ def parse_file_name(
     date_match = re.search(date_pattern, file_name)
     id_match = re.search(id_pattern, file_name)
 
+    if not date_match or not id_match:
+        return date.today(), ""
     date_ddmmyyyy = date(
         year=int(date_match[0][4:8], base=10),
         month=int(date_match[0][2:4], base=10),
@@ -80,40 +81,27 @@ def read_excel(
     )
 
 
-# TODO: Refactor (single responsibility principle), allow reading just one of the signal columns
+# TODO: Make generic
 def read_edf(
     file_path: str,
-) -> pl.LazyFrame:
+    start: int = 0,
+    stop: int | None = None,
+) -> tuple[pl.LazyFrame, datetime, float]:
     """
-    Reads an EDF file and returns a `LazyFrame` object containing the data.
+    Reads data from an EDF file into a polars DataFrame.
 
     Args:
         file_path (str): The path to the EDF file.
+        start (int, optional): The start index of the data to read. Defaults to 0.
+        stop (int, optional): The end index of the data to read. Defaults to None.
 
     Returns:
-        pl.LazyFrame: A `LazyFrame` object containing the EDF data.
-
-    Raises:
-        FileNotFoundError: If the specified file does not exist.
-
-    Examples:
-        >>> read_edf("path/to/file.edf")
-        <polars.LazyFrame>
-
-    Note:
-        This function assumes that the EDF file is in the European Data Format (EDF) and
-        uses the `mne.io.read_raw_edf` function from the MNE library to read the file.
-
-        The function reads the raw EDF data, extracts the data and time information,
-        renames the columns based on a predefined mapping, creates an index column,
-        defines the schema for the `LazyFrame`, and filters out rows where the temperature,
-        hbr, and ventilation columns are all zero.
-
-        The resulting `LazyFrame` object is returned.
+        pl.DataFrame: A polars DataFrame containing the data from the EDF file.
     """
     raw_edf = mne.io.read_raw_edf(file_path)
-    data, times = raw_edf.get_data(return_times=True)
-    channel_names: list[str] = raw_edf.info.ch_names
+    channel_names = cast(list[str], raw_edf.info.ch_names)
+    date_measured = cast(datetime, raw_edf.info["meas_date"])
+    sampling_rate = cast(float, raw_edf.info["sfreq"])
 
     rename_map = {
         "temp": "temperature",
@@ -123,33 +111,26 @@ def read_edf(
     column_names = [
         next(
             (rename_map[key] for key in rename_map if key in name.lower()),
-            f"channel_{i+1}",
+            f"channel_{i}",
         )
         for i, name in enumerate(channel_names)
     ]
-
-    index_column = np.arange(0, len(times), 1, dtype=np.uint32)
-
-    schema = {
-        "index": pl.UInt32,
-        "time_s": pl.Float64,
-        **{name: pl.Float32 for name in column_names},
-    }
-
-    return (
-        pl.LazyFrame(
-            data=np.column_stack((index_column, times, data.T)),
-            schema=schema,
+    data, times = raw_edf.get_data(start=start, stop=stop, return_times=True)
+    lf = (
+        pl.from_numpy(
+            data.transpose(), schema={name: pl.Float64 for name in column_names}
         )
+        .lazy()
+        .with_row_count("index", offset=start)
         .with_columns(
-            pl.col("time_s").cast(pl.Float64).round(4),
-            pl.col("temperature").cast(pl.Float32).round(1),
-            pl.col("hbr").cast(pl.Float32).round(4),
-            pl.col("ventilation").cast(pl.Float32).round(4),
+            pl.Series("time_s", times, dtype=pl.Float64),
+            pl.col("temperature").round(1),
         )
-        .filter(  # This gets rid of the ending sections where the sensor was already disconnected from power
+        .filter(
             (pl.col("temperature") != 0)
             & (pl.col("hbr") != 0)
             & (pl.col("ventilation") != 0)
         )
+        .select("index", "time_s", *column_names)
     )
+    return lf, date_measured, sampling_rate
