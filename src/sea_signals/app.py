@@ -14,14 +14,13 @@ from numpy.typing import NDArray
 from PySide6.QtCore import (
     QAbstractTableModel,
     QByteArray,
-    QDate,
     QFileInfo,
     QSettings,
     Qt,
     Signal,
     Slot,
 )
-from PySide6.QtGui import QCloseEvent, QStandardItemModel
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -45,6 +44,7 @@ from .models.data import (
 from .type_aliases import (
     FilterMethod,
     OxygenCondition,
+    PeakDetectionManualEdited,
     PeakDetectionParameters,
     Pipeline,
     ScaleMethod,
@@ -55,6 +55,7 @@ from .type_aliases import (
 from .ui_handler import UIHandler
 from .views.main_window import Ui_MainWindow
 from .views.plots import PlotHandler
+
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     sig_data_filtered = Signal(str)
@@ -71,6 +72,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setWindowTitle("Signal Editor")
         self.setDockNestingEnabled(True)
         self._app_dir: Path = Path.cwd()
+        self._data_dir: Path = Path.expanduser(Path("~"))
         self._output_dir: Path = Path(self._app_dir, "output")
         self._output_dir.mkdir(exist_ok=True)
         self.plot = PlotHandler()
@@ -87,8 +89,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return self._output_dir
 
     @output_dir.setter
-    def output_dir(self, value: Path) -> None:
-        self._output_dir = value
+    def output_dir(self, value: Path | str) -> None:
+        self._output_dir = Path(value)
 
     @property
     def app_dir(self) -> Path:
@@ -96,11 +98,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @property
     def data_dir(self) -> Path:
-        return self._data_dir if hasattr(self, "_data_dir") else self.app_dir
+        return self._data_dir
 
     @data_dir.setter
-    def data_dir(self, value: Path) -> None:
-        self._data_dir = value
+    def data_dir(self, value: Path | str) -> None:
+        self._data_dir = Path(value)
 
     @property
     def signal_name(self) -> SignalName:
@@ -128,7 +130,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.btn_apply_filter.clicked.connect(self.handle_apply_filter)
         self.btn_detect_peaks.clicked.connect(self.handle_peak_detection)
-        
+
         self.btn_browse_output_dir.clicked.connect(self.select_output_location)
         self.btn_load_selection.clicked.connect(self.handle_load_selection)
         self.btn_select_file.clicked.connect(self.select_data_file)
@@ -204,27 +206,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             options=QFileDialog.Option.ShowDirsOnly,
         ):
             self.line_edit_output_dir.setText(path)
-            self.output_dir = Path(path)
+            self.output_dir = path
 
     @Slot()
     def select_data_file(self) -> None:
-        if not hasattr(self, "_data_dir"):
-            self._data_dir = (
-                Path(self.file_info.path())
-                if self.file_info.isFile()
-                else self._app_dir
-            )
         path, _ = QFileDialog.getOpenFileName(
             self,
             caption="Select File",
-            dir=self._data_dir.as_posix(),
+            dir=self.data_dir.as_posix(),
             filter="EDF (*.edf);;CSV (*.csv);;TXT (*.txt);;Feather (*.feather);;All Files (*)",
             selectedFilter="All Files (*)",
         )
         if path:
-            self.file_info.setFile(path)
             self.ui.reset_widget_state()
-            self.line_edit_active_file.setText(self.file_info.fileName())
+            self.file_info.setFile(path)
+            self.line_edit_active_file.setText(Path(path).name)
             self.data.read(path)
             self.ui.update_data_selection_widgets(path)
 
@@ -415,7 +411,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         rate_name = f"{signal_name}_{self.data.rate_interp_suffix}"
         rate_plot_widget = getattr(self.plot, f"bpm_{signal_name}_plot_widget")
         instant_signal_rate = self.data.df.get_column(rate_name).to_numpy()
-            
+
         self.plot.draw_bpm(
             instant_signal_rate,
             plot_widget=rate_plot_widget,
@@ -449,17 +445,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         geometry: QByteArray = settings.value("geometry", QByteArray())
         if geometry.size():
             self.restoreGeometry(geometry)
-        data_dir: str = settings.value("data_dir", self._app_dir.as_posix())  # type: ignore
+        data_dir: str = settings.value("datadir", ".")  # type: ignore
         self.data_dir = Path(data_dir)
-        output_dir: str = settings.value("output_dir", self._output_dir.as_posix())  # type: ignore
+        output_dir: str = settings.value("outputdir", ".")  # type: ignore
         self.output_dir = Path(output_dir)
 
     def _write_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
         geometry = self.saveGeometry()
         settings.setValue("geometry", geometry)
-        settings.setValue("data_dir", self.data_dir.as_posix())
-        settings.setValue("output_dir", self.output_dir.as_posix())
+        data_dir = self.data_dir.as_posix()
+        output_dir = self.output_dir.as_posix()
+        settings.setValue("datadir", data_dir)
+        settings.setValue("outputdir", output_dir)
 
     # endregion
 
@@ -562,6 +560,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         results_df = self.data.get_result_df(result_name)
         result_table: QTableView = getattr(self, f"table_view_results_{result_name}")
         self._set_table_model(result_table, PolarsModel(results_df))
+        manual_edits = PeakDetectionManualEdited(
+            added_peaks=self.plot.added_points[result_name],
+            removed_peaks=self.plot.removed_points[result_name],
+        )
         additional_data = {
             "rate_bpm_interpolated": getattr(
                 self.data,
@@ -573,6 +575,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 f"{result_name}_{self.data.processed_suffix}",
                 np.empty(0, dtype=np.float64),
             ),
+            "manual_edits": manual_edits,
         }
         results = Result(
             identifier=identifier,

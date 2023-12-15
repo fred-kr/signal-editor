@@ -72,14 +72,6 @@ class EDFReaderKwargs(TypedDict, total=False):
 
 
 # Data Handler +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-class DataHandlerKwargs(TypedDict):
-    path: Path | str
-    sampling_rate: int
-    subject_id: NotRequired[str]
-    oxygen_condition: NotRequired[OxygenCondition]
-    date_of_recording: NotRequired[date]
-
-
 class MinMaxMapping(TypedDict):
     min: float
     max: float
@@ -104,6 +96,10 @@ class StandardizeParameters(TypedDict):
 
 
 # Peak Detection +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
+class PeakDetectionManualEdited(TypedDict):
+    added_peaks: list[int]
+    removed_peaks: list[int]
+
 class PeakDetectionElgendiPPG(TypedDict):
     peakwindow: float
     beatwindow: float

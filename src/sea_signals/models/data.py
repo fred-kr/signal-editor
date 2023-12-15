@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING, Any, Iterable, Literal, Unpack, cast
 import neurokit2 as nk
 import numpy as np
 import polars as pl
-import wfdb.processing
-from numpy.typing import NDArray
 import pyqtgraph as pg
+import wfdb.processing
+from loguru import logger
+from numpy.typing import NDArray
 from PySide6.QtCore import (
     QAbstractTableModel,
     QModelIndex,
@@ -24,6 +25,7 @@ from ..type_aliases import (
     OxygenCondition,
     PeakDetectionElgendiPPG,
     PeakDetectionLocalMaxima,
+    PeakDetectionManualEdited,
     PeakDetectionNeurokit2,
     PeakDetectionPantompkins,
     PeakDetectionParameters,
@@ -117,16 +119,18 @@ class Result:
     info_data_processing: ProcessingParameters
     statistics: DescriptiveStatistics
     result_data: pl.DataFrame
-    additional_data: dict[str, NDArray[np.float64]]
+    additional_data: dict[str, NDArray[np.float64] | PeakDetectionManualEdited]
 
 
 def standardize(
-    sig: NDArray[np.float64], method: ScaleMethod, window_size: int | Literal["None"] = "None"
+    sig: NDArray[np.float64],
+    method: ScaleMethod,
+    window_size: int | Literal["None"] = "None",
 ) -> NDArray[np.float64]:
     if method == "None":
         return sig
     is_robust = method == "mad"
-    
+
     return scale_signal(sig, robust=is_robust, window_size=window_size).to_numpy()
 
 
@@ -136,13 +140,16 @@ def signal_period(
     desired_length: int | None = None,
     interpolation_method: str = "monotone_cubic",
 ) -> NDArray[np.float64]:
-    return np.asarray(nk.signal_period(peaks, sampling_rate, desired_length, interpolation_method), dtype=np.float64)
+    return np.asarray(
+        nk.signal_period(peaks, sampling_rate, desired_length, interpolation_method),
+        dtype=np.float64,
+    )
     # if peaks.size <= 3:
     #     return np.full(peaks, np.nan)
 
     # if desired_length is None:
     #     desired_length = peaks.size
-        
+
     # if desired_length <= peaks[-1]:
     #     raise ValueError(
     #         "`desired_length` must be either `None` or larger than the index of the last peak."
@@ -182,7 +189,7 @@ class DataHandler(QObject):
         super().__init__(parent)
         self._parent = parent
         self.df: pl.DataFrame = pl.DataFrame()
-        self._sampling_rate: int = 400
+        self._sampling_rate: int = parent.spin_box_fs.value()
         self.processed_suffix = "processed"
         self.peaks_suffix = "peaks"
         self.rate_suffix = "rate"
@@ -199,7 +206,7 @@ class DataHandler(QObject):
     @Slot(int)
     def update_fs(self, value: int) -> None:
         self.fs = value
-        
+
     def read(self, path: str | Path) -> None:
         path = Path(path)
         suffix = path.suffix
@@ -208,18 +215,20 @@ class DataHandler(QObject):
             self._parent.sig_show_message.emit(info_msg, "info")
             return
 
-        if suffix == ".edf":
+        if suffix == ".csv":
+            self.df = pl.read_csv(path)
+        elif suffix == ".edf":
             df, meas_date, sampling_rate = read_edf(path.as_posix())
             self._lazy_df = df
             self.df = df.collect()
             self.meas_date = meas_date
             self.fs = sampling_rate
-        elif suffix == ".csv":
-            self.df = pl.read_csv(path)
+        elif suffix == ".feather":
+            df = pl.scan_ipc(path)
+            self._lazy_df = df
+            self.df = df.collect()
         elif suffix == ".txt":
             self.df = pl.read_csv(path, separator="\t")
-        elif suffix == ".feather":
-            self.df = pl.read_ipc(path)
         elif suffix == ".xlsx":
             self.df = pl.read_excel(path)
 
@@ -236,19 +245,26 @@ class DataHandler(QObject):
             .collect()
             .get_column("index")[0]
         )
+        logger.debug(f"b1: {b1}")
         b2 = (
             lf.sort(pl.col(filter_col), maintain_order=True)
             .filter(pl.col(filter_col) >= pl.lit(upper))
             .collect()
             .get_column("index")[0]
         )
+        logger.debug(f"b2: {b2}")
         l_index = min(b1, b2)
         u_index = max(b1, b2)
+
+        logger.debug(f"{l_index=}, {u_index=}")
         return l_index, u_index
 
     def get_subset(self, subset_col: str, lower: float, upper: float) -> None:
         lf = self._lazy_df
-        if lower == self.minmax_map[subset_col]["min"] and upper == self.minmax_map[subset_col]["max"]:
+        if (
+            lower == self.minmax_map[subset_col]["min"]
+            and upper == self.minmax_map[subset_col]["max"]
+        ):
             return
         if subset_col in {"time_s", "temperature"}:
             lower, upper = self.get_slice_indices(lf, subset_col, lower, upper)
@@ -284,12 +300,14 @@ class DataHandler(QObject):
             if processed_name in self.df.columns:
                 self.df = self.df.drop(processed_name)
 
-            sig: NDArray[np.float64] = self.df.get_column(name).cast(pl.Float64).to_numpy()
+            sig: NDArray[np.float64] = (
+                self.df.get_column(name).cast(pl.Float64).to_numpy()
+            )
             dlg.setValue(20)
             filter_method = filter_params.get("method", "None")
             standardize_method = standardize_params.get("method", "None")
             standardize_window_size = standardize_params.get("window_size", "None")
-            
+
             if pipeline == "custom":
                 if filter_method == "None":
                     filtered = sig
@@ -356,7 +374,6 @@ class DataHandler(QObject):
             error_msg = f"Peak detection method {method} not implemented. Choose one of 'elgendi_ppg', 'local', 'neurokit2', 'pantompkins', 'promac' or 'wfdb_xqrs'."
             self._parent.sig_show_message.emit(error_msg, "warning")
             return
-        
 
         setattr(self, peaks_name, peaks)
         self.sig_dh_peaks_updated.emit(name)
@@ -368,24 +385,49 @@ class DataHandler(QObject):
         peak_attr_name = f"{name}_{self.peaks_suffix}"
 
         peaks: NDArray[np.int32] = getattr(self, peak_attr_name)
-        period_interp = signal_period(
-            peaks,
-            self.fs,
-            desired_length=self.df.height,
-            interpolation_method="monotone_cubic",
+        # period_interp = np.asarray(
+        #     nk.signal_period(
+        #         peaks,
+        #         self.fs,
+        #         desired_length=self.df.height,
+        #         interpolation_method="monotone_cubic",
+        #     ),
+        #     dtype=np.float64,
+        # )
+        # if np.any(np.isnan(period_interp)):
+        #     return
+        # rate_interp = 60 / period_interp
+        rate_interp = np.asarray(
+            nk.signal_rate(
+                peaks=peaks,
+                sampling_rate=self.fs,
+                desired_length=self.df.height,
+                interpolation_method="monotone_cubic",
+                show=False,
+            ),
+            dtype=np.float64,
         )
-        if np.any(np.isnan(period_interp)):
-            return
-        rate_interp = 60 / period_interp
 
-        period_peaks = signal_period(
-            peaks, self.fs, desired_length=None, interpolation_method="monotone_cubic"
+        # period_peaks = nk.signal_period(
+        #     peaks, self.fs, desired_length=None, interpolation_method="monotone_cubic"
+        # )
+        # rate_peaks = 60 / period_peaks
+        rate_peaks = np.asarray(
+            nk.signal_rate(
+                peaks=peaks,
+                sampling_rate=self.fs,
+                desired_length=None,
+                interpolation_method="monotone_cubic",
+                show=False,
+            ),
+            dtype=np.float64,
         )
-        rate_peaks = 60 / period_peaks
 
         if rate_interp_name in self.df.columns:
             self.df = self.df.drop(rate_interp_name)
-        self.df.hstack([pl.Series(rate_interp_name, rate_interp, dtype=pl.Float64)], in_place=True)
+        self.df.hstack(
+            [pl.Series(rate_interp_name, rate_interp, dtype=pl.Float64)], in_place=True
+        )
 
         setattr(self, rate_peaks_name, rate_peaks)
         self.sig_dh_rate_updated.emit(name)

@@ -118,9 +118,6 @@ INITIAL_STATE = {
     "btn_view_vent": {
         "checked": False,
     },
-    "spin_box_fs": {
-        "value": 400,
-    },
     "combo_box_preprocess_pipeline": {
         "currentText": "custom",
     },
