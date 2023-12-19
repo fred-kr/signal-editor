@@ -9,8 +9,6 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 import qdarkstyle
-from loguru import logger
-from numpy.typing import NDArray
 from PySide6.QtCore import (
     QAbstractTableModel,
     QByteArray,
@@ -29,6 +27,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTableView,
 )
+from loguru import logger
+from numpy.typing import NDArray
 from typing_extensions import Literal
 
 from .models.data import (
@@ -72,16 +72,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setWindowTitle("Signal Editor")
         self.setDockNestingEnabled(True)
         self._app_dir: Path = Path.cwd()
-        self._data_dir: Path = Path.expanduser(Path("~"))
-        self._output_dir: Path = Path(self._app_dir, "output")
+        self._data_dir: Path = Path.cwd()
+        self._output_dir: Path = Path(self._app_dir / "output")
         self._output_dir.mkdir(exist_ok=True)
-        self.plot = PlotHandler()
+        self.plot = PlotHandler(self)
         self.data = DataHandler(self)
         self.ui = UIHandler(self, self.plot)
-        self.file_info = QFileInfo()
+        self.file_info: QFileInfo = QFileInfo()
+        # self._add_profiler()
         self.connect_signals()
         self._read_settings()
-        # self._add_profiler()
         self.line_edit_output_dir.setText(self._output_dir.as_posix())
 
     @property
@@ -113,8 +113,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return "hbr" if self.tabs_result.currentIndex() == 0 else "ventilation"
 
     def _add_profiler(self) -> None:
-        self.menu_info.addAction("Start Profiler", self._start_profiler)
-        self.menu_info.addAction("Stop Profiler", self._stop_profiler)
+        self.menubar.addAction("Start Profiler", self._start_profiler)
+        self.menubar.addAction("Stop Profiler", self._stop_profiler)
 
     def connect_signals(self) -> None:
         """
@@ -145,6 +145,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.action_exit.triggered.connect(self.closeEvent)
         self.action_select_file.triggered.connect(self.select_data_file)
+        self.action_show_roi.triggered.connect(self.plot.show_region_selector)
+        self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected)
 
         self.spin_box_fs.valueChanged.connect(self.data.update_fs)
 
@@ -152,12 +154,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def update_results(self) -> None:
-        with pg.BusyCursor():
-            self.make_results(self.result_name)
+        self.make_results(self.result_name)
 
     @Slot(str)
     def export_results(
-        self, file_type: Literal["csv", "excel", "txt", "feather"]
+            self, file_type: Literal["csv", "excel", "txt", "feather"]
     ) -> None:
         if not hasattr(self, f"{self.result_name}_results"):
             error_msg = f"No existing results for `{self.result_name}`. Results can be created using the `Compute Results` button in the `Plots` tab."
@@ -184,7 +185,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot(str, str)
     def show_message(
-        self, text: str, level: Literal["info", "warning", "critical"]
+            self, text: str, level: Literal["info", "warning", "critical"]
     ) -> None:
         icon_map = {
             "info": QMessageBox.Icon.Information,
@@ -200,10 +201,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Prompt user to select a directory for storing the exported results.
         """
         if path := QFileDialog.getExistingDirectory(
-            self,
-            caption="Select Output Directory",
-            dir=self.output_dir.as_posix(),
-            options=QFileDialog.Option.ShowDirsOnly,
+                self,
+                caption="Select Output Directory",
+                dir=self.output_dir.as_posix(),
+                options=QFileDialog.Option.ShowDirsOnly,
         ):
             self.line_edit_output_dir.setText(path)
             self.output_dir = path
@@ -223,6 +224,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.line_edit_active_file.setText(Path(path).name)
             self.data.read(path)
             self.ui.update_data_selection_widgets(path)
+
+            self.data_dir = Path(path).parent
 
     @Slot()
     def handle_load_selection(self) -> None:
@@ -249,11 +252,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         widget: pg.PlotWidget = getattr(self.plot, f"{signal_name}_plot_widget")
         bpm_widget: pg.PlotWidget = getattr(self.plot, f"bpm_{signal_name}_plot_widget")
         for plot_widget in [widget, bpm_widget]:
-            plot_widget.getPlotItem().getViewBox().autoRange()
-            plot_widget.getPlotItem().getViewBox().enableAutoRange(
-                axis=pg.ViewBox.YAxis, enable=True
-            )
-            plot_widget.getPlotItem().getViewBox().setAutoVisible(y=True)
+            plot_item = plot_widget.getPlotItem()
+            # plot_widget.getPlotItem().getViewBox().autoRange()
+            plot_item.getViewBox().enableAutoRange("y")
+            plot_item.setDownsampling(auto=True)
+            plot_item.setClipToView(True)
+            plot_item.getViewBox().setAutoVisible(y=True)
+            plot_item.getViewBox().setMouseEnabled(x=True, y=False)
+
+            # plot_widget.getPlotItem().getViewBox().setAutoVisible(y=True)
 
     @Slot()
     def handle_plot_draw(self) -> None:
@@ -288,7 +295,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         ]
         for widget in plot_widgets:
             widget.getPlotItem().getViewBox().setLimits(
-                xMin=-0.5 * data_length, xMax=1.5 * data_length
+                xMin=-0.25 * data_length, xMax=1.25 * data_length, maxYRange=200,
+                minYRange=1
             )
             widget.getPlotItem().getViewBox().setXRange(0, data_length)
         self._update_plot_view("hbr")
@@ -296,7 +304,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _update_signal(self, signal_name: SignalName) -> None:
         signal_data = self.data.df.get_column(signal_name).to_numpy(zero_copy_only=True)
-        plot_widget = getattr(self.plot, f"{signal_name}_plot_widget")
+        plot_widget: pg.PlotWidget = getattr(self.plot, f"{signal_name}_plot_widget")
         self.plot.draw_signal(signal_data, plot_widget, signal_name)
         self.sig_plot_data_changed.emit(signal_name)
 
@@ -322,7 +330,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._set_table_model(self.table_data_info, info)
 
     def _set_table_model(
-        self, table_view: QTableView, model: QAbstractTableModel
+            self, table_view: QTableView, model: QAbstractTableModel
     ) -> None:
         """
         Set the model for the given table view
@@ -412,7 +420,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         rate_plot_widget = getattr(self.plot, f"bpm_{signal_name}_plot_widget")
         instant_signal_rate = self.data.df.get_column(rate_name).to_numpy()
 
-        self.plot.draw_bpm(
+        self.plot.draw_rate(
             instant_signal_rate,
             plot_widget=rate_plot_widget,
             signal_name=signal_name,
@@ -421,12 +429,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot()
     def handle_scatter_clicked(self) -> None:
         signal_name = self.signal_name
-        scatter_plot = getattr(self.plot, f"{signal_name}_peaks_scatter")
+        scatter_plot: pg.ScatterPlotItem = getattr(self.plot,
+                                                   f"{signal_name}_peaks_scatter")
         peaks_name = f"{signal_name}_{self.data.peaks_suffix}"
-        peaks = np.asarray(
-            scatter_plot.data["x"],
-            dtype=np.int32,
-        )
+        peaks = np.asarray(scatter_plot.data["x"], dtype=np.int32)
         peaks.sort()
         setattr(self.data, peaks_name, peaks)
         self.data.compute_rate(signal_name)
@@ -481,7 +487,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def get_identifier(self, result_name: SignalName) -> ResultIdentifier:
         meas_date = self.data.meas_date if hasattr(self.data, "meas_date") else None
-        result_file_name = f"results_{result_name}_{self.file_info.baseName()}"
+        result_file_name = f"results_{result_name}_{self.file_info.completeBaseName()}"
         return ResultIdentifier(
             name=result_name,
             animal_id=self.line_edit_subject_id.text(),
@@ -553,39 +559,53 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     def make_results(self, result_name: SignalName) -> None:
-        identifier = self.get_identifier(result_name)
-        data_info = self.get_data_info()
-        processing_info = self.get_processing_info()
-        statistics = self.data.get_descriptive_stats(result_name)
-        results_df = self.data.get_result_df(result_name)
-        result_table: QTableView = getattr(self, f"table_view_results_{result_name}")
-        self._set_table_model(result_table, PolarsModel(results_df))
-        manual_edits = PeakDetectionManualEdited(
-            added_peaks=self.plot.added_points[result_name],
-            removed_peaks=self.plot.removed_points[result_name],
-        )
-        additional_data = {
-            "rate_bpm_interpolated": getattr(
-                self.data,
-                f"{result_name}_{self.data.rate_interp_suffix}",
-                np.empty(0, dtype=np.float64),
-            ),
-            "processed_signal": getattr(
-                self.data,
-                f"{result_name}_{self.data.processed_suffix}",
-                np.empty(0, dtype=np.float64),
-            ),
-            "manual_edits": manual_edits,
-        }
-        results = Result(
-            identifier=identifier,
-            info_data_selection=data_info,
-            info_data_processing=processing_info,
-            statistics=statistics,
-            result_data=results_df,
-            additional_data=additional_data,
-        )
-        setattr(self, f"{result_name}_results", results)
+        with pg.ProgressDialog(
+                "Computing results...", cancelText=None, parent=self, wait=0
+        ) as dlg:
+            dlg.setLabelText("Gathering parameters...")
+            identifier = self.get_identifier(result_name)
+            data_info = self.get_data_info()
+            processing_info = self.get_processing_info()
+            statistics = self.data.get_descriptive_stats(result_name)
+            results_df = self.data.get_result_df(result_name)
+            manual_edits = PeakDetectionManualEdited(
+                added_peaks=self.plot.added_points[result_name],
+                removed_peaks=self.plot.removed_points[result_name],
+            )
+            dlg.setValue(20)
+            dlg.setLabelText("Creating result table...")
+            result_table: QTableView = getattr(
+                self, f"table_view_results_{result_name}"
+            )
+            self._set_table_model(result_table, PolarsModel(results_df))
+            dlg.setValue(40)
+            dlg.setLabelText("Getting additional data...")
+            additional_data = {
+                "rate_bpm_interpolated": getattr(
+                    self.data,
+                    f"{result_name}_{self.data.rate_interp_suffix}",
+                    np.empty(0, dtype=np.float64),
+                ),
+                "processed_signal": getattr(
+                    self.data,
+                    f"{result_name}_{self.data.processed_suffix}",
+                    np.empty(0, dtype=np.float64),
+                ),
+                "manual_edits": manual_edits,
+            }
+            dlg.setValue(70)
+            dlg.setLabelText("Creating results object...")
+            results = Result(
+                identifier=identifier,
+                info_data_selection=data_info,
+                info_data_processing=processing_info,
+                statistics=statistics,
+                result_data=results_df,
+                additional_data=additional_data,
+            )
+            dlg.setValue(100)
+            setattr(self, f"{result_name}_results", results)
+            dlg.setLabelText("Done!")
 
 
 # ==================================================================================== #
@@ -615,7 +635,7 @@ def main(dev_mode: bool = False) -> None:
     app = QApplication(sys.argv)
     # app.setStyle("Fusion")
     app.setStyleSheet(
-        qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.LightPalette)
+        qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.DarkPalette)
     )
     window = MainWindow()
     window.show()

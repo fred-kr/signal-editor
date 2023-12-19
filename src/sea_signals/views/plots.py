@@ -1,13 +1,127 @@
-from typing import Any
+from typing import TYPE_CHECKING, Any, override
 
 import numpy as np
 import pyqtgraph as pg
 from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
-from PySide6.QtCore import QPointF, Qt, Signal, Slot
+from PySide6 import QtGui, QtWidgets
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal, Slot
 from PySide6.QtWidgets import QWidget
 
 from ..type_aliases import SignalName
+
+if TYPE_CHECKING:
+    from ..app import MainWindow
+
+
+class CustomViewBox(pg.ViewBox):
+    sig_selection_changed = Signal(QtGui.QPolygonF)
+
+    def __init__(self, *args: Any, **kargs: Any) -> None:
+        pg.ViewBox.__init__(self, *args, **kargs)
+        self._selection_box: QtWidgets.QGraphicsRectItem | None = None
+        self.mapped_peak_selection: QtGui.QPolygonF | None = None
+
+    @property
+    def selection_box(self) -> QtWidgets.QGraphicsRectItem:
+        if self._selection_box is None:
+            selection_box = QtWidgets.QGraphicsRectItem(0, 0, 1, 1)
+            selection_box.setPen(pg.mkPen((100, 100, 255), width=1))
+            selection_box.setBrush(pg.mkBrush((100, 100, 255, 100)))
+            selection_box.setZValue(1e9)
+            selection_box.hide()
+            self._selection_box = selection_box
+            self.addItem(selection_box, ignoreBounds=True)
+        return self._selection_box
+
+    @selection_box.setter
+    def selection_box(self, selection_box: QtWidgets.QGraphicsRectItem | None) -> None:
+        if self._selection_box is not None:
+            self.removeItem(self._selection_box)
+        self._selection_box = selection_box
+        if selection_box is None:
+            return None
+        selection_box.setZValue(1e9)
+        selection_box.hide()
+        self.addItem(selection_box, ignoreBounds=True)
+        return None
+
+    @override
+    def mouseDragEvent(
+        self, ev: mouseEvents.MouseDragEvent, axis: int | float | None = None
+    ) -> None:
+        ev.accept()
+
+        pos = ev.pos()
+        lastPos = ev.lastPos()
+        dif = pos - lastPos
+        dif = dif * -1
+
+        if ev.button() == Qt.MouseButton.MiddleButton:
+            if ev.isFinish():
+                r = QRectF(ev.pos(), ev.buttonDownPos())
+                data_coords: QtGui.QPolygonF = self.mapToView(r)
+                self.mapped_peak_selection = data_coords
+            else:
+                self.updateSelectionBox(ev.pos(), ev.buttonDownPos())
+                self.mapped_peak_selection = None
+
+        mouseEnabled = np.array(self.state["mouseEnabled"], dtype=np.float64)
+        mask = mouseEnabled.copy()
+        if axis is not None:
+            mask[1 - axis] = 0.0
+
+        if ev.button() & Qt.MouseButton.LeftButton:
+            if self.state["mouseMode"] == pg.ViewBox.RectMode and axis is None:
+                if ev.isFinish():
+                    self.rbScaleBox.hide()
+                    ax = QRectF(pg.Point(ev.buttonDownPos(ev.button())), pg.Point(pos))
+                    ax = self.childGroup.mapRectFromParent(ax)
+                    self.showAxRect(ax)
+                    self.axHistoryPointer += 1
+                    self.axHistory = self.axHistory[: self.axHistoryPointer] + [ax]
+                else:
+                    self.updateScaleBox(ev.buttonDownPos(), ev.pos())
+            else:
+                tr = pg.invertQTransform(self.childGroup.transform())
+                tr = tr.map(dif * mask) - tr.map(pg.Point(0, 0))
+
+                x = tr.x() if mask[0] == 1 else None
+                y = tr.y() if mask[1] == 1 else None
+
+                self._resetTarget()
+                if x is not None or y is not None:
+                    self.translateBy(x=x, y=y)
+                self.sigRangeChangedManually.emit(self.state["mouseEnabled"])
+        elif ev.button() & Qt.MouseButton.RightButton:
+            if self.state["aspectLocked"] is not False:
+                mask[0] = 0
+
+            dif = np.array(
+                [
+                    -(ev.screenPos().x() - ev.lastScreenPos().x()),
+                    ev.screenPos().y() - ev.lastScreenPos().y(),
+                ]
+            )
+            s = ((mask * 0.02) + 1) ** dif
+
+            tr = pg.invertQTransform(self.childGroup.transform())
+
+            x = s[0] if mouseEnabled[0] == 1 else None
+            y = s[1] if mouseEnabled[1] == 1 else None
+
+            center = pg.Point(tr.map(ev.buttonDownPos(Qt.MouseButton.RightButton)))
+            self._resetTarget()
+            self.scaleBy(x=x, y=y, center=center)
+            self.sigRangeChangedManually.emit(self.state["mouseEnabled"])
+
+    def updateSelectionBox(self, pos1: pg.Point, pos2: pg.Point) -> None:
+        rect = QRectF(pos1, pos2)
+        rect = self.childGroup.mapRectFromParent(rect)
+        self.selection_box.setPos(rect.topLeft())
+        tr = QtGui.QTransform.fromScale(rect.width(), rect.height())
+        self.selection_box.setTransform(tr)
+        self.selection_box.show()
 
 
 class PlotHandler(QWidget):
@@ -20,20 +134,22 @@ class PlotHandler(QWidget):
 
     def __init__(
         self,
-        parent: QWidget | None = None,
+        parent: "MainWindow",
     ):
         super().__init__(parent=parent)
-
+        self._parent = parent
         plot_bg = str(pg.getConfigOption("background"))
-        self.click_tolerance = 60
+        self.click_tolerance = 80
         self.added_points: dict[str, list[int]] = {"hbr": [], "ventilation": []}
         self.removed_points: dict[str, list[int]] = {"hbr": [], "ventilation": []}
 
         self.hbr_plot_widget = pg.PlotWidget(
+            viewBox=CustomViewBox(),
             background=plot_bg,
             useOpenGL=True,
         )
         self.ventilation_plot_widget = pg.PlotWidget(
+            viewBox=CustomViewBox(),
             background=plot_bg,
             useOpenGL=True,
         )
@@ -48,16 +164,27 @@ class PlotHandler(QWidget):
 
         self._prepare_plot_items()
 
+    def connect_signals(self) -> None:
+        hbr_vb: CustomViewBox = self.hbr_plot_widget.getPlotItem().getViewBox()
+        ventilation_vb: CustomViewBox = (
+            self.ventilation_plot_widget.getPlotItem().getViewBox()
+        )
+
     def _init_plot_items(self) -> None:
         self.hbr_signal_line: pg.PlotDataItem | None = None
         self.ventilation_signal_line: pg.PlotDataItem | None = None
+
         self.bpm_hbr_signal_line: pg.PlotDataItem | None = None
         self.bpm_ventilation_signal_line: pg.PlotDataItem | None = None
 
         self.hbr_peaks_scatter: pg.ScatterPlotItem | None = None
         self.ventilation_peaks_scatter: pg.ScatterPlotItem | None = None
+
         self.bpm_hbr_mean_hline: pg.InfiniteLine | None = None
         self.bpm_ventilation_mean_hline: pg.InfiniteLine | None = None
+
+        self.hbr_linear_region: pg.LinearRegionItem | None = None
+        self.ventilation_linear_region: pg.LinearRegionItem | None = None
 
     @staticmethod
     def set_plot_titles_and_labels(
@@ -66,15 +193,6 @@ class PlotHandler(QWidget):
         plot_item.setTitle(title)
         plot_item.setLabel(axis="left", text=left_label)
         plot_item.setLabel(axis="bottom", text=bottom_label)
-
-    @staticmethod
-    def target_pos(x: float, y: float) -> str:
-        x = max(x, 0)
-        time_seconds = x / 400
-        hours = time_seconds // 3600
-        minutes = (time_seconds % 3600) // 60
-        seconds = time_seconds % 60
-        return f"time: {int(hours):02}:{int(minutes):02}:{int(seconds):02}\namplitude: {y:.4f}"
 
     def _prepare_plot_items(self) -> None:  # sourcery skip: extract-method
         self._init_plot_items()
@@ -87,17 +205,16 @@ class PlotHandler(QWidget):
         for pw, name in plot_widgets:
             plot_item = pw.getPlotItem()
             plot_item.showGrid(x=False, y=True)
-            plot_item.getViewBox().enableAutoRange(axis=pg.ViewBox.YAxis, enable=True)
+            plot_item.getViewBox().enableAutoRange("y")
             plot_item.setDownsampling(auto=True)
             plot_item.setClipToView(True)
             plot_item.addLegend(
-                offset=(0, 1),
-                pen=pg.mkPen(color="w"),  # type: ignore
-                brush=pg.mkBrush(color="k"),  # type: ignore
+                pen="white",
+                brush="transparent",
                 colCount=2,
             )
             plot_item.register(name)
-            plot_item.setAutoVisible(y=True)
+            plot_item.getViewBox().setAutoVisible(y=True)
             plot_item.setMouseEnabled(x=True, y=False)
 
         self.set_plot_titles_and_labels(
@@ -125,47 +242,17 @@ class PlotHandler(QWidget):
             bottom_label="n samples",
         )
 
-        self.hbr_plot_widget.setXLink("bpm_hbr")
-        self.ventilation_plot_widget.setXLink("bpm_ventilation")
-        self._add_targets()
-
-    def _add_targets(self) -> None:
-        self.hbr_target = pg.TargetItem(
-            pos=(0, 0),
-            size=18,
-            label=self.target_pos,
-            labelOpts={"fill": (0, 0, 0, 120)},
-            movable=False,
-        )
-        self.ventilation_target = pg.TargetItem(
-            pos=(0, 0),
-            size=18,
-            label=self.target_pos,
-            labelOpts={"fill": (0, 0, 0, 120)},
-            movable=False,
+        self.hbr_plot_widget.getPlotItem().getViewBox().setXLink("bpm_hbr")
+        self.ventilation_plot_widget.getPlotItem().getViewBox().setXLink(
+            "bpm_ventilation"
         )
 
-        self.hbr_target.setZValue(65)
-        self.ventilation_target.setZValue(65)
-
-        self.hbr_plot_widget.addItem(self.hbr_target)
-        self.ventilation_plot_widget.addItem(self.ventilation_target)
-
-        self.hbr_plot_widget.plotItem.scene().sigMouseMoved.connect(
-            lambda pos: self.update_target_pos("hbr", pos)
-        )
-        self.ventilation_plot_widget.plotItem.scene().sigMouseMoved.connect(
-            lambda pos: self.update_target_pos("ventilation", pos)
-        )
-
-        self.hbr_plot_widget.plotItem.getViewBox().setCursor(Qt.CursorShape.BlankCursor)  # type: ignore
-        self.ventilation_plot_widget.plotItem.getViewBox().setCursor(  # type: ignore
-            Qt.CursorShape.BlankCursor
-        )
+        for bpm_pw in [self.bpm_hbr_plot_widget, self.bpm_ventilation_plot_widget]:
+            bpm_pw.getPlotItem().getViewBox().setMouseMode(pg.ViewBox.RectMode)
 
     @Slot(QPointF)
     def update_target_pos(self, signal_name: SignalName, pos: QPointF) -> None:
-        scene_pos = getattr(
+        scene_pos: QPointF = getattr(
             self, f"{signal_name}_plot_widget"
         ).plotItem.vb.mapSceneToView(pos)
         getattr(self, f"{signal_name}_target").setPos(scene_pos)
@@ -173,14 +260,14 @@ class PlotHandler(QWidget):
     @Slot()
     def reset_plots(self) -> None:
         plot_widgets = [
-            "hbr_plot_widget",
-            "ventilation_plot_widget",
-            "bpm_hbr_plot_widget",
-            "bpm_ventilation_plot_widget",
+            self.hbr_plot_widget,
+            self.ventilation_plot_widget,
+            self.bpm_hbr_plot_widget,
+            self.bpm_ventilation_plot_widget,
         ]
         for pw in plot_widgets:
-            getattr(self, pw).getPlotItem().clear()
-            getattr(self, pw).getPlotItem().legend.clear()
+            pw.getPlotItem().clear()
+            pw.getPlotItem().legend.clear()
         self.hbr_signal_line = None
         self.ventilation_signal_line = None
         self._prepare_plot_items()
@@ -194,7 +281,7 @@ class PlotHandler(QWidget):
         color = "crimson" if signal_name == "hbr" else "royalblue"
         signal_line = pg.PlotDataItem(
             sig,
-            pen=pg.mkPen(color=color, width=1),  # type: ignore
+            pen=color,
             skipFiniteCheck=True,
             autoDownSample=True,
             name=f"{signal_name}_signal",
@@ -202,7 +289,7 @@ class PlotHandler(QWidget):
         signal_line.curve.setSegmentedLineMode("on")
         signal_line.curve.setClickable(True, width=self.click_tolerance)
 
-        bpm_plot_widget = getattr(self, f"bpm_{signal_name}_plot_widget")
+        bpm_plot_widget: pg.PlotWidget = getattr(self, f"bpm_{signal_name}_plot_widget")
 
         line_ref = getattr(self, f"{signal_name}_signal_line")
         scatter_ref = getattr(self, f"{signal_name}_peaks_scatter")
@@ -238,13 +325,13 @@ class PlotHandler(QWidget):
             pxMode=True,
             size=10,
             pen=None,
-            brush=pg.mkBrush(color=color),  # type: ignore
+            brush=color,
             useCache=True,
             name=f"{signal_name}_peaks",
             hoverable=True,
-            hoverPen=pg.mkPen(color="k", width=1),  # type: ignore
+            hoverPen="black",
             hoverSymbol="x",
-            hoverBrush=pg.mkBrush(color="red"),  # type: ignore
+            hoverBrush="red",
             hoverSize=15,
             tip=None,
         )
@@ -263,18 +350,19 @@ class PlotHandler(QWidget):
             self.remove_clicked_point
         )
 
-    def draw_bpm(
+    def draw_rate(
         self,
         bpm_data: NDArray[np.float32 | np.float64],
         plot_widget: pg.PlotWidget,
-        signal_name: str,
+        signal_name: SignalName,
+        **kwargs: float,
     ) -> None:
-        mean_bpm = np.mean(bpm_data)
-        color = "limegreen"
+        mean_bpm = kwargs.get("mean_peak_interval", np.mean(bpm_data))
+        color = "green"
 
         bpm_line = pg.PlotDataItem(
             bpm_data,
-            pen=pg.mkPen(color=color, width=1),  # type: ignore
+            pen=color,
             autoDownsample=True,
             skipFiniteCheck=True,
             name=f"bpm_{signal_name}",
@@ -282,7 +370,7 @@ class PlotHandler(QWidget):
         bpm_mean_line = pg.InfiniteLine(
             pos=mean_bpm,
             angle=0,
-            pen=pg.mkPen(color="yellow", width=2, style=Qt.PenStyle.DashLine),  # type: ignore
+            pen=dict(color="goldenrod", width=1, style=Qt.PenStyle.DashLine),
             name=f"mean_bpm_{signal_name}",
         )
 
@@ -292,14 +380,18 @@ class PlotHandler(QWidget):
         if bpm_line_ref is not None and bpm_mean_line_ref is not None:
             plot_widget.removeItem(bpm_line_ref)
             plot_widget.removeItem(bpm_mean_line_ref)
-            plot_widget.getPlotItem().legend.clear()
+        if legend := plot_widget.getPlotItem().legend:
+            legend.clear()
+        else:
+            legend = pg.LegendItem()
+            plot_widget.getPlotItem().addLegend()
 
         plot_widget.addItem(bpm_line)
         plot_widget.addItem(bpm_mean_line)
-        plot_widget.getPlotItem().legend.addItem(
+        legend.addItem(
             pg.PlotDataItem(
-                np.array([0, 1], dtype=np.float32),
-                pen=pg.mkPen(color="yellow", width=2, style=Qt.PenStyle.DotLine),
+                np.array([0, 1]),
+                pen=dict(color="goldenrod", width=1, style=Qt.PenStyle.DashLine),
                 skipFiniteCheck=True,
             ),
             f"Mean BPM: {int(mean_bpm)}",
@@ -317,14 +409,26 @@ class PlotHandler(QWidget):
         points: np.ndarray[pg.SpotItem, Any],
         ev: mouseEvents.MouseClickEvent,
     ) -> None:
+        """
+        Removes a clicked point from a scatter plot. The poition of the clicked point is
+        saved to the `removed_points` dictionary.
+
+        Args:
+            sender (pg.ScatterPlotItem): The scatter plot item that emitted the signal.
+            points (np.ndarray[pg.SpotItem, Any]): The array of selected points.
+            ev (mouseEvents.MouseClickEvent): The mouse click event.
+        """
         ev.accept()
-        if points.size <= 0:
+        if len(points) == 0:
             return
+
         to_remove_index = points[0].index()
-        scatter_plots = {
+
+        scatter_plots: dict[str, pg.ScatterPlotItem | None] = {
             "hbr_peaks": getattr(self, "hbr_peaks_scatter", None),
             "ventilation_peaks": getattr(self, "ventilation_peaks_scatter", None),
         }
+
         if scatter_plot := scatter_plots.get(sender.name()):
             new_points_x = np.delete(scatter_plot.data["x"], to_remove_index)
             new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)
@@ -332,6 +436,42 @@ class PlotHandler(QWidget):
             self.sig_peaks_edited.emit()
             name = "hbr" if "hbr" in sender.name() else "ventilation"
             self.removed_points[name].append(int(points[0].pos().x()))
+
+    @Slot()
+    def remove_selected(self) -> None:
+        signal_name = self._parent.signal_name
+        vb: CustomViewBox = (
+            getattr(self, f"{signal_name}_plot_widget").getPlotItem().getViewBox()
+        )
+        if vb.mapped_peak_selection is None:
+            return
+        rect = vb.mapped_peak_selection.boundingRect().getRect()
+        rect_x, rect_y, rect_width, rect_height = (
+            int(rect[0]),
+            rect[1],
+            rect[2],
+            rect[3],
+        )
+
+        x_range = (rect_x, rect_x + rect_width)
+        y_range = (rect_y, rect_y + rect_height)
+        scatter_ref: pg.ScatterPlotItem = getattr(self, f"{signal_name}_peaks_scatter")
+
+        scatter_x, scatter_y = scatter_ref.getData()
+        to_remove = np.argwhere(
+            (scatter_x >= x_range[0])
+            & (scatter_x <= x_range[1])
+            & (scatter_y >= y_range[0])
+            & (scatter_y <= y_range[1])
+        )
+
+        if to_remove.size == 0:
+            return
+        scatter_ref.setData(
+            x=np.delete(scatter_x, to_remove), y=np.delete(scatter_y, to_remove)
+        )
+
+        self.removed_points[signal_name].extend(scatter_x[to_remove].tolist())
 
     @Slot(object, object)
     def add_clicked_point(
@@ -354,3 +494,11 @@ class PlotHandler(QWidget):
             self.sig_peaks_edited.emit()
             name = "hbr" if "hbr" in signal_name else "ventilation"
             self.added_points[name].append(x_new)
+
+    @Slot()
+    def show_region_selector(self) -> None:
+        signal_name = self._parent.signal_name
+        plot_widget = getattr(self, f"{signal_name}_plot_widget")
+        view_box = plot_widget.getPlotItem().getViewBox()
+        selection_box = view_box.selection_box
+        selection_box.setVisible(not selection_box.isVisible())

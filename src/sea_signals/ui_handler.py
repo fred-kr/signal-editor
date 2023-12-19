@@ -6,8 +6,6 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 import rich
-from pyqtgraph.console import ConsoleWidget
-from pyqtgraph.parametertree import ParameterTree
 from PySide6.QtCore import (
     QDate,
     QObject,
@@ -16,12 +14,13 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QFont, QStandardItemModel
+from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QDockWidget,
-    QMessageBox,
     QVBoxLayout,
 )
+from pyqtgraph.console import ConsoleWidget
+from pyqtgraph.parametertree import ParameterTree
 
 from .models.io import parse_file_name
 from .models.peaks import UIPeakDetection
@@ -29,7 +28,6 @@ from .type_aliases import (
     FilterMethod,
     PeakDetectionMethod,
     Pipeline,
-    ScaleMethod,
     SignalName,
 )
 from .views.plots import PlotHandler
@@ -82,7 +80,7 @@ COMBO_BOX_ITEMS = {
     },
 }
 
-INITIAL_STATE = {
+INITIAL_STATE_MAP = {
     "table_data_preview": {
         "model": QStandardItemModel(),
     },
@@ -95,7 +93,7 @@ INITIAL_STATE = {
         "checked": False,
     },
     "container_file_info": {
-        "enabled": False,
+        "enabled": True,
     },
     "date_edit_file_info": {
         "date": QDate.currentDate(),
@@ -126,8 +124,7 @@ INITIAL_STATE = {
         "currentText": "None",
     },
     "combo_box_scale_method": {
-        "enabled": True,
-        "currentText": "None",
+        "value": "None",
     },
     "container_standardize": {
         "enabled": True,
@@ -149,10 +146,10 @@ INITIAL_STATE = {
         "value": 3,
     },
     "spin_box_window_size": {
-        "value": 251,
+        "value": 250,
     },
     "slider_window_size": {
-        "value": 251,
+        "value": 250,
     },
     "combo_box_peak_detection_method": {
         "currentText": "elgendi_ppg",
@@ -172,7 +169,7 @@ INITIAL_STATE = {
     },
 }
 
-INITIAL_STATE_METHODS_MAPPING = {
+INITIAL_STATE_METHODS_MAP = {
     "enabled": "setEnabled",
     "checked": "setChecked",
     "text": "setText",
@@ -186,7 +183,6 @@ INITIAL_STATE_METHODS_MAPPING = {
 
 class UIHandler(QObject):
     sig_filter_inputs_ready = Signal()
-    sig_preprocess_pipeline_ready = Signal(str)
     sig_ready_for_cleaning = Signal()
 
     def __init__(self, window: "MainWindow", plot: PlotHandler) -> None:
@@ -223,28 +219,12 @@ class UIHandler(QObject):
 
     def _prepare_widgets(self) -> None:
         self.window.container_file_info.setEnabled(False)
-        self._signal_filter_containers = [
-            self.window.dbl_spin_box_lowcut,
-            self.window.dbl_spin_box_highcut,
-            self.window.container_order_inputs,
-            self.window.container_window_size,
-        ]
-        for container in self._signal_filter_containers:
-            container.setEnabled(False)
 
     def _prepare_inputs(self) -> None:
         # Signal Filtering
-        self.window.combo_box_preprocess_pipeline.setCurrentIndex(0)
-        self.window.container_filter_pipeline.setEnabled(True)
-        self.window.combo_box_filter_method.setCurrentIndex(0)
-        self.window.combo_box_scale_method.setCurrentIndex(0)
-        self._prepare_widgets()
-        self.window.dbl_spin_box_lowcut.setValue(0.5)
-        self.window.dbl_spin_box_highcut.setValue(8.0)
-        self.window.spin_box_order.setValue(3)
-        self.window.slider_order.setValue(3)
-        self.window.spin_box_window_size.setValue(251)
-        self.window.slider_window_size.setValue(251)
+        self.window.combo_box_preprocess_pipeline.setValue("custom")
+        self.window.container_custom_filter_inputs.setEnabled(True)
+        self._set_elgendi_cleaning_params()
 
         # Peak Detection
         self.window.combo_box_peak_detection_method.setCurrentIndex(0)
@@ -326,7 +306,7 @@ class UIHandler(QObject):
                 w.setSingleStep(0.1)
             elif col_name == "time_s":
                 w.setDecimals(4)
-                w.setSingleStep(np.round(np.divide(1, fs), 4))
+                w.setSingleStep(np.round(1 / fs, 4))
             w.setMinimum(lower)
             w.setMaximum(upper)
 
@@ -337,8 +317,8 @@ class UIHandler(QObject):
     def reset_widget_state(self) -> None:
         mw = self.window
         mw.tabs_main.setCurrentIndex(0)
-        mapping = INITIAL_STATE_METHODS_MAPPING
-        for widget_name, state in INITIAL_STATE.items():
+        mapping = INITIAL_STATE_METHODS_MAP
+        for widget_name, state in INITIAL_STATE_MAP.items():
             for attribute, value in state.items():
                 getattr(mw, widget_name).__getattribute__(mapping[attribute])(value)
 
@@ -348,19 +328,20 @@ class UIHandler(QObject):
         mw.statusbar.showMessage("Ready")
 
     def create_peak_detection_trees(self) -> None:
-        method = "elgendi_ppg"
+        method: PeakDetectionMethod = "elgendi_ppg"
 
         self.peak_tree = ParameterTree()
         self.peak_params = UIPeakDetection(name="Adjustable Parameters")
         self.peak_params.set_method(method)
         self.peak_tree.setParameters(self.peak_params, showTop=True)
-        self.peak_tree.setFont(QFont("Segoe UI", 9, QFont.Weight.Normal))
 
-        self.window.layout_container_peak_detection_sidebar.addWidget(self.peak_tree)
+        self.window.container_peak_detection_sidebar.layout().addWidget(self.peak_tree)
 
     @Slot()
     def on_peak_detection_method_changed(self) -> None:
-        method = cast(PeakDetectionMethod, self.window.combo_box_peak_detection_method.value())
+        method = cast(
+            PeakDetectionMethod, self.window.combo_box_peak_detection_method.value()
+        )
         try:
             self.peak_params.set_method(method)
         except NotImplementedError as e:
@@ -408,7 +389,7 @@ class UIHandler(QObject):
     def update_temperature_label(self, signal_name: SignalName, pos: QPointF) -> None:
         if not hasattr(self.window, "data"):
             return
-        if not hasattr(self.window.data, "df"):
+        if self.window.data.df.is_empty():
             return
         data_pos = int(
             getattr(self.plot, f"{signal_name}_plot_widget")
@@ -454,7 +435,7 @@ class UIHandler(QObject):
             "pl": pl,
             "rich": rich,
         }
-        startup_message = f"Available namespaces: {*module_names,=}"
+        startup_message = f"Available namespaces: {*module_names, = }"
         self.console = ConsoleWidget(
             parent=self.window,
             namespace=namespace,
@@ -480,10 +461,8 @@ class UIHandler(QObject):
             self.console.input.setFocus()
 
     @Slot(str)
-    def handle_filter_method_changed(self, method: str) -> None:
+    def handle_filter_method_changed(self, text: str) -> None:
         method = cast(FilterMethod, self.window.combo_box_filter_method.value())
-        # self.window.container_filter_pipeline.setEnabled(method != "None")
-        self.window.combo_box_filter_method.setEnabled(self.window.combo_box_preprocess_pipeline.value() == "custom")
 
         if method != "None":
             states = {
@@ -535,24 +514,23 @@ class UIHandler(QObject):
         self.window.slider_window_size.setValue(250)
         self.sig_filter_inputs_ready.emit()
 
-    @Slot(str)
-    def handle_preprocess_pipeline_changed(self, pipeline: str) -> None:
-        pipeline_value = cast(Pipeline, self.window.combo_box_preprocess_pipeline.value())
+    @Slot()
+    def handle_preprocess_pipeline_changed(self) -> None:
+        pipeline_value = cast(
+            Pipeline, self.window.combo_box_preprocess_pipeline.value()
+        )
         if pipeline_value == "custom":
-            for container in self._signal_filter_containers:
-                container.setEnabled(True)
+            self.window.container_custom_filter_inputs.setEnabled(True)
             selected_filter = cast(str, self.window.combo_box_filter_method.value())
             self.handle_filter_method_changed(selected_filter)
 
         elif pipeline_value == "ppg_elgendi":
-            for container in self._signal_filter_containers:
-                container.setEnabled(False)
+            self.window.container_custom_filter_inputs.setEnabled(False)
             self._set_elgendi_cleaning_params()
         else:
             # TODO: add UI and logic for other signal cleaning pipelines
-            for container in self._signal_filter_containers:
-                container.setEnabled(False)
-            msg = f"Selected pipeline {pipeline} not yet implemented, use either 'custom' or 'ppg_elgendi'."
+            self.window.container_custom_filter_inputs.setEnabled(False)
+            msg = f"Selected pipeline {pipeline_value} not yet implemented, use either 'custom' or 'ppg_elgendi'."
             self.window.sig_show_message.emit(msg, "info")
             return
             # logger.warning(f"Pipeline {pipeline} not implemented yet.")
@@ -562,5 +540,3 @@ class UIHandler(QObject):
             # "ecg_hamilton2002"
             # "ecg_elgendi2010"
             # "ecg_engzeemod2012"
-
-        self.sig_preprocess_pipeline_ready.emit(pipeline)

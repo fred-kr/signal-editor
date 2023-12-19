@@ -218,20 +218,17 @@ class DataHandler(QObject):
         if suffix == ".csv":
             self.df = pl.read_csv(path)
         elif suffix == ".edf":
-            df, meas_date, sampling_rate = read_edf(path.as_posix())
-            self._lazy_df = df
-            self.df = df.collect()
-            self.meas_date = meas_date
-            self.fs = sampling_rate
+            self._lazy_df, self.meas_date, self.sampling_rate = read_edf(path.as_posix())
         elif suffix == ".feather":
-            df = pl.scan_ipc(path)
-            self._lazy_df = df
-            self.df = df.collect()
+            self._lazy_df = pl.scan_ipc(path)
         elif suffix == ".txt":
-            self.df = pl.read_csv(path, separator="\t")
+            self._lazy_df = pl.scan_csv(path, separator="\t")
         elif suffix == ".xlsx":
             self.df = pl.read_excel(path)
+        else:
+            raise NotImplementedError(f"File type `{suffix}` not supported")
 
+        self.df = self._lazy_df.collect()
         self.calc_minmax()
 
     @staticmethod
