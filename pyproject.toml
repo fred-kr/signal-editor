@@ -12,7 +12,7 @@ pyqtgraph = {git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "master"}
 pyopengl-accelerate = "^3.1.7"
 pyarrow = "^14.0.1"
 wfdb = "^4.1.2"
-polars = "^0.19.17"
+polars = "^0.20.1"
 neurokit2 = "^0.2.7"
 pyopengl = "^3.1.7"
 mne = "^1.6.0"
@@ -23,6 +23,7 @@ pyside6 = "^6.6.0"
 numpy = "^1.26.2"
 scipy = "^1.11.4"
 xlsxwriter = "^3.1.9"
+h5py = "^3.10.0"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.18.1"
@@ -33,8 +34,6 @@ loguru = "^0.7.2"
 pytest = "^7.4.3"
 mypy = "^1.7.1"
 ruff = "^0.1.6"
-attrs = "^23.1.0"
-snakeviz = "^2.2.0"
 matplotlib = "^3.8.2"
 
 [tool.mypy]

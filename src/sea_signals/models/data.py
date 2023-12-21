@@ -1,5 +1,6 @@
 import datetime
-from dataclasses import dataclass
+import pickle
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Literal, Unpack, cast
 
@@ -22,10 +23,8 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import QWidget
 
 from ..type_aliases import (
-    OxygenCondition,
     PeakDetectionElgendiPPG,
     PeakDetectionLocalMaxima,
-    PeakDetectionManualEdited,
     PeakDetectionNeurokit2,
     PeakDetectionPantompkins,
     PeakDetectionParameters,
@@ -54,6 +53,68 @@ if TYPE_CHECKING:
     from ..app import MainWindow
 
 
+@dataclass(slots=True, kw_only=True)
+class Peaks:
+    hbr: NDArray[np.int32] = field(default_factory=lambda: np.empty(0, dtype=np.int32))
+    ventilation: NDArray[np.int32] = field(
+        default_factory=lambda: np.empty(0, dtype=np.int32)
+    )
+
+    def __getitem__(self, key: SignalName) -> NDArray[np.int32]:
+        return getattr(self, key, np.empty(0, dtype=np.int32))
+
+    def update(self, name: SignalName, peaks: NDArray[np.int32]) -> None:
+        setattr(self, name, peaks)
+
+    def add_peak(self, name: SignalName, peak: int) -> None:
+        peaks = self[name]
+        insert_index = np.searchsorted(peaks, peak)
+        peaks = np.insert(peaks, insert_index, peak)
+        self.update(name, peaks)
+
+    def remove_peak(self, name: SignalName, peak: int) -> None:
+        peaks = self[name]
+        if peak not in peaks:
+            return
+        peaks = np.delete(peaks, np.where(peaks == peak))
+        self.update(name, peaks)
+
+    def diff(self, name: SignalName) -> NDArray[np.int32]:
+        return np.ediff1d(self[name], to_begin=np.array([0]))
+
+
+@dataclass(slots=True, kw_only=True)
+class Rate:
+    """
+    Holds the non-interpolated rate data for each signal. Results come from the `neurokit2.signal_rate` function.
+    """
+
+    hbr: NDArray[np.float64] = field(
+        default_factory=lambda: np.empty(0, dtype=np.float64)
+    )
+    ventilation: NDArray[np.float64] = field(
+        default_factory=lambda: np.empty(0, dtype=np.float64)
+    )
+
+    def __getitem__(self, key: SignalName) -> NDArray[np.float64]:
+        return getattr(self, key, np.empty(0, dtype=np.float64))
+
+    def update(self, name: SignalName, rate: NDArray[np.float64]) -> None:
+        setattr(self, name, rate)
+
+
+@dataclass(slots=True, kw_only=True)
+class ResultDFs:
+    hbr: pl.DataFrame = field(default_factory=lambda: pl.DataFrame())
+    ventilation: pl.DataFrame = field(default_factory=lambda: pl.DataFrame())
+
+    def __getitem__(self, key: SignalName) -> pl.DataFrame:
+        return getattr(self, key, pl.DataFrame())
+
+    def update(self, name: SignalName, df: pl.DataFrame) -> None:
+        setattr(self, name, df)
+
+
 @dataclass(slots=True, kw_only=True, frozen=True)
 class PeakStatistics:
     pass
@@ -61,20 +122,20 @@ class PeakStatistics:
 
 @dataclass(slots=True, kw_only=True, frozen=True)
 class PeakIntervalStatistics:
-    mean: float
-    median: float
-    std: float
-    mad: float
-    var: float
+    mean: np.float_
+    median: np.float_
+    std: np.float_
+    mad: np.float_
+    var: np.float_
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
 class RateStatistics:
-    mean: float
-    median: float
-    std: float
-    mad: float
-    var: float
+    mean: np.float_
+    median: np.float_
+    std: np.float_
+    mad: np.float_
+    var: np.float_
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -82,44 +143,6 @@ class DescriptiveStatistics:
     peaks: PeakStatistics
     peak_intervals: PeakIntervalStatistics
     rate: RateStatistics
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class ProcessingParameters:
-    sampling_rate: int
-    pipeline: Pipeline
-    filter_parameters: SignalFilterParameters
-    standardization_parameters: StandardizeParameters
-    peak_detection_parameters: PeakDetectionParameters
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class SelectionParameters:
-    subset_column: str | None = None
-    lower_limit: int | float
-    upper_limit: int | float
-    selection_size: int
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class ResultIdentifier:
-    name: SignalName
-    animal_id: str
-    environmental_condition: OxygenCondition
-    data_file_name: str
-    data_measured_date: datetime.datetime | None
-    result_file_name: str
-    result_creation_date: datetime.datetime
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class Result:
-    identifier: ResultIdentifier
-    info_data_selection: SelectionParameters
-    info_data_processing: ProcessingParameters
-    statistics: DescriptiveStatistics
-    result_data: pl.DataFrame
-    additional_data: dict[str, NDArray[np.float64] | PeakDetectionManualEdited]
 
 
 def standardize(
@@ -132,44 +155,6 @@ def standardize(
     is_robust = method == "mad"
 
     return scale_signal(sig, robust=is_robust, window_size=window_size).to_numpy()
-
-
-def signal_period(
-    peaks: NDArray[np.int32],
-    sampling_rate: int,
-    desired_length: int | None = None,
-    interpolation_method: str = "monotone_cubic",
-) -> NDArray[np.float64]:
-    return np.asarray(
-        nk.signal_period(peaks, sampling_rate, desired_length, interpolation_method),
-        dtype=np.float64,
-    )
-    # if peaks.size <= 3:
-    #     return np.full(peaks, np.nan)
-
-    # if desired_length is None:
-    #     desired_length = peaks.size
-
-    # if desired_length <= peaks[-1]:
-    #     raise ValueError(
-    #         "`desired_length` must be either `None` or larger than the index of the last peak."
-    #     )
-
-    # period = np.ediff1d(peaks, to_begin=0) / sampling_rate
-    # period[0] = np.mean(period[1:])
-
-    # if desired_length is not None:
-    #     period = np.asarray(
-    #         nk.signal_interpolate(
-    #             peaks,
-    #             period,
-    #             x_new=np.arange(desired_length),
-    #             method=interpolation_method,
-    #         ),
-    #         dtype=np.float64,
-    #     )
-
-    # return period
 
 
 class DataHandler(QObject):
@@ -190,9 +175,12 @@ class DataHandler(QObject):
         self._parent = parent
         self.df: pl.DataFrame = pl.DataFrame()
         self._sampling_rate: int = parent.spin_box_fs.value()
+        self.peaks: Peaks = Peaks()
+        self.rate: Rate = Rate()
+        self.result_dfs: ResultDFs = ResultDFs()
         self.processed_suffix = "processed"
         self.peaks_suffix = "peaks"
-        self.rate_suffix = "rate"
+        self.rate_no_interp_suffix = "rate"
         self.rate_interp_suffix = "rate_interpolated"
 
     @property
@@ -210,21 +198,25 @@ class DataHandler(QObject):
     def read(self, path: str | Path) -> None:
         path = Path(path)
         suffix = path.suffix
-        if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx"}:
-            info_msg = "Currently only .csv, .txt, .xlsx, .feather and .edf files are supported"
+        if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx", ".pkl"}:
+            info_msg = "Currently only .csv, .txt, .xlsx, .feather, .pkl and .edf files are supported"
             self._parent.sig_show_message.emit(info_msg, "info")
             return
 
         if suffix == ".csv":
-            self.df = pl.read_csv(path)
+            self._lazy_df = pl.scan_csv(path)
         elif suffix == ".edf":
-            self._lazy_df, self.meas_date, self.sampling_rate = read_edf(path.as_posix())
+            self._lazy_df, self.meas_date, self.sampling_rate = read_edf(
+                path.as_posix()
+            )
         elif suffix == ".feather":
             self._lazy_df = pl.scan_ipc(path)
         elif suffix == ".txt":
             self._lazy_df = pl.scan_csv(path, separator="\t")
         elif suffix == ".xlsx":
             self.df = pl.read_excel(path)
+        elif suffix == ".pkl":
+            self._parent.restore_state(path)
         else:
             raise NotImplementedError(f"File type `{suffix}` not supported")
 
@@ -333,7 +325,6 @@ class DataHandler(QObject):
         self, name: SignalName, **kwargs: Unpack[PeakDetectionParameters]
     ) -> None:
         processed_name = f"{name}_{self.processed_suffix}"
-        peaks_name = f"{name}_{self.peaks_suffix}"
         sig = self.df.get_column(processed_name).to_numpy(zero_copy_only=True)
         method = kwargs["method"]
         method_params = kwargs["input_values"]
@@ -372,28 +363,17 @@ class DataHandler(QObject):
             self._parent.sig_show_message.emit(error_msg, "warning")
             return
 
-        setattr(self, peaks_name, peaks)
-        self.sig_dh_peaks_updated.emit(name)
+        self.peaks.update(name, peaks)
+        # self._peak_intervals = (
+        #     pl.Series("peak_interval", peaks, pl.Int32).diff().fill_null(pl.lit(0))
+        # )
+        # logger.debug(f"{name} peaks: {peaks}\npeak intervals: {self._peak_intervals}")
         self.compute_rate(name)
 
     def compute_rate(self, name: SignalName) -> None:
-        rate_interp_name = f"{name}_{self.rate_interp_suffix}"
-        rate_peaks_name = f"{name}_{self.rate_suffix}"
-        peak_attr_name = f"{name}_{self.peaks_suffix}"
+        name_rate_interp = f"{name}_{self.rate_interp_suffix}"
 
-        peaks: NDArray[np.int32] = getattr(self, peak_attr_name)
-        # period_interp = np.asarray(
-        #     nk.signal_period(
-        #         peaks,
-        #         self.fs,
-        #         desired_length=self.df.height,
-        #         interpolation_method="monotone_cubic",
-        #     ),
-        #     dtype=np.float64,
-        # )
-        # if np.any(np.isnan(period_interp)):
-        #     return
-        # rate_interp = 60 / period_interp
+        peaks = self.peaks[name]
         rate_interp = np.asarray(
             nk.signal_rate(
                 peaks=peaks,
@@ -404,12 +384,7 @@ class DataHandler(QObject):
             ),
             dtype=np.float64,
         )
-
-        # period_peaks = nk.signal_period(
-        #     peaks, self.fs, desired_length=None, interpolation_method="monotone_cubic"
-        # )
-        # rate_peaks = 60 / period_peaks
-        rate_peaks = np.asarray(
+        rate_no_interp = np.asarray(
             nk.signal_rate(
                 peaks=peaks,
                 sampling_rate=self.fs,
@@ -420,54 +395,108 @@ class DataHandler(QObject):
             dtype=np.float64,
         )
 
-        if rate_interp_name in self.df.columns:
-            self.df = self.df.drop(rate_interp_name)
+        if name_rate_interp in self.df.columns:
+            self.df = self.df.drop(name_rate_interp)
         self.df.hstack(
-            [pl.Series(rate_interp_name, rate_interp, dtype=pl.Float64)], in_place=True
+            [pl.Series(name_rate_interp, rate_interp, dtype=pl.Float64).round(1)],
+            in_place=True,
         )
 
-        setattr(self, rate_peaks_name, rate_peaks)
-        self.sig_dh_rate_updated.emit(name)
+        self.rate.update(name, rate_no_interp)
 
     def get_descriptive_stats(self, name: SignalName) -> DescriptiveStatistics:
-        peak_attr_name = f"{name}_{self.peaks_suffix}"
-        rate_attr_name = f"{name}_{self.rate_suffix}"
-        peaks: NDArray[np.int32] | None = getattr(self, peak_attr_name, None)
-        rate: NDArray[np.floating[Any]] | None = getattr(self, rate_attr_name, None)
-        if peaks is None or rate is None:
-            raise ValueError(f"Missing {peak_attr_name} or {rate_attr_name}.")
+        # peaks = self.peaks[name]
+        rate_no_interp = self.rate[name]
+        diffs = self.peaks.diff(name)
+        # if hasattr(self, "_peak_intervals"):
+        #     diffs: NDArray[np.int32] = self._peak_intervals.to_numpy(writable=True)
+        # else:
+        #     diffs: NDArray[np.int32] = np.ediff1d(peaks, to_begin=np.array([0]))
         return DescriptiveStatistics(
             peaks=PeakStatistics(),
             peak_intervals=PeakIntervalStatistics(
-                mean=np.mean(peaks),
-                median=np.median(peaks),
-                std=np.std(peaks),
-                mad=np.nanmedian(np.abs(peaks - np.nanmedian(peaks))),
-                var=np.var(peaks),
+                mean=np.mean(diffs).round(2),
+                median=np.median(diffs).round(2),
+                std=np.std(diffs).round(2),
+                mad=np.nanmedian(np.abs(diffs - np.nanmedian(diffs))).round(2),
+                var=np.var(diffs).round(2),
             ),
             rate=RateStatistics(
-                mean=np.mean(rate),
-                median=np.median(rate),
-                std=np.std(rate),
-                mad=np.nanmedian(np.abs(rate - np.nanmedian(rate))),
-                var=np.var(rate),
+                mean=np.mean(rate_no_interp).round(2),
+                median=np.median(rate_no_interp).round(2),
+                std=np.std(rate_no_interp).round(2),
+                mad=np.nanmedian(
+                    np.abs(rate_no_interp - np.nanmedian(rate_no_interp))
+                ).round(2),
+                var=np.var(rate_no_interp).round(2),
             ),
         )
 
-    def get_result_df(self, name: SignalName) -> pl.DataFrame:
-        peaks: NDArray[np.int32] = getattr(self, f"{name}_{self.peaks_suffix}")
-        rate: NDArray[np.floating[Any]] = getattr(self, f"{name}_{self.rate_suffix}")
-        return (
+    def compute_result_df(self, name: SignalName) -> None:
+        peaks = self.peaks[name]
+
+        # time_col = self.df.get_column("time_s")[peaks]
+        # peak_indices = self.df.get_column("index")[peaks]
+        # peak_intervals = self._peak_intervals
+        result_df = (
             self.df.lazy()
             .select(
                 pl.col("time_s").gather(peaks).round(4),
-                pl.Series("peak_index", peaks, pl.Int32),
-                pl.Series("peak_interval", peaks, pl.Int32).diff().fill_null(0),
+                pl.Series("peak_index", self.df.get_column("index").gather(peaks), pl.Int32),
+                pl.Series("peak_intervals", self.peaks.diff(name), pl.Int32),
                 pl.col("temperature").gather(peaks).round(1),
-                pl.Series("rate_bpm", rate, pl.Int32),
+                pl.Series("rate_bpm", self.rate[name], pl.Float64).round(1),
             )
             .collect()
         )
+        self.result_dfs.update(name, result_df)
+
+    def get_result_df(self, name: SignalName, compute: bool = True) -> pl.DataFrame:
+        if compute:
+            self.compute_result_df(name)
+        return self.result_dfs[name]
+
+    def restore_peaks(self, peaks: Peaks) -> None:
+        self.peaks = peaks
+
+    def restore_rate(self, rate: Rate) -> None:
+        self.rate = rate
+
+    def restore_df(self, df: pl.DataFrame) -> None:
+        self.df = df
+        if all(
+            col in df.columns
+            for col in ["index", "time_s", "temperature", "hbr", "ventilation"]
+        ):
+            self._lazy_df = df.lazy().select(
+                pl.col("index", "time_s", "temperature", "hbr", "ventilation")
+            )
+        else:
+            self._lazy_df = df.lazy()
+        self.calc_minmax()
+
+    def restore_result_dfs(self, result_dfs: ResultDFs) -> None:
+        self.result_dfs = result_dfs
+
+    @dataclass(slots=True, kw_only=True)
+    class DataState:
+        df: pl.DataFrame
+        result_df: ResultDFs = field(init=False)
+        peaks: Peaks = field(init=False)
+        rate: Rate = field(init=False)
+
+    def get_state(self) -> DataState:
+        state = self.DataState(df=self.df.clone())
+        state.result_df = self.result_dfs
+        state.peaks = self.peaks
+        state.rate = self.rate
+        return state
+
+    def restore_state(self, state: DataState) -> None:
+        self.restore_df(state.df)
+        self.restore_result_dfs(state.result_df)
+        self.restore_peaks(state.peaks)
+        self.restore_rate(state.rate)
 
 
 class CompactDFModel(QAbstractTableModel):

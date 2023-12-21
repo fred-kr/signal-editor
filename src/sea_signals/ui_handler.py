@@ -6,6 +6,8 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 import rich
+from pyqtgraph.console import ConsoleWidget
+from pyqtgraph.parametertree import ParameterTree
 from PySide6.QtCore import (
     QDate,
     QObject,
@@ -14,13 +16,11 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QStandardItemModel
+from PySide6.QtGui import QActionGroup, QStandardItemModel
 from PySide6.QtWidgets import (
     QDockWidget,
     QVBoxLayout,
 )
-from pyqtgraph.console import ConsoleWidget
-from pyqtgraph.parametertree import ParameterTree
 
 from .models.io import parse_file_name
 from .models.peaks import UIPeakDetection
@@ -258,6 +258,11 @@ class UIHandler(QObject):
 
     def _prepare_toolbars(self) -> None:
         self.window.toolbar_plots.setVisible(False)
+
+        self.action_group_mouse_mode = QActionGroup(self.window)
+        self.action_group_mouse_mode.setExclusive(True)
+        self.action_group_mouse_mode.addAction(self.window.action_rect_mode)
+        self.action_group_mouse_mode.addAction(self.window.action_pan_mode)
 
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():

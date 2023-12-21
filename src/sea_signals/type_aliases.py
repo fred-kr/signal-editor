@@ -1,10 +1,9 @@
-from datetime import date
-from pathlib import Path
 from typing import Any, NotRequired
 
 import numpy as np
-from PySide6.QtGui import QBrush, QPainter, QPainterPath, QPen
+import polars as pl
 from numpy.typing import ArrayLike, NDArray
+from PySide6.QtGui import QBrush, QPainter, QPainterPath, QPen
 from typing_extensions import Literal, TypedDict
 
 # ==================================================================================== #
@@ -77,6 +76,12 @@ class MinMaxMapping(TypedDict):
     max: float
 
 
+class DataState(TypedDict):
+    df: pl.DataFrame
+    peaks: dict[SignalName, NDArray[np.int32]]
+    rate_no_interpolation: dict[SignalName, NDArray[np.float64]]
+
+
 # Signal Preprocessing +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
 class RequiredParameters(TypedDict):
     method: FilterMethod
@@ -96,9 +101,30 @@ class StandardizeParameters(TypedDict):
 
 
 # Peak Detection +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
+class OldPeaks(TypedDict, total=False):
+    hbr: list[tuple[np.int32, np.float64]]
+    ventilation: list[tuple[np.int32, np.float64]]
+
+
+class AddedPoints(TypedDict):
+    hbr: list[int]
+    ventilation: list[int]
+
+
+class RemovedPoints(TypedDict):
+    hbr: list[int]
+    ventilation: list[int]
+
+
+class PeakEdits(TypedDict):
+    added_peaks: AddedPoints
+    removed_peaks: RemovedPoints
+
+
 class PeakDetectionManualEdited(TypedDict):
     added_peaks: list[int]
     removed_peaks: list[int]
+
 
 class PeakDetectionElgendiPPG(TypedDict):
     peakwindow: float

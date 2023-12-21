@@ -5,10 +5,9 @@ import pyqtgraph as pg
 from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6 import QtGui, QtWidgets
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal, Slot
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QObject, QPointF, QRectF, Qt, Signal, Slot
 
-from ..type_aliases import SignalName
+from ..type_aliases import AddedPoints, OldPeaks, PeakEdits, RemovedPoints, SignalName
 
 if TYPE_CHECKING:
     from ..app import MainWindow
@@ -57,7 +56,13 @@ class CustomViewBox(pg.ViewBox):
         dif = pos - lastPos
         dif = dif * -1
 
-        if ev.button() == Qt.MouseButton.MiddleButton:
+
+        mouseEnabled = np.array(self.state["mouseEnabled"], dtype=np.float64)
+        mask = mouseEnabled.copy()
+        if axis is not None:
+            mask[1 - axis] = 0.0
+
+        if ev.button() == Qt.MouseButton.MiddleButton or (ev.button() == Qt.MouseButton.LeftButton and ev.modifiers() & Qt.KeyboardModifier.ControlModifier):
             if ev.isFinish():
                 r = QRectF(ev.pos(), ev.buttonDownPos())
                 data_coords: QtGui.QPolygonF = self.mapToView(r)
@@ -65,13 +70,7 @@ class CustomViewBox(pg.ViewBox):
             else:
                 self.updateSelectionBox(ev.pos(), ev.buttonDownPos())
                 self.mapped_peak_selection = None
-
-        mouseEnabled = np.array(self.state["mouseEnabled"], dtype=np.float64)
-        mask = mouseEnabled.copy()
-        if axis is not None:
-            mask[1 - axis] = 0.0
-
-        if ev.button() & Qt.MouseButton.LeftButton:
+        elif ev.button() == Qt.MouseButton.LeftButton:
             if self.state["mouseMode"] == pg.ViewBox.RectMode and axis is None:
                 if ev.isFinish():
                     self.rbScaleBox.hide()
@@ -124,13 +123,13 @@ class CustomViewBox(pg.ViewBox):
         self.selection_box.show()
 
 
-class PlotHandler(QWidget):
+class PlotHandler(QObject):
     """
     Class that manages showing and updating plots.
     """
 
     sig_bpm_updated = Signal(str)
-    sig_peaks_edited = Signal()
+    sig_peaks_edited = Signal(str)
 
     def __init__(
         self,
@@ -140,8 +139,13 @@ class PlotHandler(QWidget):
         self._parent = parent
         plot_bg = str(pg.getConfigOption("background"))
         self.click_tolerance = 80
-        self.added_points: dict[str, list[int]] = {"hbr": [], "ventilation": []}
-        self.removed_points: dict[str, list[int]] = {"hbr": [], "ventilation": []}
+        self.added_points: AddedPoints = AddedPoints(hbr=[], ventilation=[])
+        self.removed_points: RemovedPoints = RemovedPoints(hbr=[], ventilation=[])
+        self.peak_edits: PeakEdits = PeakEdits(
+            added_peaks=AddedPoints(hbr=[], ventilation=[]),
+            removed_peaks=RemovedPoints(hbr=[], ventilation=[]),
+        )
+        self._old_peaks: OldPeaks = {}
 
         self.hbr_plot_widget = pg.PlotWidget(
             viewBox=CustomViewBox(),
@@ -163,12 +167,6 @@ class PlotHandler(QWidget):
         )
 
         self._prepare_plot_items()
-
-    def connect_signals(self) -> None:
-        hbr_vb: CustomViewBox = self.hbr_plot_widget.getPlotItem().getViewBox()
-        ventilation_vb: CustomViewBox = (
-            self.ventilation_plot_widget.getPlotItem().getViewBox()
-        )
 
     def _init_plot_items(self) -> None:
         self.hbr_signal_line: pg.PlotDataItem | None = None
@@ -194,7 +192,7 @@ class PlotHandler(QWidget):
         plot_item.setLabel(axis="left", text=left_label)
         plot_item.setLabel(axis="bottom", text=bottom_label)
 
-    def _prepare_plot_items(self) -> None:  # sourcery skip: extract-method
+    def _prepare_plot_items(self) -> None:
         self._init_plot_items()
         plot_widgets = [
             (self.hbr_plot_widget, "hbr"),
@@ -217,29 +215,37 @@ class PlotHandler(QWidget):
             plot_item.getViewBox().setAutoVisible(y=True)
             plot_item.setMouseEnabled(x=True, y=False)
 
+        # common_label = "<span style='color: lightgray; font-size: 10pt;'>n samples</span>"
+        # common_amp_label = (
+        #     "<span style='color: lightgray; font-size: 10pt;'>Signal Amplitude</span>"
+        # )
+        # common_rate_label = (
+        #     "<span style='color: lightgray; font-size: 10pt;'>Signal Rate</span>"
+        # )
+
         self.set_plot_titles_and_labels(
             self.hbr_plot_widget.getPlotItem(),
-            title="<b>HBR</b>",
-            left_label="Signal Amplitude",
-            bottom_label="n samples",
+            title="<span style='color: white; font-size: 12pt; font-weight: 500'>HBR</span>",
+            left_label="<span style='color: lightgray; font-size: 10pt;'>Signal Amplitude</span>",
+            bottom_label="<span style='color: lightgray; font-size: 10pt;'>n samples</span>",
         )
         self.set_plot_titles_and_labels(
             self.ventilation_plot_widget.getPlotItem(),
-            title="<b>Ventilation</b>",
-            left_label="Signal Amplitude",
-            bottom_label="n samples",
+            title="<span style='color: white; font-size: 12pt; font-weight: 500'>Ventilation</span>",
+            left_label="<span style='color: lightgray; font-size: 10pt;'>Signal Amplitude</span>",
+            bottom_label="<span style='color: lightgray; font-size: 10pt;'>n samples</span>",
         )
         self.set_plot_titles_and_labels(
             self.bpm_hbr_plot_widget.getPlotItem(),
-            title="<b>Estimated Rate</b>",
-            left_label="beats per minute",
-            bottom_label="n samples",
+            title="<span style='color: white; font-size: 12pt; font-weight: 500'>Estimated Rate</span>",
+            left_label="<span style='color: lightgray; font-size: 10pt;'>Cycles per minute</span>",
+            bottom_label="<span style='color: lightgray; font-size: 10pt;'>n samples</span>",
         )
         self.set_plot_titles_and_labels(
             self.bpm_ventilation_plot_widget.getPlotItem(),
-            title="<b>Estimated Rate</b>",
-            left_label="beats per minute",
-            bottom_label="n samples",
+            title="<span style='color: white; font-size: 12pt; font-weight: 500'>Estimated Rate</span>",
+            left_label="<span style='color: lightgray; font-size: 10pt;'>Cycles per minute</span>",
+            bottom_label="<span style='color: lightgray; font-size: 10pt;'>n samples</span>",
         )
 
         self.hbr_plot_widget.getPlotItem().getViewBox().setXLink("bpm_hbr")
@@ -276,7 +282,7 @@ class PlotHandler(QWidget):
         self,
         sig: NDArray[np.float32 | np.float64],
         plot_widget: pg.PlotWidget,
-        signal_name: str,
+        signal_name: SignalName,
     ) -> None:
         color = "crimson" if signal_name == "hbr" else "royalblue"
         signal_line = pg.PlotDataItem(
@@ -291,10 +297,18 @@ class PlotHandler(QWidget):
 
         bpm_plot_widget: pg.PlotWidget = getattr(self, f"bpm_{signal_name}_plot_widget")
 
-        line_ref = getattr(self, f"{signal_name}_signal_line")
-        scatter_ref = getattr(self, f"{signal_name}_peaks_scatter")
-        bpm_line_ref = getattr(self, f"bpm_{signal_name}_signal_line")
-        bpm_mean_line_ref = getattr(self, f"bpm_{signal_name}_mean_hline")
+        line_ref: pg.PlotDataItem | None = getattr(
+            self, f"{signal_name}_signal_line", None
+        )
+        scatter_ref: pg.ScatterPlotItem | None = getattr(
+            self, f"{signal_name}_peaks_scatter", None
+        )
+        bpm_line_ref: pg.PlotDataItem | None = getattr(
+            self, f"bpm_{signal_name}_signal_line", None
+        )
+        bpm_mean_line_ref: pg.InfiniteLine | None = getattr(
+            self, f"bpm_{signal_name}_mean_hline", None
+        )
         if line_ref is not None:
             line_ref.sigClicked.disconnect(self.add_clicked_point)
             plot_widget.removeItem(line_ref)
@@ -316,28 +330,32 @@ class PlotHandler(QWidget):
         pos_x: NDArray[np.int32],
         pos_y: NDArray[np.float32 | np.float64],
         plot_widget: pg.PlotWidget,
-        signal_name: str,
+        signal_name: SignalName,
     ) -> None:
-        color = "goldenrod"
+        brush_color = "goldenrod"
+        hover_brush_color = "red"
+
         peaks_scatter = pg.ScatterPlotItem(
             x=pos_x,
             y=pos_y,
             pxMode=True,
             size=10,
             pen=None,
-            brush=color,
+            brush=brush_color,
             useCache=True,
             name=f"{signal_name}_peaks",
             hoverable=True,
             hoverPen="black",
             hoverSymbol="x",
-            hoverBrush="red",
+            hoverBrush=hover_brush_color,
             hoverSize=15,
             tip=None,
         )
         peaks_scatter.setZValue(60)
 
-        scatter_ref = getattr(self, f"{signal_name}_peaks_scatter")
+        scatter_ref: pg.ScatterPlotItem | None = getattr(
+            self, f"{signal_name}_peaks_scatter", None
+        )
 
         if scatter_ref is not None:
             scatter_ref.sigClicked.disconnect(self.remove_clicked_point)
@@ -358,11 +376,12 @@ class PlotHandler(QWidget):
         **kwargs: float,
     ) -> None:
         mean_bpm = kwargs.get("mean_peak_interval", np.mean(bpm_data))
-        color = "green"
+        pen_color = "green"
+        mean_pen_color = "goldenrod"
 
         bpm_line = pg.PlotDataItem(
             bpm_data,
-            pen=color,
+            pen=pen_color,
             autoDownsample=True,
             skipFiniteCheck=True,
             name=f"bpm_{signal_name}",
@@ -370,14 +389,18 @@ class PlotHandler(QWidget):
         bpm_mean_line = pg.InfiniteLine(
             pos=mean_bpm,
             angle=0,
-            pen=dict(color="goldenrod", width=1, style=Qt.PenStyle.DashLine),
+            pen=dict(color=mean_pen_color, width=2, style=Qt.PenStyle.DashLine),
             name=f"mean_bpm_{signal_name}",
         )
 
-        bpm_line_ref = getattr(self, f"bpm_{signal_name}_signal_line")
-        bpm_mean_line_ref = getattr(self, f"bpm_{signal_name}_mean_hline")
+        bpm_line_ref: pg.PlotDataItem | None = getattr(
+            self, f"bpm_{signal_name}_signal_line", None
+        )
+        bpm_mean_line_ref: pg.InfiniteLine | None = getattr(
+            self, f"bpm_{signal_name}_mean_hline", None
+        )
 
-        if bpm_line_ref is not None and bpm_mean_line_ref is not None:
+        if bpm_line_ref is not None:
             plot_widget.removeItem(bpm_line_ref)
             plot_widget.removeItem(bpm_mean_line_ref)
         if legend := plot_widget.getPlotItem().legend:
@@ -391,7 +414,7 @@ class PlotHandler(QWidget):
         legend.addItem(
             pg.PlotDataItem(
                 np.array([0, 1]),
-                pen=dict(color="goldenrod", width=1, style=Qt.PenStyle.DashLine),
+                pen=dict(color=mean_pen_color, width=2, style=Qt.PenStyle.DashLine),
                 skipFiniteCheck=True,
             ),
             f"Mean BPM: {int(mean_bpm)}",
@@ -410,13 +433,16 @@ class PlotHandler(QWidget):
         ev: mouseEvents.MouseClickEvent,
     ) -> None:
         """
-        Removes a clicked point from a scatter plot. The poition of the clicked point is
-        saved to the `removed_points` dictionary.
+        Remove clicked point from plot.
 
-        Args:
-            sender (pg.ScatterPlotItem): The scatter plot item that emitted the signal.
-            points (np.ndarray[pg.SpotItem, Any]): The array of selected points.
-            ev (mouseEvents.MouseClickEvent): The mouse click event.
+        Parameters
+        ----------
+        sender : pg.ScatterPlotItem
+            The object that emitted the signal
+        points : np.ndarray[pg.SpotItem, Any]
+            Array of points under the cursor at the moment of the event
+        ev : mouseEvents.MouseClickEvent
+            The mouse click event
         """
         ev.accept()
         if len(points) == 0:
@@ -433,15 +459,18 @@ class PlotHandler(QWidget):
             new_points_x = np.delete(scatter_plot.data["x"], to_remove_index)
             new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)
             scatter_plot.setData(x=new_points_x, y=new_points_y)
-            self.sig_peaks_edited.emit()
             name = "hbr" if "hbr" in sender.name() else "ventilation"
-            self.removed_points[name].append(int(points[0].pos().x()))
+            self.peak_edits["removed_peaks"][name].append(int(points[0].pos().x()))
+            self.sig_peaks_edited.emit(name)
 
     @Slot()
     def remove_selected(self) -> None:
-        signal_name = self._parent.signal_name
+        """
+        Removes peaks inside a rectangular selection.
+        """
+        name = self._parent.signal_name
         vb: CustomViewBox = (
-            getattr(self, f"{signal_name}_plot_widget").getPlotItem().getViewBox()
+            getattr(self, f"{name}_plot_widget").getPlotItem().getViewBox()
         )
         if vb.mapped_peak_selection is None:
             return
@@ -455,9 +484,10 @@ class PlotHandler(QWidget):
 
         x_range = (rect_x, rect_x + rect_width)
         y_range = (rect_y, rect_y + rect_height)
-        scatter_ref: pg.ScatterPlotItem = getattr(self, f"{signal_name}_peaks_scatter")
+        scatter_ref: pg.ScatterPlotItem = getattr(self, f"{name}_peaks_scatter")
 
         scatter_x, scatter_y = scatter_ref.getData()
+        # self.hbr_plot_widget.saveState()
         to_remove = np.argwhere(
             (scatter_x >= x_range[0])
             & (scatter_x <= x_range[1])
@@ -471,34 +501,89 @@ class PlotHandler(QWidget):
             x=np.delete(scatter_x, to_remove), y=np.delete(scatter_y, to_remove)
         )
 
-        self.removed_points[signal_name].extend(scatter_x[to_remove].tolist())
+        self.peak_edits["removed_peaks"][name].extend(
+            scatter_x[to_remove][:, 0].astype(int).tolist()
+        )
+        self.sig_peaks_edited.emit(name)
+        # self.removed_points[signal_name].extend(
+        #     scatter_x[to_remove][:, 0].astype(int).tolist()
+        # )
 
     @Slot(object, object)
     def add_clicked_point(
         self, sender: pg.PlotCurveItem, ev: mouseEvents.MouseClickEvent
     ) -> None:
+        """
+        Add scatter point to plot.
+
+        Parameters
+        ----------
+        sender : pg.PlotCurveItem
+            The object that emitted the signal
+        ev : mouseEvents.MouseClickEvent
+            The mouse click event
+        """
         ev.accept()
-        x_new = int(ev.pos().x())
-        signal_map = {
-            "hbr_signal": getattr(self, "hbr_signal_line", None),
-            "ventilation_signal": getattr(self, "ventilation_signal_line", None),
+        click_x = int(ev.pos().x())
+        signal_map: dict[SignalName, pg.PlotCurveItem | None] = {
+            "hbr": getattr(self, "hbr_signal_line", None),
+            "ventilation": getattr(self, "ventilation_signal_line", None),
         }
-        scatter_map = {
-            "hbr_signal": getattr(self, "hbr_peaks_scatter", None),
-            "ventilation_signal": getattr(self, "ventilation_peaks_scatter", None),
+        scatter_map: dict[SignalName, pg.ScatterPlotItem | None] = {
+            "hbr": getattr(self, "hbr_peaks_scatter", None),
+            "ventilation": getattr(self, "ventilation_peaks_scatter", None),
         }
-        signal_name = sender.name()
-        if signal_name in signal_map:
-            y_new = signal_map[signal_name].yData[x_new]
-            scatter_map[signal_name].addPoints(x=x_new, y=y_new)
-            self.sig_peaks_edited.emit()
-            name = "hbr" if "hbr" in signal_name else "ventilation"
-            self.added_points[name].append(x_new)
+        name = self._parent.signal_name
+        # if name not in signal_map:
+        #     return
+        signal_line = signal_map[name]
+
+        if signal_line is None:
+            return
+
+        xData: NDArray[np.float64] = signal_line.xData
+        yData: NDArray[np.float64] = signal_line.yData
+
+        # Define the radius within which to search for the max y-value
+        search_radius = 15
+
+        # Find the indices within the radius around the click position
+        indices = np.where(
+            (xData >= click_x - search_radius) & (xData <= click_x + search_radius)
+        )[0]
+
+        # Select the subset of y-values within the radius
+        y_values_in_radius = yData[indices]
+
+        # Find the index of the max y-value
+        max_y_index = indices[np.argmax(y_values_in_radius)]
+
+        # Get the new x and y values
+        x_new, y_new = xData[max_y_index], y_values_in_radius.max()
+        scatter_map[name].addPoints(x=x_new, y=y_new)
+        # name = "hbr" if "hbr" in name else "ventilation"
+        self.peak_edits["added_peaks"][name].append(int(x_new))
+        self.sig_peaks_edited.emit(name)
 
     @Slot()
     def show_region_selector(self) -> None:
-        signal_name = self._parent.signal_name
-        plot_widget = getattr(self, f"{signal_name}_plot_widget")
+        name = self._parent.signal_name
+        plot_widget = getattr(self, f"{name}_plot_widget")
         view_box = plot_widget.getPlotItem().getViewBox()
         selection_box = view_box.selection_box
         selection_box.setVisible(not selection_box.isVisible())
+
+    # @Slot()
+    # def restore_previous_peaks(self) -> None:
+    #     signal_name = self._parent.signal_name
+    #     scatter_plot = getattr(self, f"{signal_name}_peaks_scatter")
+    #     scatter_plot.setData(
+    #         x=self._old_peaks[signal_name][0], y=self._old_peaks[signal_name][1]
+    #     )
+    #     self.sig_peaks_edited.emit()
+
+    def get_state(self) -> PeakEdits:
+        return self.peak_edits
+
+    def restore_state(self, state: PeakEdits) -> None:
+        self.peak_edits = state

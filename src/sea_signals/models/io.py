@@ -134,3 +134,29 @@ def read_edf(
         .select("index", "time_s", *column_names)
     )
     return lf, date_measured, sampling_rate
+
+
+# def save_to_hdf5(result: Result, file_path: str | Path) -> None:
+#     with h5py.File(Path(file_path).resolve().as_posix(), "w") as hdf:
+
+#         for attr, value in asdict(result).items():
+#             if isinstance(value, (str, int, float, datetime)):
+#                 hdf.attrs[attr] = value
+#             elif isinstance(value, list):
+#                 hdf.create_dataset(attr, data=np.array(value), compression="gzip")
+#             elif isinstance(value, dict):
+#                 grp = hdf.create_group(attr)
+#                 for k, v in value.items():
+#                     grp.create_dataset(k, data=np.array(v), compression="gzip")
+#             elif isinstance(value, np.ndarray):
+#                 hdf.create_dataset(attr, data=value, compression="gzip")
+#             # elif isinstance(value, pl.DataFrame):
+#                 # np_df = value.to_numpy(structured=True)
+#                 # hdf.create_dataset(attr, data=np_df, compression="gzip")
+#             else:
+#                 raise ValueError(f"Unsupported type: {type(value)}")
+
+#         result_df = result.result_data
+#         df_grp = hdf.create_group("result_data")
+#         for column in result_df.columns:
+#             df_grp.create_dataset(column, data=result_df[column].to_numpy(), compression="gzip")

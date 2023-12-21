@@ -30,15 +30,22 @@ def scale_z[T: (pl.Expr, pl.Series)](sig: T) -> T:
 def rolling_mad(
     sig: pl.Series, window_size: int, constant: float = 1.4826
 ) -> pl.Series:
-    return (
-        (sig - sig.rolling_median(window_size, min_periods=0))
-        / (
-            (sig - sig.rolling_median(window_size, min_periods=0))
-            .abs()
-            .rolling_median(window_size, min_periods=0)
-            * constant
-        )
-    ).fill_nan(sig[0])
+    if window_size <= 0:
+        raise ValueError("Window size must be greater than 0")
+    deviation = sig - sig.rolling_median(window_size, min_periods=0)
+    mad = deviation.abs().rolling_median(window_size, min_periods=0) * constant
+
+    scaled_signal = deviation / mad
+    return scaled_signal.fill_nan(0)
+    # return (
+    #     (sig - sig.rolling_median(window_size, min_periods=0))
+    #     / (
+    #         (sig - sig.rolling_median(window_size, min_periods=0))
+    #         .abs()
+    #         .rolling_median(window_size, min_periods=0)
+    #         * constant
+    #     )
+    # ).fill_nan(sig[0])
 
 
 def rolling_z(sig: pl.Series, window_size: int) -> pl.Series:
