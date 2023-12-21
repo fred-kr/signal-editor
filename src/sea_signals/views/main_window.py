@@ -832,16 +832,16 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout_2.addWidget(self.label_2)
 
-        self.horizontalSlider = QSlider(self.container_scale_window_inputs)
-        self.horizontalSlider.setObjectName(u"horizontalSlider")
-        sizePolicy5.setHeightForWidth(self.horizontalSlider.sizePolicy().hasHeightForWidth())
-        self.horizontalSlider.setSizePolicy(sizePolicy5)
-        self.horizontalSlider.setMinimum(5)
-        self.horizontalSlider.setMaximum(10000)
-        self.horizontalSlider.setValue(2000)
-        self.horizontalSlider.setOrientation(Qt.Horizontal)
+        self.slider_scale_window_size = QSlider(self.container_scale_window_inputs)
+        self.slider_scale_window_size.setObjectName(u"slider_scale_window_size")
+        sizePolicy5.setHeightForWidth(self.slider_scale_window_size.sizePolicy().hasHeightForWidth())
+        self.slider_scale_window_size.setSizePolicy(sizePolicy5)
+        self.slider_scale_window_size.setMinimum(5)
+        self.slider_scale_window_size.setMaximum(10000)
+        self.slider_scale_window_size.setValue(2000)
+        self.slider_scale_window_size.setOrientation(Qt.Horizontal)
 
-        self.horizontalLayout_2.addWidget(self.horizontalSlider)
+        self.horizontalLayout_2.addWidget(self.slider_scale_window_size)
 
         self.spin_box_scale_window_size = QSpinBox(self.container_scale_window_inputs)
         self.spin_box_scale_window_size.setObjectName(u"spin_box_scale_window_size")
@@ -1199,6 +1199,7 @@ class Ui_MainWindow(object):
         self.menu_file.addAction(self.action_load_state)
         self.menu_info.addAction(self.action_toggle_whats_this_mode)
         self.toolbar.addAction(self.action_open_console)
+        self.toolbar.addSeparator()
         self.toolbar.addAction(self.action_save_state)
         self.toolbar.addAction(self.action_load_state)
         self.toolbar.addSeparator()
@@ -1213,8 +1214,6 @@ class Ui_MainWindow(object):
         self.toolbar_plots.addAction(self.action_show_roi)
         self.toolbar_plots.addSeparator()
         self.toolbar_plots.addAction(self.action_redraw_with_current_values)
-        self.toolbar_plots.addAction(self.action_step_forward)
-        self.toolbar_plots.addAction(self.action_step_backward)
 
         self.retranslateUi(MainWindow)
         self.tabs_main.currentChanged.connect(self.sidebar.setCurrentIndex)
@@ -1222,8 +1221,8 @@ class Ui_MainWindow(object):
         self.spin_box_order.valueChanged.connect(self.slider_order.setValue)
         self.slider_window_size.valueChanged.connect(self.spin_box_window_size.setValue)
         self.spin_box_window_size.valueChanged.connect(self.slider_window_size.setValue)
-        self.horizontalSlider.valueChanged.connect(self.spin_box_scale_window_size.setValue)
-        self.spin_box_scale_window_size.valueChanged.connect(self.horizontalSlider.setValue)
+        self.slider_scale_window_size.valueChanged.connect(self.spin_box_scale_window_size.setValue)
+        self.spin_box_scale_window_size.valueChanged.connect(self.slider_scale_window_size.setValue)
 
         self.tabs_main.setCurrentIndex(0)
         self.stacked_hbr_vent.setCurrentIndex(0)

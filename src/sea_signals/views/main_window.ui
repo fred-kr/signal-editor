@@ -608,6 +608,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <bool>false</bool>
    </attribute>
    <addaction name="action_open_console"/>
+   <addaction name="separator"/>
    <addaction name="action_save_state"/>
    <addaction name="action_load_state"/>
    <addaction name="separator"/>
@@ -657,8 +658,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <addaction name="action_show_roi"/>
    <addaction name="separator"/>
    <addaction name="action_redraw_with_current_values"/>
-   <addaction name="action_step_forward"/>
-   <addaction name="action_step_backward"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <widget class="QDockWidget" name="dock_widget_sidebar">
@@ -1469,7 +1468,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                    </widget>
                   </item>
                   <item>
-                   <widget class="QSlider" name="horizontalSlider">
+                   <widget class="QSlider" name="slider_scale_window_size">
                     <property name="sizePolicy">
                      <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
                       <horstretch>0</horstretch>
@@ -2567,7 +2566,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </hints>
   </connection>
   <connection>
-   <sender>horizontalSlider</sender>
+   <sender>slider_scale_window_size</sender>
    <signal>valueChanged(int)</signal>
    <receiver>spin_box_scale_window_size</receiver>
    <slot>setValue(int)</slot>
@@ -2585,7 +2584,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <connection>
    <sender>spin_box_scale_window_size</sender>
    <signal>valueChanged(int)</signal>
-   <receiver>horizontalSlider</receiver>
+   <receiver>slider_scale_window_size</receiver>
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">

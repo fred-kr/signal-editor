@@ -1,8 +1,8 @@
+import datetime
 from typing import Any, NotRequired
 
 import numpy as np
-import polars as pl
-from numpy.typing import ArrayLike, NDArray
+from numpy.typing import ArrayLike
 from PySide6.QtGui import QBrush, QPainter, QPainterPath, QPen
 from typing_extensions import Literal, TypedDict
 
@@ -63,7 +63,12 @@ type OxygenCondition = Literal["normoxic", "hypoxic"]
 #                                  TYPED DICTIONARIES                                  #
 # ==================================================================================== #
 
+class FileMetadata(TypedDict):
+    date_measured: datetime.datetime
+    animal_id: str
+    oxygen_condition: OxygenCondition
 
+    
 # File readers +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
 class EDFReaderKwargs(TypedDict, total=False):
     start: int
@@ -71,15 +76,6 @@ class EDFReaderKwargs(TypedDict, total=False):
 
 
 # Data Handler +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-class MinMaxMapping(TypedDict):
-    min: float
-    max: float
-
-
-class DataState(TypedDict):
-    df: pl.DataFrame
-    peaks: dict[SignalName, NDArray[np.int32]]
-    rate_no_interpolation: dict[SignalName, NDArray[np.float64]]
 
 
 # Signal Preprocessing +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
@@ -100,7 +96,7 @@ class StandardizeParameters(TypedDict):
     window_size: NotRequired[int | Literal["None"]]
 
 
-# Peak Detection +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
+# Plot Handler +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
 class OldPeaks(TypedDict, total=False):
     hbr: list[tuple[np.int32, np.float64]]
     ventilation: list[tuple[np.int32, np.float64]]
@@ -121,11 +117,7 @@ class PeakEdits(TypedDict):
     removed_peaks: RemovedPoints
 
 
-class PeakDetectionManualEdited(TypedDict):
-    added_peaks: list[int]
-    removed_peaks: list[int]
-
-
+# Peak Detection +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
 class PeakDetectionElgendiPPG(TypedDict):
     peakwindow: float
     beatwindow: float
@@ -184,52 +176,6 @@ class PeakDetectionParameters(TypedDict):
 
 
 # Results ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-class PeakIntervalStatistics(TypedDict):
-    mean: np.float_
-    median: np.float_
-    std: np.float_
-    var: np.float_
-
-
-class RateStatistics(TypedDict):
-    mean: np.float_
-    median: np.float_
-    std: np.float_
-    var: np.float_
-
-
-class DescriptiveStatistics(TypedDict):
-    name: SignalName
-    interval: PeakIntervalStatistics
-    rate: RateStatistics
-
-
-class ComputedResults(TypedDict):
-    signal_name: SignalName
-    peak_intervals: NDArray[np.int32]
-    signal_rate: NDArray[np.float64]
-    peak_interval_stats: PeakIntervalStatistics
-    signal_rate_stats: RateStatistics
-
-
-class InfoProcessingParams(TypedDict):
-    signal_name: SignalName
-    sampling_rate: int
-    preprocess_pipeline: Pipeline
-    filter_parameters: SignalFilterParameters
-    standardization_method: ScaleMethod
-    peak_detection_method: PeakDetectionMethod
-    peak_method_parameters: PeakDetectionParameters
-
-
-class InfoWorkingData(TypedDict):
-    signal_name: SignalName
-    subset_column: str | None
-    subset_lower_bound: int | float
-    subset_upper_bound: int | float
-    n_samples: int
-
-
 class GeneralParameterOptions(TypedDict, total=False):
     name: str
     readonly: bool

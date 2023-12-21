@@ -67,6 +67,7 @@ COMBO_BOX_ITEMS = {
     "combo_box_oxygen_condition": {
         "Normoxic": "normoxic",
         "Hypoxic": "hypoxic",
+        "Unknown": "unknown",
     },
     "combo_box_scale_method": {
         "No Standardization": "None",
@@ -283,14 +284,16 @@ class UIHandler(QObject):
         self.update_subset_param_widgets(viable_filter_columns[0])
         self.window.combo_box_filter_column.blockSignals(False)
         try:
-            parsed_date, parsed_id = parse_file_name(Path(path).name)
+            parsed_date, parsed_id, parsed_oxy = parse_file_name(Path(path).name)
             self.window.date_edit_file_info.setDate(
                 QDate(parsed_date.year, parsed_date.month, parsed_date.day)
             )
             self.window.line_edit_subject_id.setText(parsed_id)
+            self.window.combo_box_oxygen_condition.setValue(parsed_oxy)
         except Exception:
             self.window.date_edit_file_info.setDate(QDate(1970, 1, 1))
             self.window.line_edit_subject_id.setText("")
+            self.window.combo_box_oxygen_condition.setValue("unknown")
 
     @Slot(str)
     def update_subset_param_widgets(self, col_name: str) -> None:

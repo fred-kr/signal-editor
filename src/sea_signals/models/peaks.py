@@ -87,24 +87,6 @@ class UIPeakDetection(pTypes.GroupParameter):
             }
             if values["sampto"] == 0:
                 values["sampto"] = "end"
-        #     values = cast(
-        #         PeakDetectionInputValues,
-        #         {
-        #             "sampfrom": self.names["sampfrom"].value(),
-        #             "sampto": self.names["sampto"].value(),
-        #             "corrections": {
-        #                 name: self.names[name].value()
-        #                 for name in {"search_radius", "smooth_window_size", "peak_dir"}
-        #             },
-        #         },
-        #     )
-        #     if values["sampto"] == 0:
-        #         values["sampto"] = "end"
-        # else:
-        #     values = cast(
-        #         PeakDetectionInputValues,
-        #         {name: self.names[name].value() for name in self._relevant_children},
-        #     )
         return PeakDetectionParameters(
             method=self._active_method,
             input_values=values,

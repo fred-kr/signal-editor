@@ -7,7 +7,7 @@ from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6 import QtGui, QtWidgets
 from PySide6.QtCore import QObject, QPointF, QRectF, Qt, Signal, Slot
 
-from ..type_aliases import AddedPoints, OldPeaks, PeakEdits, RemovedPoints, SignalName
+from ..type_aliases import AddedPoints, PeakEdits, RemovedPoints, SignalName
 
 if TYPE_CHECKING:
     from ..app import MainWindow
@@ -56,13 +56,15 @@ class CustomViewBox(pg.ViewBox):
         dif = pos - lastPos
         dif = dif * -1
 
-
         mouseEnabled = np.array(self.state["mouseEnabled"], dtype=np.float64)
         mask = mouseEnabled.copy()
         if axis is not None:
             mask[1 - axis] = 0.0
 
-        if ev.button() == Qt.MouseButton.MiddleButton or (ev.button() == Qt.MouseButton.LeftButton and ev.modifiers() & Qt.KeyboardModifier.ControlModifier):
+        if ev.button() == Qt.MouseButton.MiddleButton or (
+            ev.button() == Qt.MouseButton.LeftButton
+            and ev.modifiers() & Qt.KeyboardModifier.ControlModifier
+        ):
             if ev.isFinish():
                 r = QRectF(ev.pos(), ev.buttonDownPos())
                 data_coords: QtGui.QPolygonF = self.mapToView(r)
@@ -139,13 +141,13 @@ class PlotHandler(QObject):
         self._parent = parent
         plot_bg = str(pg.getConfigOption("background"))
         self.click_tolerance = 80
-        self.added_points: AddedPoints = AddedPoints(hbr=[], ventilation=[])
-        self.removed_points: RemovedPoints = RemovedPoints(hbr=[], ventilation=[])
+        # self.added_points: AddedPoints = AddedPoints(hbr=[], ventilation=[])
+        # self.removed_points: RemovedPoints = RemovedPoints(hbr=[], ventilation=[])
         self.peak_edits: PeakEdits = PeakEdits(
             added_peaks=AddedPoints(hbr=[], ventilation=[]),
             removed_peaks=RemovedPoints(hbr=[], ventilation=[]),
         )
-        self._old_peaks: OldPeaks = {}
+        # self._old_peaks: OldPeaks = {}
 
         self.hbr_plot_widget = pg.PlotWidget(
             viewBox=CustomViewBox(),
@@ -215,14 +217,6 @@ class PlotHandler(QObject):
             plot_item.getViewBox().setAutoVisible(y=True)
             plot_item.setMouseEnabled(x=True, y=False)
 
-        # common_label = "<span style='color: lightgray; font-size: 10pt;'>n samples</span>"
-        # common_amp_label = (
-        #     "<span style='color: lightgray; font-size: 10pt;'>Signal Amplitude</span>"
-        # )
-        # common_rate_label = (
-        #     "<span style='color: lightgray; font-size: 10pt;'>Signal Rate</span>"
-        # )
-
         self.set_plot_titles_and_labels(
             self.hbr_plot_widget.getPlotItem(),
             title="<span style='color: white; font-size: 12pt; font-weight: 500'>HBR</span>",
@@ -277,6 +271,10 @@ class PlotHandler(QObject):
         self.hbr_signal_line = None
         self.ventilation_signal_line = None
         self._prepare_plot_items()
+
+    # @Slot(str)
+    # def reset_view(self, name: SignalName) -> None:
+    #     pw: pg.PlotWidget = getattr(self, f"{name}_plot_widget")
 
     def draw_signal(
         self,
@@ -375,7 +373,7 @@ class PlotHandler(QObject):
         signal_name: SignalName,
         **kwargs: float,
     ) -> None:
-        mean_bpm = kwargs.get("mean_peak_interval", np.mean(bpm_data))
+        mean_bpm = kwargs.get("mean_peak_interval", np.mean(bpm_data, dtype=np.float64))
         pen_color = "green"
         mean_pen_color = "goldenrod"
 
@@ -538,7 +536,7 @@ class PlotHandler(QObject):
         #     return
         signal_line = signal_map[name]
 
-        if signal_line is None:
+        if signal_line is None or scatter_map[name] is None:
             return
 
         xData: NDArray[np.float64] = signal_line.xData

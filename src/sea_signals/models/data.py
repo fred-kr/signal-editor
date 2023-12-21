@@ -1,5 +1,3 @@
-import datetime
-import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Literal, Unpack, cast
@@ -217,6 +215,7 @@ class DataHandler(QObject):
             self.df = pl.read_excel(path)
         elif suffix == ".pkl":
             self._parent.restore_state(path)
+            return
         else:
             raise NotImplementedError(f"File type `{suffix}` not supported")
 
@@ -364,10 +363,6 @@ class DataHandler(QObject):
             return
 
         self.peaks.update(name, peaks)
-        # self._peak_intervals = (
-        #     pl.Series("peak_interval", peaks, pl.Int32).diff().fill_null(pl.lit(0))
-        # )
-        # logger.debug(f"{name} peaks: {peaks}\npeak intervals: {self._peak_intervals}")
         self.compute_rate(name)
 
     def compute_rate(self, name: SignalName) -> None:
@@ -405,13 +400,8 @@ class DataHandler(QObject):
         self.rate.update(name, rate_no_interp)
 
     def get_descriptive_stats(self, name: SignalName) -> DescriptiveStatistics:
-        # peaks = self.peaks[name]
         rate_no_interp = self.rate[name]
         diffs = self.peaks.diff(name)
-        # if hasattr(self, "_peak_intervals"):
-        #     diffs: NDArray[np.int32] = self._peak_intervals.to_numpy(writable=True)
-        # else:
-        #     diffs: NDArray[np.int32] = np.ediff1d(peaks, to_begin=np.array([0]))
         return DescriptiveStatistics(
             peaks=PeakStatistics(),
             peak_intervals=PeakIntervalStatistics(
@@ -435,14 +425,13 @@ class DataHandler(QObject):
     def compute_result_df(self, name: SignalName) -> None:
         peaks = self.peaks[name]
 
-        # time_col = self.df.get_column("time_s")[peaks]
-        # peak_indices = self.df.get_column("index")[peaks]
-        # peak_intervals = self._peak_intervals
         result_df = (
             self.df.lazy()
             .select(
                 pl.col("time_s").gather(peaks).round(4),
-                pl.Series("peak_index", self.df.get_column("index").gather(peaks), pl.Int32),
+                pl.Series(
+                    "peak_index", self.df.get_column("index").gather(peaks), pl.Int32
+                ),
                 pl.Series("peak_intervals", self.peaks.diff(name), pl.Int32),
                 pl.col("temperature").gather(peaks).round(1),
                 pl.Series("rate_bpm", self.rate[name], pl.Float64).round(1),

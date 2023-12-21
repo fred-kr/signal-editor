@@ -7,23 +7,56 @@ import mne.io
 import polars as pl
 from loguru import logger
 
-
 def parse_file_name(
-    file_name: str, date_pattern: str = r"\d{8}", id_pattern: str = r"P[AM]\d{1,2}"
-) -> tuple[date, str]:
+    file_name: str,
+    date_pattern: str = r"\d{8}",
+    id_pattern: str = r"(?:P[AM]|F)\d{1,2}",
+) -> tuple[date, str, str]:
     date_match = re.search(date_pattern, file_name)
     id_match = re.search(id_pattern, file_name)
+    if "hyp" in file_name:
+        oxy_condition = "hypoxic"
+    elif "norm" in file_name:
+        oxy_condition = "normoxic"
+    else:
+        oxy_condition = "unknown"
 
-    if not date_match or not id_match:
-        return date.today(), ""
-    date_ddmmyyyy = date(
-        year=int(date_match[0][4:8], base=10),
-        month=int(date_match[0][2:4], base=10),
-        day=int(date_match[0][:2], base=10),
-    )
-    id_str = str(id_match[0])
+    if not date_match:
+        date_ddmmyyyy = datetime.now()
+    else:
+        date_ddmmyyyy = date(
+            year=int(date_match[0][4:8], base=10),
+            month=int(date_match[0][2:4], base=10),
+            day=int(date_match[0][:2], base=10),
+        )
+    id_str = str(id_match[0]) if id_match else "unknown"
+    return date_ddmmyyyy, id_str, oxy_condition
 
-    return date_ddmmyyyy, id_str
+
+# def parse_file_name(
+#     file_name: str,
+#     date_pattern: str = r"(\d{4})(\d{2})(\d{2})",
+#     id_pattern: str = r"(?:P[AM]|F)\d{1,2}",
+# ) -> tuple[date, str, str]:
+#     date_match = re.search(date_pattern, file_name)
+#     if date_match is None:
+#         date_match = re.search(r"\d{8}", file_name)
+#     id_match = re.search(id_pattern, file_name)
+#     oxy_conditions = {"hyp": "hypoxic", "norm": "normoxic"}
+#     oxy_condition = (
+#         oxy_conditions.get(
+#             next((key for key in oxy_conditions if key in file_name), "unknown")
+#         )
+#         or "unknown"
+#     )
+
+#     if not date_match:
+#         date_ddmmyyyy = datetime.now().date()
+#     else:
+#         year, month, day = map(lambda x: int(x, 10), date_match.groups())
+#         date_ddmmyyyy = date(year=year, month=month, day=day)
+#     id_str = id_match[0] if id_match else "unknown"
+#     return date_ddmmyyyy, id_str, oxy_condition
 
 
 def format_column_names(columns: Iterable[str]) -> list[str]:
