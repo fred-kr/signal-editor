@@ -99,7 +99,8 @@ class SignalFilterParameters(RequiredParameters, total=False):
 
 class StandardizeParameters(TypedDict):
     method: ScaleMethod
-    window_size: NotRequired[int | Literal["None"]]
+    window_size: int
+    rolling_window: bool
 
 
 # Plot Handler +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #

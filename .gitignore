@@ -151,3 +151,4 @@ _parameter_tree_schemas.py
 comment-files
 *.csv
 *.pkl
+*.hdf5

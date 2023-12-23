@@ -1,4 +1,4 @@
-from typing import Literal, Unpack
+from typing import Unpack
 
 import neurokit2 as nk
 import numpy as np
@@ -58,7 +58,8 @@ def rolling_z(sig: pl.Series, window_size: int) -> pl.Series:
 def scale_signal(
     sig: pl.Series | NDArray[np.float32 | np.float64],
     robust: bool = False,
-    window_size: int | Literal["None"] = "None",
+    window_size: int = 500,
+    rolling_window: bool = True,
 ) -> pl.Series:
     """
     Scales a signal series using either Z-score or median absolute
@@ -91,7 +92,7 @@ def scale_signal(
         sig = pl.Series("", sig)
     sig = sig.cast(pl.Float64)
 
-    if window_size == "None":
+    if not rolling_window:
         return scale_mad(sig) if robust else scale_z(sig)
     else:
         return rolling_mad(sig, window_size) if robust else rolling_z(sig, window_size)

@@ -7,11 +7,30 @@ import mne.io
 import polars as pl
 from loguru import logger
 
+
 def parse_file_name(
     file_name: str,
     date_pattern: str = r"\d{8}",
     id_pattern: str = r"(?:P[AM]|F)\d{1,2}",
 ) -> tuple[date, str, str]:
+    """
+    Parses the file name for the date, id, and oxygen condition.
+
+    Parameters
+    ----------
+    file_name : str
+        String representing the file name.
+    date_pattern : str, optional
+        The regular expression pattern for the date, by default r"\\d{8}"
+    id_pattern : str, optional
+        The regular expression pattern for the id, by default r"(?:P[AM]|F)\\d{1,2}"
+
+    Returns
+    -------
+    tuple[date, str, str]
+        The date, id, and oxygen condition parsed from the file name, or 'unknown' if
+        the respective pattern was not found.
+    """
     date_match = re.search(date_pattern, file_name)
     id_match = re.search(id_pattern, file_name)
     if "hyp" in file_name:
@@ -33,44 +52,26 @@ def parse_file_name(
     return date_ddmmyyyy, id_str, oxy_condition
 
 
-# def parse_file_name(
-#     file_name: str,
-#     date_pattern: str = r"(\d{4})(\d{2})(\d{2})",
-#     id_pattern: str = r"(?:P[AM]|F)\d{1,2}",
-# ) -> tuple[date, str, str]:
-#     date_match = re.search(date_pattern, file_name)
-#     if date_match is None:
-#         date_match = re.search(r"\d{8}", file_name)
-#     id_match = re.search(id_pattern, file_name)
-#     oxy_conditions = {"hyp": "hypoxic", "norm": "normoxic"}
-#     oxy_condition = (
-#         oxy_conditions.get(
-#             next((key for key in oxy_conditions if key in file_name), "unknown")
-#         )
-#         or "unknown"
-#     )
-
-#     if not date_match:
-#         date_ddmmyyyy = datetime.now().date()
-#     else:
-#         year, month, day = map(lambda x: int(x, 10), date_match.groups())
-#         date_ddmmyyyy = date(year=year, month=month, day=day)
-#     id_str = id_match[0] if id_match else "unknown"
-#     return date_ddmmyyyy, id_str, oxy_condition
-
-
 def format_column_names(columns: Iterable[str]) -> list[str]:
     """
-    Formats a list of column names.
+    Formats a list of column names by sanitizing unwanted characters and spaces, and
+    ensures all names are lowercase. If any column name is empty, assigns a default name
+    with an incremented index.
 
-    Args:
-        columns (Iterable[str]): The list of column names.
+    Parameters
+    ----------
+    columns : Iterable[str]
+        An iterable of column names.
 
-    Returns:
-        list[str]: The formatted column names.
+    Returns
+    -------
+    list[str]
+        A list containing the formatted column names.
 
-    Raises:
-        ValueError: If the column names list is empty.
+    Raises
+    ------
+    ValueError
+        If input iterable is empty.
     """
     if not columns:
         raise ValueError("Column names cannot be empty.")
@@ -167,29 +168,3 @@ def read_edf(
         .select("index", "time_s", *column_names)
     )
     return lf, date_measured, sampling_rate
-
-
-# def save_to_hdf5(result: Result, file_path: str | Path) -> None:
-#     with h5py.File(Path(file_path).resolve().as_posix(), "w") as hdf:
-
-#         for attr, value in asdict(result).items():
-#             if isinstance(value, (str, int, float, datetime)):
-#                 hdf.attrs[attr] = value
-#             elif isinstance(value, list):
-#                 hdf.create_dataset(attr, data=np.array(value), compression="gzip")
-#             elif isinstance(value, dict):
-#                 grp = hdf.create_group(attr)
-#                 for k, v in value.items():
-#                     grp.create_dataset(k, data=np.array(v), compression="gzip")
-#             elif isinstance(value, np.ndarray):
-#                 hdf.create_dataset(attr, data=value, compression="gzip")
-#             # elif isinstance(value, pl.DataFrame):
-#                 # np_df = value.to_numpy(structured=True)
-#                 # hdf.create_dataset(attr, data=np_df, compression="gzip")
-#             else:
-#                 raise ValueError(f"Unsupported type: {type(value)}")
-
-#         result_df = result.result_data
-#         df_grp = hdf.create_group("result_data")
-#         for column in result_df.columns:
-#             df_grp.create_dataset(column, data=result_df[column].to_numpy(), compression="gzip")

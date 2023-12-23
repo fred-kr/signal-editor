@@ -2,11 +2,12 @@ import cProfile
 import os
 import pickle
 import sys
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, Literal, TypedDict, cast
 
+import h5py
 import numpy as np
 import polars as pl
 import pyqtgraph as pg
@@ -17,6 +18,7 @@ from PySide6.QtCore import (
     QByteArray,
     QDate,
     QFileInfo,
+    QProcess,
     QSettings,
     Qt,
     Signal,
@@ -32,7 +34,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTableView,
 )
-from typing_extensions import Literal
 
 from .models.data import (
     CompactDFModel,
@@ -81,7 +82,7 @@ class ResultIdentifier:
     animal_id: str
     environmental_condition: OxygenCondition
     data_file_name: str
-    data_measured_date: datetime | None
+    data_measured_date: datetime | Literal["unknown"]
     result_file_name: str
     result_creation_date: datetime
 
@@ -128,7 +129,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.set_style(self.active_style)
         self.line_edit_output_dir.setText(self._output_dir.as_posix())
         # FIXME: remove once hdf5 is implemented
-        self.btn_save_to_hdf5.setEnabled(False)
+        # self.btn_save_to_hdf5.setEnabled(False)
 
     @property
     def output_dir(self) -> Path:
@@ -224,6 +225,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.btn_compute_results.clicked.connect(self.update_results)
 
+        self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
+
         self.btn_group_plot_view.idClicked.connect(
             self.stacked_hbr_vent.setCurrentIndex
         )
@@ -257,6 +260,58 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         if not np.array_equal(plot_peak_indices, data_peak_indices):
             self.data.peaks.update(name, plot_peak_indices)
+
+    @staticmethod
+    def create_attrs(group: h5py.Group, data: dict[str, Any]) -> None:
+        for key, value in data.items():
+            if value is None:
+                value = ()
+                group.attrs.create(key, value)
+            elif isinstance(value, datetime):
+                value = value.strftime("%Y-%m-%d %H:%M:%S.%f")
+                group.attrs.create(key, value)
+            elif isinstance(value, dict):
+                subgrp = group.create_group(key)
+                MainWindow.create_attrs(subgrp, value)
+            else:
+                group.attrs.create(key, value)
+                
+
+    def write_hdf5(self, file_path: str | Path, result: Result) -> None:
+        with h5py.File(file_path, "a") as f:
+            grp_result = f.create_group("result")
+            self.create_attrs(grp_result.create_group("identifier"), asdict(result.identifier))
+            self.create_attrs(grp_result.create_group("selection_metadata"), asdict(result.info_data_selection))
+            self.create_attrs(grp_result.create_group("processing_metadata"), asdict(result.info_data_processing))
+            self.create_attrs(grp_result.create_group("statistics"), asdict(result.statistics))
+
+            grp_manual_edits = grp_result.create_group("manual_edits")
+            for edit_type in ["added_peaks", "removed_peaks"]:
+                grp_edit_type = grp_manual_edits.create_group(edit_type)
+                for peak_type in ["hbr", "ventilation"]:
+                    grp_edit_type.create_dataset(peak_type, data=result.manual_edits[edit_type][peak_type])
+
+            grp_result.create_dataset("result_data", data=result.result_data.to_numpy(structured=True))
+            grp_result.create_dataset("source_data", data=result.source_data.to_numpy(structured=True))
+
+    @Slot()
+    def run_hdf5view(self) -> None:
+        self.hdf5view_process = QProcess(self)
+        self.hdf5view_process.finished.connect(self.process_finished)
+        self.hdf5view_process.start("hdf5view")
+
+    def process_finished(self) -> None:
+        self.hdf5view_process = None
+
+    @Slot()
+    def save_to_hdf5(self) -> None:
+        if file_path := QFileDialog.getSaveFileName(
+            self,
+            "Save to HDF5",
+            f"{self.output_dir.as_posix()}/{self.file_info.completeBaseName()}_results.hdf5",
+            "HDF5 Files (*.hdf5 *.h5)",
+        )[0]:
+            self.write_hdf5(file_path, getattr(self, f"{self.result_name}_results"))
 
     @Slot()
     def update_results(self) -> None:
@@ -416,12 +471,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _set_x_ranges(self) -> None:
         data_length = self.data.df.height
         plot_widgets = self.plot.plot_widgets.get_all_widgets()
-        # plot_widgets = [
-        # self.plot.hbr_plot_widget,
-        # self.plot.bpm_hbr_plot_widget,
-        # self.plot.ventilation_plot_widget,
-        # self.plot.bpm_ventilation_plot_widget,
-        # ]
         for widget in plot_widgets:
             widget.getPlotItem().getViewBox().setLimits(
                 xMin=-0.25 * data_length,
@@ -566,6 +615,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot()
     def closeEvent(self, event: QCloseEvent) -> None:
         self._write_settings()
+        if hasattr(self, "hdf5view_process") and self.hdf5view_process:
+            self.hdf5view_process.kill()
+            self.hdf5view_process = None
         if self.ui.console_dock.isVisible():
             self.ui.console_dock.close()
         QMainWindow.closeEvent(self, event)
@@ -615,7 +667,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     # endregion
 
     def get_identifier(self, result_name: SignalName) -> ResultIdentifier:
-        meas_date = self.data.meas_date if hasattr(self.data, "meas_date") else None
+        meas_date = getattr(self.data, "meas_date", "unknown")
         result_file_name = f"results_{result_name}_{self.file_info.fileName()}"
         return ResultIdentifier(
             name=result_name,
@@ -668,12 +720,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def get_standardization_values(self) -> StandardizeParameters:
         method = cast(ScaleMethod, self.combo_box_scale_method.value())
-        if self.container_scale_window_inputs.isChecked():
-            window_size = self.spin_box_scale_window_size.value()
-        else:
-            window_size = "None"
-
-        return StandardizeParameters(method=method, window_size=window_size)
+        window_size = self.spin_box_scale_window_size.value()
+        rolling_window = self.container_scale_window_inputs.isChecked()
+        return StandardizeParameters(
+            method=method, window_size=window_size, rolling_window=rolling_window
+        )
 
     def get_peak_detection_values(self) -> PeakDetectionParameters:
         if hasattr(self.ui, "peak_params"):
@@ -739,8 +790,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             1,
         )
         if not ok:
-            msg = "Please enter a valid index position."
-            self.sig_show_message.emit(msg, "warning")
+            # msg = "Please enter a valid index position."
+            # self.sig_show_message.emit(msg, "warning")
             return
         if file_path := QFileDialog.getSaveFileName(
             self,
@@ -881,7 +932,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.handle_table_view_data()
         for s_name in {"hbr", "ventilation"}:
             s_name = cast(SignalName, s_name)
-            signal_widget: pg.PlotWidget = getattr(self.plot, f"{s_name}_plot_widget")
+            signal_widget = self.plot.plot_widgets.get_signal_widget(s_name)
             processed_name = f"{s_name}_{self.data.processed_suffix}"
             if processed_name not in self.data.df.columns:
                 self.plot.draw_signal(
@@ -894,7 +945,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             ).to_numpy()
             peaks = self.data.peaks[s_name]
             peaks_y = processed_signal[peaks]
-            rate_widget: pg.PlotWidget = getattr(self.plot, f"bpm_{s_name}_plot_widget")
+            rate_widget = self.plot.plot_widgets.get_rate_widget(s_name)
             self.plot.draw_signal(processed_signal, signal_widget, s_name)
             self.plot.draw_peaks(peaks, peaks_y, signal_widget, s_name)
             self.plot.draw_rate(rate, rate_widget, s_name)

@@ -445,6 +445,22 @@ files = [
 numpy = ">=1.17.3"
 
 [[package]]
+name = "hdf5view"
+version = "0.0.7"
+description = "HDF5View is a python based HDF5 file viewer built on PyQt5/PySide2/PyQt6/PySide6, QtPy, h5py and pyqtgraph."
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "hdf5view-0.0.7-py3-none-any.whl", hash = "sha256:b42594ffd9cb78ff7f74495e8348fd8a0aef4abaf766694108395da3cd77a5df"},
+    {file = "hdf5view-0.0.7.tar.gz", hash = "sha256:54d2974614b512c98f58e94e9e49d97b4cdd4d2afd47a87e227e42af044e270b"},
+]
+
+[package.dependencies]
+h5py = "*"
+pyqtgraph = "*"
+qtpy = "*"
+
+[[package]]
 name = "idna"
 version = "3.6"
 description = "Internationalized Domain Names in Applications (IDNA)"
@@ -2123,4 +2139,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12,<3.13"
-content-hash = "263deb719af15840780742bc8d6f2d19b2dcaf849fc68a0129ad522e286ed407"
+content-hash = "bf6ad3c7491316a4fbeb2aed979aec58a25fb1a41d3e54a5ddc3c7f74c45f582"

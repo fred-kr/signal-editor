@@ -304,27 +304,6 @@ class PlotHandler(QObject):
         self.plot_widgets = PlotWidgetContainer()
         self.last_edited_index = 0
 
-        # self.hbr_vb = CustomViewBox()
-        # self.ventilation_vb = CustomViewBox()
-
-        # self.hbr_plot_widget = pg.PlotWidget(
-        #     viewBox=self.hbr_vb,
-        #     background=plot_bg,
-        #     useOpenGL=True,
-        # )
-        # self.ventilation_plot_widget = pg.PlotWidget(
-        #     viewBox=self.ventilation_vb,
-        #     background=plot_bg,
-        #     useOpenGL=True,
-        # )
-        # self.bpm_hbr_plot_widget = pg.PlotWidget(
-        #     background=plot_bg,
-        #     useOpenGL=True,
-        # )
-        # self.bpm_ventilation_plot_widget = pg.PlotWidget(
-        #     background=plot_bg,
-        #     useOpenGL=True,
-        # )
         self.plot_widgets.add_widget("hbr", is_rate=False)
         self.plot_widgets.add_widget("ventilation", is_rate=False)
         self.plot_widgets.add_widget("hbr", is_rate=True)
@@ -336,18 +315,6 @@ class PlotHandler(QObject):
         self.plot_items.hbr = PlotContent()
         self.plot_items.ventilation = PlotContent()
 
-        # self.hbr_signal_line: pg.PlotDataItem | None = None
-        # self.ventilation_signal_line: pg.PlotDataItem | None = None
-
-        # self.bpm_hbr_signal_line: pg.PlotDataItem | None = None
-        # self.bpm_ventilation_signal_line: pg.PlotDataItem | None = None
-
-        # self.hbr_peaks_scatter: pg.ScatterPlotItem | None = None
-        # self.ventilation_peaks_scatter: pg.ScatterPlotItem | None = None
-
-        # self.bpm_hbr_mean_hline: pg.InfiniteLine | None = None
-        # self.bpm_ventilation_mean_hline: pg.InfiniteLine | None = None
-
     @staticmethod
     def set_plot_titles_and_labels(
         plot_item: pg.PlotItem, title: str, left_label: str, bottom_label: str
@@ -357,12 +324,6 @@ class PlotHandler(QObject):
         plot_item.setLabel(axis="bottom", text=bottom_label)
 
     def set_style(self, style: Literal["dark", "light"]) -> None:
-        # plot_widgets = [
-        #     self.hbr_plot_widget,
-        #     self.ventilation_plot_widget,
-        #     self.bpm_hbr_plot_widget,
-        #     self.bpm_ventilation_plot_widget,
-        # ]
         plot_widgets = self.plot_widgets.get_all_widgets()
 
         if style == "dark":
@@ -428,15 +389,6 @@ class PlotHandler(QObject):
             "ventilation"
         ).getPlotItem().getViewBox().setXLink("rate_ventilation")
 
-        # self.hbr_plot_widget.getPlotItem().getViewBox().setXLink("bpm_hbr")
-        # self.bpm_hbr_plot_widget.getPlotItem().getViewBox().setXLink("hbr")
-        # self.ventilation_plot_widget.getPlotItem().getViewBox().setXLink(
-        # "bpm_ventilation"
-        # )
-        # self.bpm_ventilation_plot_widget.getPlotItem().getViewBox().setXLink(
-        # "ventilation"
-        # )
-
         for rate_pw in [
             self.plot_widgets.get_rate_widget("hbr"),
             self.plot_widgets.get_rate_widget("ventilation"),
@@ -481,15 +433,6 @@ class PlotHandler(QObject):
 
     @Slot()
     def reset_plots(self) -> None:
-        # plot_widgets = [
-        #     self.hbr_plot_widget,
-        #     self.ventilation_plot_widget,
-        #     self.bpm_hbr_plot_widget,
-        #     self.bpm_ventilation_plot_widget,
-        # ]
-        # for pw in plot_widgets:
-        #     pw.getPlotItem().clear()
-        #     pw.getPlotItem().legend.clear()
         for name in {"hbr", "ventilation"}:
             name = cast(SignalName, name)
             self.plot_widgets.get_signal_widget(name).getPlotItem().clear()
@@ -497,10 +440,6 @@ class PlotHandler(QObject):
             self.plot_widgets.get_rate_widget(name).getPlotItem().clear()
             self.plot_widgets.get_rate_widget(name).getPlotItem().legend.clear()
             self.plot_items[name]["signal"] = pg.PlotDataItem()
-        # self.hbr_signal_line = None
-        # self.ventilation_signal_line = None
-        # self.plot_items.hbr.signal = None
-        # self.plot_items.ventilation.signal = None
 
         self._prepare_plot_items()
 
@@ -521,26 +460,12 @@ class PlotHandler(QObject):
         signal_line.curve.setSegmentedLineMode("on")
         signal_line.curve.setClickable(True, width=self.click_tolerance)
 
-        # bpm_plot_widget: pg.PlotWidget = getattr(self, f"bpm_{signal_name}_plot_widget")
         rate_plot_widget = self.plot_widgets.get_rate_widget(signal_name)
-        line_ref = self.plot_items[signal_name]["signal"]
         scatter_ref = self.plot_items[signal_name]["peaks"]
         rate_line_ref = self.plot_items[signal_name]["rate"]
         rate_mean_line_ref = self.plot_items[signal_name]["rate_mean"]
 
-        # line_ref: pg.PlotDataItem | None = getattr(
-        #     self, f"{signal_name}_signal_line", None
-        # )
-        # scatter_ref: pg.ScatterPlotItem | None = getattr(
-        #     self, f"{signal_name}_peaks_scatter", None
-        # )
-        # bpm_line_ref: pg.PlotDataItem | None = getattr(
-        #     self, f"bpm_{signal_name}_signal_line", None
-        # )
-        # bpm_mean_line_ref: pg.InfiniteLine | None = getattr(
-        #     self, f"bpm_{signal_name}_mean_hline", None
-        # )
-        if line_ref:
+        if line_ref := self.plot_items[signal_name]["signal"]:
             line_ref.sigClicked.disconnect(self.add_clicked_point)
             plot_widget.removeItem(line_ref)
         if scatter_ref:
@@ -555,12 +480,6 @@ class PlotHandler(QObject):
         signal_line.sigClicked.connect(self.add_clicked_point)
 
         self.plot_items[signal_name]["signal"] = signal_line
-        # self.plot_items[signal_name]["signal"].sigClicked.connect(self.add_clicked_point)
-
-        # setattr(self, f"{signal_name}_signal_line", signal_line)
-        # getattr(self, f"{signal_name}_signal_line").sigClicked.connect(
-        # self.add_clicked_point
-        # )
 
     def draw_peaks(
         self,
@@ -590,9 +509,6 @@ class PlotHandler(QObject):
         )
         peaks_scatter.setZValue(60)
 
-        # scatter_ref: pg.ScatterPlotItem | None = getattr(
-        #     self, f"{signal_name}_peaks_scatter", None
-        # )
         scatter_ref = self.plot_items[signal_name]["peaks"]
 
         if scatter_ref is not None:
@@ -602,11 +518,6 @@ class PlotHandler(QObject):
         plot_widget.addItem(peaks_scatter)
         peaks_scatter.sigClicked.connect(self.remove_clicked_point)
         self.plot_items[signal_name]["peaks"] = peaks_scatter
-
-        # setattr(self, f"{signal_name}_peaks_scatter", peaks_scatter)
-        # getattr(self, f"{signal_name}_peaks_scatter").sigClicked.connect(
-        # self.remove_clicked_point
-        # )
 
     def draw_rate(
         self,
@@ -635,12 +546,6 @@ class PlotHandler(QObject):
             name=f"rate_mean_{signal_name}",
         )
 
-        # bpm_line_ref: pg.PlotDataItem | None = getattr(
-        # # self, f"bpm_{signal_name}_signal_line", None
-        # # )
-        # # bpm_mean_line_ref: pg.InfiniteLine | None = getattr(
-        # self, f"bpm_{signal_name}_mean_hline", None
-        # )
         rate_line_ref = self.plot_items[signal_name]["rate"]
         rate_mean_line_ref = self.plot_items[signal_name]["rate_mean"]
 
@@ -648,9 +553,6 @@ class PlotHandler(QObject):
             plot_widget.removeItem(rate_line_ref)
             plot_widget.removeItem(rate_mean_line_ref)
 
-        # if bpm_line_ref is not None:
-        # plot_widget.removeItem(bpm_line_ref)
-        # plot_widget.removeItem(bpm_mean_line_ref)
         if legend := plot_widget.getPlotItem().legend:
             legend.clear()
         else:
@@ -670,9 +572,6 @@ class PlotHandler(QObject):
 
         self.plot_items[signal_name]["rate"] = rate_line
         self.plot_items[signal_name]["rate_mean"] = rate_mean_line
-
-        # setattr(self, f"bpm_{signal_name}_signal_line", rate_line)
-        # setattr(self, f"bpm_{signal_name}_mean_hline", rate_mean_line)
         self.sig_rate_updated.emit(signal_name)
 
     @Slot(object, object, object)
@@ -700,17 +599,12 @@ class PlotHandler(QObject):
 
         to_remove_index = points[0].index()
 
-        # scatter_plots: dict[str, pg.ScatterPlotItem | None] = {
-        #     "hbr_peaks": getattr(self, "hbr_peaks_scatter", None),
-        #     "ventilation_peaks": getattr(self, "ventilation_peaks_scatter", None),
-        # }
         name = "hbr" if "hbr" in sender.name() else "ventilation"
 
         if scatter_plot := self.plot_items[name]["peaks"]:
             new_points_x = np.delete(scatter_plot.data["x"], to_remove_index)
             new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)
             scatter_plot.setData(x=new_points_x, y=new_points_y)
-            # name = "hbr" if "hbr" in sender.name() else "ventilation"
             self.peak_edits["removed_peaks"][name].append(int(points[0].pos().x()))
             self.last_edited_index = int(points[0].pos().x())
             self.sig_peaks_edited.emit(name)
@@ -721,9 +615,6 @@ class PlotHandler(QObject):
         Removes peaks inside a rectangular selection.
         """
         name = self._parent.signal_name
-        # vb: CustomViewBox = (
-        #     getattr(self, f"{name}_plot_widget").getPlotItem().getViewBox()
-        # )
         vb = self.plot_widgets.get_signal_widget(name).getPlotItem().getViewBox()
         if vb.mapped_peak_selection is None:
             return
@@ -740,10 +631,8 @@ class PlotHandler(QObject):
 
         x_range = (rect_x, rect_x + rect_width)
         y_range = (rect_y, rect_y + rect_height)
-        # scatter_ref: pg.ScatterPlotItem = getattr(self, f"{name}_peaks_scatter")
 
         scatter_x, scatter_y = scatter_ref.getData()
-        # self.hbr_plot_widget.saveState()
         to_remove = np.argwhere(
             (scatter_x >= x_range[0])
             & (scatter_x <= x_range[1])
@@ -779,18 +668,7 @@ class PlotHandler(QObject):
         """
         ev.accept()
         click_x = int(ev.pos().x())
-        # signal_map: dict[SignalName, pg.PlotCurveItem | None] = {
-        #     "hbr": getattr(self, "hbr_signal_line", None),
-        #     "ventilation": getattr(self, "ventilation_signal_line", None),
-        # }
-        # scatter_map: dict[SignalName, pg.ScatterPlotItem | None] = {
-        #     "hbr": getattr(self, "hbr_peaks_scatter", None),
-        #     "ventilation": getattr(self, "ventilation_peaks_scatter", None),
-        # }
         name = self._parent.signal_name
-        # if name not in signal_map:
-        #     return
-        # signal_line = signal_map[name]
         signal_line = self.plot_items[name]["signal"]
         scatter_ref = self.plot_items[name]["peaks"]
 
@@ -801,7 +679,7 @@ class PlotHandler(QObject):
         yData: NDArray[np.float64] = signal_line.yData
 
         # Define the radius within which to search for the max y-value
-        search_radius = self.click_tolerance
+        search_radius = 15
 
         # Find the indices within the radius around the click position
         indices = np.where(
@@ -813,11 +691,12 @@ class PlotHandler(QObject):
 
         # Find the index of the max y-value
         max_y_index = indices[np.argmax(y_values_in_radius)]
+        if max_y_index in scatter_ref.data["x"]:
+            return
 
         # Get the new x and y values
         x_new, y_new = xData[max_y_index], y_values_in_radius.max()
         scatter_ref.addPoints(x=x_new, y=y_new)
-        # name = "hbr" if "hbr" in name else "ventilation"
         self.peak_edits["added_peaks"][name].append(int(x_new))
         self.last_edited_index = x_new
         self.sig_peaks_edited.emit(name)
@@ -829,15 +708,6 @@ class PlotHandler(QObject):
         view_box = plot_widget.getPlotItem().getViewBox()
         selection_box = view_box.selection_box
         selection_box.setVisible(not selection_box.isVisible())
-
-    # @Slot()
-    # def restore_previous_peaks(self) -> None:
-    #     signal_name = self._parent.signal_name
-    #     scatter_plot = getattr(self, f"{signal_name}_peaks_scatter")
-    #     scatter_plot.setData(
-    #         x=self._old_peaks[signal_name][0], y=self._old_peaks[signal_name][1]
-    #     )
-    #     self.sig_peaks_edited.emit()
 
     def get_state(self) -> PeakEdits:
         return self.peak_edits

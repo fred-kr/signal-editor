@@ -146,13 +146,14 @@ class DescriptiveStatistics:
 def standardize(
     sig: NDArray[np.float64],
     method: ScaleMethod,
-    window_size: int | Literal["None"] = "None",
+    window_size: int = 500,
+    rolling_window: bool = True,
 ) -> NDArray[np.float64]:
     if method == "None":
         return sig
     is_robust = method == "mad"
 
-    return scale_signal(sig, robust=is_robust, window_size=window_size).to_numpy()
+    return scale_signal(sig, robust=is_robust, window_size=window_size, rolling_window=rolling_window).to_numpy()
 
 
 class DataHandler(QObject):
@@ -294,7 +295,8 @@ class DataHandler(QObject):
             dlg.setValue(20)
             filter_method = filter_params.get("method", "None")
             standardize_method = standardize_params.get("method", "None")
-            standardize_window_size = standardize_params.get("window_size", "None")
+            standardize_window_size = standardize_params.get("window_size")
+            uses_rolling_window = standardize_params.get("rolling_window")
 
             if pipeline == "custom":
                 if filter_method == "None":
@@ -315,6 +317,7 @@ class DataHandler(QObject):
                 filtered,
                 method=standardize_method,
                 window_size=standardize_window_size,
+                rolling_window=uses_rolling_window,
             )
             dlg.setValue(99)
             self.df.hstack([pl.Series(processed_name, standardized)], in_place=True)
