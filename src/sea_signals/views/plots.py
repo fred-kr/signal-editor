@@ -1,11 +1,13 @@
-from typing import TYPE_CHECKING, Any, override
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import numpy as np
 import pyqtgraph as pg
 from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6 import QtGui, QtWidgets
-from PySide6.QtCore import QObject, QPointF, QRectF, Qt, Signal, Slot
+from PySide6.QtCore import QObject, QRectF, Qt, Signal, Slot
+from PySide6.QtGui import QFont
 
 from ..type_aliases import AddedPoints, PeakEdits, RemovedPoints, SignalName
 
@@ -19,7 +21,9 @@ class CustomViewBox(pg.ViewBox):
     def __init__(self, *args: Any, **kargs: Any) -> None:
         pg.ViewBox.__init__(self, *args, **kargs)
         self._selection_box: QtWidgets.QGraphicsRectItem | None = None
+        self._deletion_box: QtWidgets.QGraphicsRectItem | None = None
         self.mapped_peak_selection: QtGui.QPolygonF | None = None
+        self.mapped_deletion_selection: QtGui.QPolygonF | None = None
 
     @property
     def selection_box(self) -> QtWidgets.QGraphicsRectItem:
@@ -45,6 +49,30 @@ class CustomViewBox(pg.ViewBox):
         self.addItem(selection_box, ignoreBounds=True)
         return None
 
+    @property
+    def deletion_box(self) -> QtWidgets.QGraphicsRectItem:
+        if self._deletion_box is None:
+            deletion_box = QtWidgets.QGraphicsRectItem(0, 0, 1, 1)
+            deletion_box.setPen(pg.mkPen((255, 100, 100), width=1))
+            deletion_box.setBrush(pg.mkBrush((255, 100, 100, 100)))
+            deletion_box.setZValue(1e9)
+            deletion_box.hide()
+            self._deletion_box = deletion_box
+            self.addItem(deletion_box, ignoreBounds=True)
+        return self._deletion_box
+
+    @deletion_box.setter
+    def deletion_box(self, deletion_box: QtWidgets.QGraphicsRectItem | None) -> None:
+        if self._deletion_box is not None:
+            self.removeItem(self._deletion_box)
+        self._deletion_box = deletion_box
+        if deletion_box is None:
+            return None
+        deletion_box.setZValue(1e9)
+        deletion_box.hide()
+        self.addItem(deletion_box, ignoreBounds=True)
+        return None
+
     @override
     def mouseDragEvent(
         self, ev: mouseEvents.MouseDragEvent, axis: int | float | None = None
@@ -53,26 +81,51 @@ class CustomViewBox(pg.ViewBox):
 
         pos = ev.pos()
         lastPos = ev.lastPos()
-        dif = pos - lastPos
-        dif = dif * -1
+        dif = (pos - lastPos) * np.array([-1, -1])
 
         mouseEnabled = np.array(self.state["mouseEnabled"], dtype=np.float64)
         mask = mouseEnabled.copy()
         if axis is not None:
             mask[1 - axis] = 0.0
 
-        if ev.button() == Qt.MouseButton.MiddleButton or (
-            ev.button() == Qt.MouseButton.LeftButton
-            and ev.modifiers() & Qt.KeyboardModifier.ControlModifier
-        ):
+        def is_middle_button(ev: mouseEvents.MouseDragEvent) -> bool:
+            return ev.button() == Qt.MouseButton.MiddleButton
+
+        def is_left_button_with_control(ev: mouseEvents.MouseDragEvent) -> bool:
+            return (
+                ev.button() == Qt.MouseButton.LeftButton
+                and ev.modifiers() & Qt.KeyboardModifier.ControlModifier
+            )
+
+        def is_left_button_with_alt(ev: mouseEvents.MouseDragEvent) -> bool:
+            return (
+                ev.button() == Qt.MouseButton.LeftButton
+                and ev.modifiers() & Qt.KeyboardModifier.AltModifier
+            )
+
+        def is_left_button(ev: mouseEvents.MouseDragEvent) -> bool:
+            return ev.button() == Qt.MouseButton.LeftButton
+
+        def is_right_button(ev: mouseEvents.MouseDragEvent) -> bool:
+            return ev.button() & Qt.MouseButton.RightButton
+
+        def create_selection(ev: mouseEvents.MouseDragEvent) -> QtGui.QPolygonF:
+            r = QRectF(ev.pos(), ev.buttonDownPos())
+            return self.mapToView(r)
+
+        if is_middle_button(ev) or is_left_button_with_control(ev):
             if ev.isFinish():
-                r = QRectF(ev.pos(), ev.buttonDownPos())
-                data_coords: QtGui.QPolygonF = self.mapToView(r)
-                self.mapped_peak_selection = data_coords
+                self.mapped_peak_selection = create_selection(ev)
             else:
                 self.updateSelectionBox(ev.pos(), ev.buttonDownPos())
                 self.mapped_peak_selection = None
-        elif ev.button() == Qt.MouseButton.LeftButton:
+        elif is_left_button_with_alt(ev):
+            if ev.isFinish():
+                self.mapped_deletion_selection = create_selection(ev)
+            else:
+                self.updateDeletionBox(ev.pos(), ev.buttonDownPos())
+                self.mapped_deletion_selection = None
+        elif is_left_button(ev):
             if self.state["mouseMode"] == pg.ViewBox.RectMode and axis is None:
                 if ev.isFinish():
                     self.rbScaleBox.hide()
@@ -94,7 +147,7 @@ class CustomViewBox(pg.ViewBox):
                 if x is not None or y is not None:
                     self.translateBy(x=x, y=y)
                 self.sigRangeChangedManually.emit(self.state["mouseEnabled"])
-        elif ev.button() & Qt.MouseButton.RightButton:
+        elif is_right_button(ev):
             if self.state["aspectLocked"] is not False:
                 mask[0] = 0
 
@@ -124,13 +177,115 @@ class CustomViewBox(pg.ViewBox):
         self.selection_box.setTransform(tr)
         self.selection_box.show()
 
+    def updateDeletionBox(self, pos1: pg.Point, pos2: pg.Point) -> None:
+        rect = QRectF(pos1, pos2)
+        rect = self.childGroup.mapRectFromParent(rect)
+        self.deletion_box.setPos(rect.topLeft())
+        tr = QtGui.QTransform.fromScale(rect.width(), rect.height())
+        self.deletion_box.setTransform(tr)
+        self.deletion_box.show()
+
+
+type PlotContentProp = Literal["signal", "peaks", "rate", "rate_mean"]
+type PlotContentValue = pg.PlotDataItem | pg.ScatterPlotItem | pg.InfiniteLine
+
+
+@dataclass(slots=True, kw_only=True)
+class PlotContent:
+    signal: pg.PlotDataItem | None = None
+    peaks: pg.ScatterPlotItem | None = None
+    rate: pg.PlotDataItem | None = None
+    rate_mean: pg.InfiniteLine | None = None
+
+    def __getitem__(self, key: PlotContentProp) -> PlotContentValue | None:
+        return getattr(self, key, None)
+
+    def __setitem__(self, key: PlotContentProp, value: PlotContentValue) -> None:
+        expected_types = {
+            "signal": pg.PlotDataItem,
+            "peaks": pg.ScatterPlotItem,
+            "rate": pg.PlotDataItem,
+            "rate_mean": pg.InfiniteLine,
+        }
+        if key in expected_types:
+            expected_type = expected_types[key]
+            if not isinstance(value, expected_type):
+                raise ValueError(f"{key} must be a {expected_type.__name__}")
+            setattr(self, key, value)
+
+
+@dataclass(slots=True, kw_only=True)
+class Plots:
+    hbr: PlotContent = field(default_factory=PlotContent)
+    ventilation: PlotContent = field(default_factory=PlotContent)
+
+    def __getitem__(self, key: SignalName) -> PlotContent:
+        return getattr(self, key)
+
+    def __setitem__(self, key: SignalName, value: PlotContent) -> None:
+        if key in {"hbr", "ventilation"}:
+            setattr(self, key, value)
+
+    def set_plot_item(
+        self, key: SignalName, item_name: PlotContentProp, item_value: PlotContentValue
+    ) -> None:
+        self[key][item_name] = item_value
+
+    def get_plot_item(
+        self, key: SignalName, item_name: PlotContentProp
+    ) -> PlotContentValue:
+        return self[key][item_name]
+
+
+def make_plot_widget(
+    background_color: str, view_box: pg.ViewBox | CustomViewBox | None = None
+) -> pg.PlotWidget:
+    return pg.PlotWidget(
+        viewBox=view_box,
+        background=background_color,
+        useOpenGL=True,
+    )
+
+
+@dataclass(slots=True, kw_only=True)
+class PlotWidgetContainer:
+    hbr: pg.PlotWidget = field(default_factory=pg.PlotWidget)
+    ventilation: pg.PlotWidget = field(default_factory=pg.PlotWidget)
+    hbr_rate: pg.PlotWidget = field(default_factory=pg.PlotWidget)
+    ventilation_rate: pg.PlotWidget = field(default_factory=pg.PlotWidget)
+
+    def get_signal_widget(self, key: SignalName) -> pg.PlotWidget:
+        if key in {"hbr", "ventilation"}:
+            return getattr(self, key)
+        else:
+            raise ValueError(f"{key} is not a valid signal name")
+
+    def get_rate_widget(self, key: SignalName) -> pg.PlotWidget:
+        if key in {"hbr", "ventilation"}:
+            return getattr(self, f"{key}_rate")
+        else:
+            raise ValueError(f"{key} is not a valid signal name")
+
+    def add_widget(self, name: SignalName, is_rate: bool = False) -> None:
+        bg_col = str(pg.getConfigOption("background"))
+        if is_rate:
+            widget = make_plot_widget(bg_col)
+            setattr(self, f"{name}_rate", widget)
+        else:
+            custom_vb = CustomViewBox()
+            widget = make_plot_widget(bg_col, custom_vb)
+            setattr(self, name, widget)
+
+    def get_all_widgets(self) -> list[pg.PlotWidget]:
+        return [self.hbr, self.ventilation, self.hbr_rate, self.ventilation_rate]
+
 
 class PlotHandler(QObject):
     """
     Class that manages showing and updating plots.
     """
 
-    sig_bpm_updated = Signal(str)
+    sig_rate_updated = Signal(str)
     sig_peaks_edited = Signal(str)
 
     def __init__(
@@ -139,52 +294,59 @@ class PlotHandler(QObject):
     ):
         super().__init__(parent=parent)
         self._parent = parent
-        plot_bg = str(pg.getConfigOption("background"))
+        # plot_bg = str(pg.getConfigOption("background"))
         self.click_tolerance = 80
-        # self.added_points: AddedPoints = AddedPoints(hbr=[], ventilation=[])
-        # self.removed_points: RemovedPoints = RemovedPoints(hbr=[], ventilation=[])
         self.peak_edits: PeakEdits = PeakEdits(
             added_peaks=AddedPoints(hbr=[], ventilation=[]),
             removed_peaks=RemovedPoints(hbr=[], ventilation=[]),
         )
-        # self._old_peaks: OldPeaks = {}
+        self.plot_items = Plots()
+        self.plot_widgets = PlotWidgetContainer()
+        self.last_edited_index = 0
 
-        self.hbr_plot_widget = pg.PlotWidget(
-            viewBox=CustomViewBox(),
-            background=plot_bg,
-            useOpenGL=True,
-        )
-        self.ventilation_plot_widget = pg.PlotWidget(
-            viewBox=CustomViewBox(),
-            background=plot_bg,
-            useOpenGL=True,
-        )
-        self.bpm_hbr_plot_widget = pg.PlotWidget(
-            background=plot_bg,
-            useOpenGL=True,
-        )
-        self.bpm_ventilation_plot_widget = pg.PlotWidget(
-            background=plot_bg,
-            useOpenGL=True,
-        )
+        # self.hbr_vb = CustomViewBox()
+        # self.ventilation_vb = CustomViewBox()
+
+        # self.hbr_plot_widget = pg.PlotWidget(
+        #     viewBox=self.hbr_vb,
+        #     background=plot_bg,
+        #     useOpenGL=True,
+        # )
+        # self.ventilation_plot_widget = pg.PlotWidget(
+        #     viewBox=self.ventilation_vb,
+        #     background=plot_bg,
+        #     useOpenGL=True,
+        # )
+        # self.bpm_hbr_plot_widget = pg.PlotWidget(
+        #     background=plot_bg,
+        #     useOpenGL=True,
+        # )
+        # self.bpm_ventilation_plot_widget = pg.PlotWidget(
+        #     background=plot_bg,
+        #     useOpenGL=True,
+        # )
+        self.plot_widgets.add_widget("hbr", is_rate=False)
+        self.plot_widgets.add_widget("ventilation", is_rate=False)
+        self.plot_widgets.add_widget("hbr", is_rate=True)
+        self.plot_widgets.add_widget("ventilation", is_rate=True)
 
         self._prepare_plot_items()
 
     def _init_plot_items(self) -> None:
-        self.hbr_signal_line: pg.PlotDataItem | None = None
-        self.ventilation_signal_line: pg.PlotDataItem | None = None
+        self.plot_items.hbr = PlotContent()
+        self.plot_items.ventilation = PlotContent()
 
-        self.bpm_hbr_signal_line: pg.PlotDataItem | None = None
-        self.bpm_ventilation_signal_line: pg.PlotDataItem | None = None
+        # self.hbr_signal_line: pg.PlotDataItem | None = None
+        # self.ventilation_signal_line: pg.PlotDataItem | None = None
 
-        self.hbr_peaks_scatter: pg.ScatterPlotItem | None = None
-        self.ventilation_peaks_scatter: pg.ScatterPlotItem | None = None
+        # self.bpm_hbr_signal_line: pg.PlotDataItem | None = None
+        # self.bpm_ventilation_signal_line: pg.PlotDataItem | None = None
 
-        self.bpm_hbr_mean_hline: pg.InfiniteLine | None = None
-        self.bpm_ventilation_mean_hline: pg.InfiniteLine | None = None
+        # self.hbr_peaks_scatter: pg.ScatterPlotItem | None = None
+        # self.ventilation_peaks_scatter: pg.ScatterPlotItem | None = None
 
-        self.hbr_linear_region: pg.LinearRegionItem | None = None
-        self.ventilation_linear_region: pg.LinearRegionItem | None = None
+        # self.bpm_hbr_mean_hline: pg.InfiniteLine | None = None
+        # self.bpm_ventilation_mean_hline: pg.InfiniteLine | None = None
 
     @staticmethod
     def set_plot_titles_and_labels(
@@ -194,14 +356,52 @@ class PlotHandler(QObject):
         plot_item.setLabel(axis="left", text=left_label)
         plot_item.setLabel(axis="bottom", text=bottom_label)
 
+    def set_style(self, style: Literal["dark", "light"]) -> None:
+        # plot_widgets = [
+        #     self.hbr_plot_widget,
+        #     self.ventilation_plot_widget,
+        #     self.bpm_hbr_plot_widget,
+        #     self.bpm_ventilation_plot_widget,
+        # ]
+        plot_widgets = self.plot_widgets.get_all_widgets()
+
+        if style == "dark":
+            self._set_dark_style(plot_widgets)
+        elif style == "light":
+            self._set_light_style(plot_widgets)
+
+    def _set_dark_style(self, plot_widgets: list[pg.PlotWidget]) -> None:
+        self._set_plot_labels(color="lightgray")
+        for pw in plot_widgets:
+            pw.setBackground("black")
+            if pw.getPlotItem().legend is not None:
+                pw.getPlotItem().legend.setBrush("gray")
+                pw.getPlotItem().legend.setPen("white")
+                pw.getPlotItem().legend.setLabelTextColor("lightgray")
+
+    def _set_light_style(self, plot_widgets: list[pg.PlotWidget]) -> None:
+        self._set_plot_labels(color="black")
+        for pw in plot_widgets:
+            pw.setBackground("white")
+            if pw.getPlotItem().legend is not None:
+                pw.getPlotItem().legend.setBrush("gray")
+                pw.getPlotItem().legend.setPen("black")
+                pw.getPlotItem().legend.setLabelTextColor("black")
+
     def _prepare_plot_items(self) -> None:
         self._init_plot_items()
         plot_widgets = [
-            (self.hbr_plot_widget, "hbr"),
-            (self.bpm_hbr_plot_widget, "bpm_hbr"),
-            (self.ventilation_plot_widget, "ventilation"),
-            (self.bpm_ventilation_plot_widget, "bpm_ventilation"),
+            (self.plot_widgets.get_signal_widget("hbr"), "hbr"),
+            (self.plot_widgets.get_rate_widget("hbr"), "rate_hbr"),
+            (self.plot_widgets.get_signal_widget("ventilation"), "ventilation"),
+            (self.plot_widgets.get_rate_widget("ventilation"), "rate_ventilation"),
         ]
+        style = self._parent.active_style
+        pen_col = "lightgray" if style == "dark" else "black"
+        plot_font = QFont("Segoe UI", 10, 400)
+        plot_font.setBold(True)
+        self._set_plot_labels(color=pen_col)
+
         for pw, name in plot_widgets:
             plot_item = pw.getPlotItem()
             plot_item.showGrid(x=False, y=True)
@@ -209,72 +409,100 @@ class PlotHandler(QObject):
             plot_item.setDownsampling(auto=True)
             plot_item.setClipToView(True)
             plot_item.addLegend(
-                pen="white",
+                pen=pen_col,
+                labelTextColor=pen_col,
                 brush="transparent",
                 colCount=2,
             )
+            plot_item.legend.anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(5, -5))
             plot_item.register(name)
             plot_item.getViewBox().setAutoVisible(y=True)
             plot_item.setMouseEnabled(x=True, y=False)
+            for axis in {"left", "bottom", "top", "right"}:
+                plot_item.getAxis(axis).label.setFont(plot_font)
 
+        self.plot_widgets.get_signal_widget("hbr").getPlotItem().getViewBox().setXLink(
+            "rate_hbr"
+        )
+        self.plot_widgets.get_signal_widget(
+            "ventilation"
+        ).getPlotItem().getViewBox().setXLink("rate_ventilation")
+
+        # self.hbr_plot_widget.getPlotItem().getViewBox().setXLink("bpm_hbr")
+        # self.bpm_hbr_plot_widget.getPlotItem().getViewBox().setXLink("hbr")
+        # self.ventilation_plot_widget.getPlotItem().getViewBox().setXLink(
+        # "bpm_ventilation"
+        # )
+        # self.bpm_ventilation_plot_widget.getPlotItem().getViewBox().setXLink(
+        # "ventilation"
+        # )
+
+        for rate_pw in [
+            self.plot_widgets.get_rate_widget("hbr"),
+            self.plot_widgets.get_rate_widget("ventilation"),
+        ]:
+            rate_pw.getPlotItem().getViewBox().setMouseMode(pg.ViewBox.RectMode)
+
+    def _set_plot_labels(
+        self, color: str, font_family: str = "Segoe UI", title_font_size: int = 12
+    ) -> None:
         self.set_plot_titles_and_labels(
-            self.hbr_plot_widget.getPlotItem(),
-            title="<span style='color: white; font-size: 12pt; font-weight: 500'>HBR</span>",
-            left_label="<span style='color: lightgray; font-size: 10pt;'>Signal Amplitude</span>",
-            bottom_label="<span style='color: lightgray; font-size: 10pt;'>n samples</span>",
+            self.plot_widgets.get_signal_widget("hbr").getPlotItem(),
+            title=f"<span style='color: {color}; font-family: {font_family}; font-size: {title_font_size}pt;'><b>Heart</b></span>",
+            left_label=f"<span style='color: {color};'>Signal Amplitude</span>",
+            bottom_label=f"<span style='color: {color};'>n samples</span>",
         )
         self.set_plot_titles_and_labels(
-            self.ventilation_plot_widget.getPlotItem(),
-            title="<span style='color: white; font-size: 12pt; font-weight: 500'>Ventilation</span>",
-            left_label="<span style='color: lightgray; font-size: 10pt;'>Signal Amplitude</span>",
-            bottom_label="<span style='color: lightgray; font-size: 10pt;'>n samples</span>",
+            self.plot_widgets.get_signal_widget("ventilation").getPlotItem(),
+            title=f"<span style='color: {color}; font-family: {font_family}; font-size: {title_font_size}pt;'><b>Ventilation</b></span>",
+            left_label=f"<span style='color: {color};'>Signal Amplitude</span>",
+            bottom_label=f"<span style='color: {color};'>n samples</span>",
         )
         self.set_plot_titles_and_labels(
-            self.bpm_hbr_plot_widget.getPlotItem(),
-            title="<span style='color: white; font-size: 12pt; font-weight: 500'>Estimated Rate</span>",
-            left_label="<span style='color: lightgray; font-size: 10pt;'>Cycles per minute</span>",
-            bottom_label="<span style='color: lightgray; font-size: 10pt;'>n samples</span>",
+            self.plot_widgets.get_rate_widget("hbr").getPlotItem(),
+            title=f"<span style='color: {color}; font-family: {font_family}; font-size: {title_font_size}pt;'><b>Estimated Rate</b></span>",
+            left_label=f"<span style='color: {color};'>Cycles per minute</span>",
+            bottom_label=f"<span style='color: {color};'>n samples</span>",
         )
         self.set_plot_titles_and_labels(
-            self.bpm_ventilation_plot_widget.getPlotItem(),
-            title="<span style='color: white; font-size: 12pt; font-weight: 500'>Estimated Rate</span>",
-            left_label="<span style='color: lightgray; font-size: 10pt;'>Cycles per minute</span>",
-            bottom_label="<span style='color: lightgray; font-size: 10pt;'>n samples</span>",
+            self.plot_widgets.get_rate_widget("ventilation").getPlotItem(),
+            title=f"<span style='color: {color}; font-family: {font_family}; font-size: {title_font_size}pt;'><b>Estimated Rate</b></span>",
+            left_label=f"<span style='color: {color};'>Cycles per minute</span>",
+            bottom_label=f"<span style='color: {color};'>n samples</span>",
         )
 
-        self.hbr_plot_widget.getPlotItem().getViewBox().setXLink("bpm_hbr")
-        self.ventilation_plot_widget.getPlotItem().getViewBox().setXLink(
-            "bpm_ventilation"
-        )
-
-        for bpm_pw in [self.bpm_hbr_plot_widget, self.bpm_ventilation_plot_widget]:
-            bpm_pw.getPlotItem().getViewBox().setMouseMode(pg.ViewBox.RectMode)
-
-    @Slot(QPointF)
-    def update_target_pos(self, signal_name: SignalName, pos: QPointF) -> None:
-        scene_pos: QPointF = getattr(
-            self, f"{signal_name}_plot_widget"
-        ).plotItem.vb.mapSceneToView(pos)
-        getattr(self, f"{signal_name}_target").setPos(scene_pos)
+    # @Slot(QPointF)
+    # def update_target_pos(self, signal_name: SignalName, pos: QPointF) -> None:
+    #     # scene_pos: QPointF = getattr(
+    #         # self, f"{signal_name}_plot_widget"
+    #     # ).plotItem.vb.mapSceneToView(pos)
+    #     scene_pos: QPointF = self.plot_widgets.get_signal_widget(signal_name).plotItem.vb.mapSceneToView(pos)
+    #     getattr(self, f"{signal_name}_target").setPos(scene_pos)
 
     @Slot()
     def reset_plots(self) -> None:
-        plot_widgets = [
-            self.hbr_plot_widget,
-            self.ventilation_plot_widget,
-            self.bpm_hbr_plot_widget,
-            self.bpm_ventilation_plot_widget,
-        ]
-        for pw in plot_widgets:
-            pw.getPlotItem().clear()
-            pw.getPlotItem().legend.clear()
-        self.hbr_signal_line = None
-        self.ventilation_signal_line = None
-        self._prepare_plot_items()
+        # plot_widgets = [
+        #     self.hbr_plot_widget,
+        #     self.ventilation_plot_widget,
+        #     self.bpm_hbr_plot_widget,
+        #     self.bpm_ventilation_plot_widget,
+        # ]
+        # for pw in plot_widgets:
+        #     pw.getPlotItem().clear()
+        #     pw.getPlotItem().legend.clear()
+        for name in {"hbr", "ventilation"}:
+            name = cast(SignalName, name)
+            self.plot_widgets.get_signal_widget(name).getPlotItem().clear()
+            self.plot_widgets.get_signal_widget(name).getPlotItem().legend.clear()
+            self.plot_widgets.get_rate_widget(name).getPlotItem().clear()
+            self.plot_widgets.get_rate_widget(name).getPlotItem().legend.clear()
+            self.plot_items[name]["signal"] = pg.PlotDataItem()
+        # self.hbr_signal_line = None
+        # self.ventilation_signal_line = None
+        # self.plot_items.hbr.signal = None
+        # self.plot_items.ventilation.signal = None
 
-    # @Slot(str)
-    # def reset_view(self, name: SignalName) -> None:
-    #     pw: pg.PlotWidget = getattr(self, f"{name}_plot_widget")
+        self._prepare_plot_items()
 
     def draw_signal(
         self,
@@ -293,35 +521,46 @@ class PlotHandler(QObject):
         signal_line.curve.setSegmentedLineMode("on")
         signal_line.curve.setClickable(True, width=self.click_tolerance)
 
-        bpm_plot_widget: pg.PlotWidget = getattr(self, f"bpm_{signal_name}_plot_widget")
+        # bpm_plot_widget: pg.PlotWidget = getattr(self, f"bpm_{signal_name}_plot_widget")
+        rate_plot_widget = self.plot_widgets.get_rate_widget(signal_name)
+        line_ref = self.plot_items[signal_name]["signal"]
+        scatter_ref = self.plot_items[signal_name]["peaks"]
+        rate_line_ref = self.plot_items[signal_name]["rate"]
+        rate_mean_line_ref = self.plot_items[signal_name]["rate_mean"]
 
-        line_ref: pg.PlotDataItem | None = getattr(
-            self, f"{signal_name}_signal_line", None
-        )
-        scatter_ref: pg.ScatterPlotItem | None = getattr(
-            self, f"{signal_name}_peaks_scatter", None
-        )
-        bpm_line_ref: pg.PlotDataItem | None = getattr(
-            self, f"bpm_{signal_name}_signal_line", None
-        )
-        bpm_mean_line_ref: pg.InfiniteLine | None = getattr(
-            self, f"bpm_{signal_name}_mean_hline", None
-        )
-        if line_ref is not None:
+        # line_ref: pg.PlotDataItem | None = getattr(
+        #     self, f"{signal_name}_signal_line", None
+        # )
+        # scatter_ref: pg.ScatterPlotItem | None = getattr(
+        #     self, f"{signal_name}_peaks_scatter", None
+        # )
+        # bpm_line_ref: pg.PlotDataItem | None = getattr(
+        #     self, f"bpm_{signal_name}_signal_line", None
+        # )
+        # bpm_mean_line_ref: pg.InfiniteLine | None = getattr(
+        #     self, f"bpm_{signal_name}_mean_hline", None
+        # )
+        if line_ref:
             line_ref.sigClicked.disconnect(self.add_clicked_point)
             plot_widget.removeItem(line_ref)
-        if scatter_ref is not None:
+        if scatter_ref:
             plot_widget.removeItem(scatter_ref)
-        if bpm_line_ref is not None:
-            bpm_plot_widget.removeItem(bpm_line_ref)
-        if bpm_mean_line_ref is not None:
-            bpm_plot_widget.removeItem(bpm_mean_line_ref)
+        if rate_line_ref:
+            rate_plot_widget.removeItem(rate_line_ref)
+        if rate_mean_line_ref:
+            rate_plot_widget.removeItem(rate_mean_line_ref)
 
         plot_widget.addItem(signal_line)
-        setattr(self, f"{signal_name}_signal_line", signal_line)
-        getattr(self, f"{signal_name}_signal_line").sigClicked.connect(
-            self.add_clicked_point
-        )
+
+        signal_line.sigClicked.connect(self.add_clicked_point)
+
+        self.plot_items[signal_name]["signal"] = signal_line
+        # self.plot_items[signal_name]["signal"].sigClicked.connect(self.add_clicked_point)
+
+        # setattr(self, f"{signal_name}_signal_line", signal_line)
+        # getattr(self, f"{signal_name}_signal_line").sigClicked.connect(
+        # self.add_clicked_point
+        # )
 
     def draw_peaks(
         self,
@@ -351,77 +590,90 @@ class PlotHandler(QObject):
         )
         peaks_scatter.setZValue(60)
 
-        scatter_ref: pg.ScatterPlotItem | None = getattr(
-            self, f"{signal_name}_peaks_scatter", None
-        )
+        # scatter_ref: pg.ScatterPlotItem | None = getattr(
+        #     self, f"{signal_name}_peaks_scatter", None
+        # )
+        scatter_ref = self.plot_items[signal_name]["peaks"]
 
         if scatter_ref is not None:
             scatter_ref.sigClicked.disconnect(self.remove_clicked_point)
             plot_widget.removeItem(scatter_ref)
 
         plot_widget.addItem(peaks_scatter)
+        peaks_scatter.sigClicked.connect(self.remove_clicked_point)
+        self.plot_items[signal_name]["peaks"] = peaks_scatter
 
-        setattr(self, f"{signal_name}_peaks_scatter", peaks_scatter)
-        getattr(self, f"{signal_name}_peaks_scatter").sigClicked.connect(
-            self.remove_clicked_point
-        )
+        # setattr(self, f"{signal_name}_peaks_scatter", peaks_scatter)
+        # getattr(self, f"{signal_name}_peaks_scatter").sigClicked.connect(
+        # self.remove_clicked_point
+        # )
 
     def draw_rate(
         self,
-        bpm_data: NDArray[np.float32 | np.float64],
+        rate_data: NDArray[np.float32 | np.float64],
         plot_widget: pg.PlotWidget,
         signal_name: SignalName,
         **kwargs: float,
     ) -> None:
-        mean_bpm = kwargs.get("mean_peak_interval", np.mean(bpm_data, dtype=np.float64))
+        rate_mean = kwargs.get(
+            "mean_peak_interval", np.mean(rate_data, dtype=np.float64)
+        )
         pen_color = "green"
         mean_pen_color = "goldenrod"
 
-        bpm_line = pg.PlotDataItem(
-            bpm_data,
+        rate_line = pg.PlotDataItem(
+            rate_data,
             pen=pen_color,
             autoDownsample=True,
             skipFiniteCheck=True,
-            name=f"bpm_{signal_name}",
+            name=f"rate_{signal_name}",
         )
-        bpm_mean_line = pg.InfiniteLine(
-            pos=mean_bpm,
+        rate_mean_line = pg.InfiniteLine(
+            pos=rate_mean,
             angle=0,
             pen=dict(color=mean_pen_color, width=2, style=Qt.PenStyle.DashLine),
-            name=f"mean_bpm_{signal_name}",
+            name=f"rate_mean_{signal_name}",
         )
 
-        bpm_line_ref: pg.PlotDataItem | None = getattr(
-            self, f"bpm_{signal_name}_signal_line", None
-        )
-        bpm_mean_line_ref: pg.InfiniteLine | None = getattr(
-            self, f"bpm_{signal_name}_mean_hline", None
-        )
+        # bpm_line_ref: pg.PlotDataItem | None = getattr(
+        # # self, f"bpm_{signal_name}_signal_line", None
+        # # )
+        # # bpm_mean_line_ref: pg.InfiniteLine | None = getattr(
+        # self, f"bpm_{signal_name}_mean_hline", None
+        # )
+        rate_line_ref = self.plot_items[signal_name]["rate"]
+        rate_mean_line_ref = self.plot_items[signal_name]["rate_mean"]
 
-        if bpm_line_ref is not None:
-            plot_widget.removeItem(bpm_line_ref)
-            plot_widget.removeItem(bpm_mean_line_ref)
+        if rate_line_ref is not None:
+            plot_widget.removeItem(rate_line_ref)
+            plot_widget.removeItem(rate_mean_line_ref)
+
+        # if bpm_line_ref is not None:
+        # plot_widget.removeItem(bpm_line_ref)
+        # plot_widget.removeItem(bpm_mean_line_ref)
         if legend := plot_widget.getPlotItem().legend:
             legend.clear()
         else:
             legend = pg.LegendItem()
             plot_widget.getPlotItem().addLegend()
 
-        plot_widget.addItem(bpm_line)
-        plot_widget.addItem(bpm_mean_line)
+        plot_widget.addItem(rate_line)
+        plot_widget.addItem(rate_mean_line)
         legend.addItem(
             pg.PlotDataItem(
                 np.array([0, 1]),
                 pen=dict(color=mean_pen_color, width=2, style=Qt.PenStyle.DashLine),
                 skipFiniteCheck=True,
             ),
-            f"Mean BPM: {int(mean_bpm)}",
+            f"<span style='color: {mean_pen_color}; font-family: Segoe UI; font-size: 10pt;'>Mean Rate: {int(rate_mean)}</span>",
         )
 
-        setattr(self, f"bpm_{signal_name}_signal_line", bpm_line)
-        setattr(self, f"bpm_{signal_name}_mean_hline", bpm_mean_line)
+        self.plot_items[signal_name]["rate"] = rate_line
+        self.plot_items[signal_name]["rate_mean"] = rate_mean_line
 
-        self.sig_bpm_updated.emit(signal_name)
+        # setattr(self, f"bpm_{signal_name}_signal_line", rate_line)
+        # setattr(self, f"bpm_{signal_name}_mean_hline", rate_mean_line)
+        self.sig_rate_updated.emit(signal_name)
 
     @Slot(object, object, object)
     def remove_clicked_point(
@@ -448,17 +700,19 @@ class PlotHandler(QObject):
 
         to_remove_index = points[0].index()
 
-        scatter_plots: dict[str, pg.ScatterPlotItem | None] = {
-            "hbr_peaks": getattr(self, "hbr_peaks_scatter", None),
-            "ventilation_peaks": getattr(self, "ventilation_peaks_scatter", None),
-        }
+        # scatter_plots: dict[str, pg.ScatterPlotItem | None] = {
+        #     "hbr_peaks": getattr(self, "hbr_peaks_scatter", None),
+        #     "ventilation_peaks": getattr(self, "ventilation_peaks_scatter", None),
+        # }
+        name = "hbr" if "hbr" in sender.name() else "ventilation"
 
-        if scatter_plot := scatter_plots.get(sender.name()):
+        if scatter_plot := self.plot_items[name]["peaks"]:
             new_points_x = np.delete(scatter_plot.data["x"], to_remove_index)
             new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)
             scatter_plot.setData(x=new_points_x, y=new_points_y)
-            name = "hbr" if "hbr" in sender.name() else "ventilation"
+            # name = "hbr" if "hbr" in sender.name() else "ventilation"
             self.peak_edits["removed_peaks"][name].append(int(points[0].pos().x()))
+            self.last_edited_index = int(points[0].pos().x())
             self.sig_peaks_edited.emit(name)
 
     @Slot()
@@ -467,10 +721,14 @@ class PlotHandler(QObject):
         Removes peaks inside a rectangular selection.
         """
         name = self._parent.signal_name
-        vb: CustomViewBox = (
-            getattr(self, f"{name}_plot_widget").getPlotItem().getViewBox()
-        )
+        # vb: CustomViewBox = (
+        #     getattr(self, f"{name}_plot_widget").getPlotItem().getViewBox()
+        # )
+        vb = self.plot_widgets.get_signal_widget(name).getPlotItem().getViewBox()
         if vb.mapped_peak_selection is None:
+            return
+        scatter_ref = self.plot_items[name]["peaks"]
+        if scatter_ref is None:
             return
         rect = vb.mapped_peak_selection.boundingRect().getRect()
         rect_x, rect_y, rect_width, rect_height = (
@@ -482,7 +740,7 @@ class PlotHandler(QObject):
 
         x_range = (rect_x, rect_x + rect_width)
         y_range = (rect_y, rect_y + rect_height)
-        scatter_ref: pg.ScatterPlotItem = getattr(self, f"{name}_peaks_scatter")
+        # scatter_ref: pg.ScatterPlotItem = getattr(self, f"{name}_peaks_scatter")
 
         scatter_x, scatter_y = scatter_ref.getData()
         # self.hbr_plot_widget.saveState()
@@ -495,17 +753,15 @@ class PlotHandler(QObject):
 
         if to_remove.size == 0:
             return
-        scatter_ref.setData(
+        self.plot_items[name]["peaks"].setData(
             x=np.delete(scatter_x, to_remove), y=np.delete(scatter_y, to_remove)
         )
 
         self.peak_edits["removed_peaks"][name].extend(
             scatter_x[to_remove][:, 0].astype(int).tolist()
         )
+        self.last_edited_index = np.max(scatter_x[to_remove])
         self.sig_peaks_edited.emit(name)
-        # self.removed_points[signal_name].extend(
-        #     scatter_x[to_remove][:, 0].astype(int).tolist()
-        # )
 
     @Slot(object, object)
     def add_clicked_point(
@@ -523,27 +779,29 @@ class PlotHandler(QObject):
         """
         ev.accept()
         click_x = int(ev.pos().x())
-        signal_map: dict[SignalName, pg.PlotCurveItem | None] = {
-            "hbr": getattr(self, "hbr_signal_line", None),
-            "ventilation": getattr(self, "ventilation_signal_line", None),
-        }
-        scatter_map: dict[SignalName, pg.ScatterPlotItem | None] = {
-            "hbr": getattr(self, "hbr_peaks_scatter", None),
-            "ventilation": getattr(self, "ventilation_peaks_scatter", None),
-        }
+        # signal_map: dict[SignalName, pg.PlotCurveItem | None] = {
+        #     "hbr": getattr(self, "hbr_signal_line", None),
+        #     "ventilation": getattr(self, "ventilation_signal_line", None),
+        # }
+        # scatter_map: dict[SignalName, pg.ScatterPlotItem | None] = {
+        #     "hbr": getattr(self, "hbr_peaks_scatter", None),
+        #     "ventilation": getattr(self, "ventilation_peaks_scatter", None),
+        # }
         name = self._parent.signal_name
         # if name not in signal_map:
         #     return
-        signal_line = signal_map[name]
+        # signal_line = signal_map[name]
+        signal_line = self.plot_items[name]["signal"]
+        scatter_ref = self.plot_items[name]["peaks"]
 
-        if signal_line is None or scatter_map[name] is None:
+        if signal_line is None or scatter_ref is None:
             return
 
         xData: NDArray[np.float64] = signal_line.xData
         yData: NDArray[np.float64] = signal_line.yData
 
         # Define the radius within which to search for the max y-value
-        search_radius = 15
+        search_radius = self.click_tolerance
 
         # Find the indices within the radius around the click position
         indices = np.where(
@@ -558,15 +816,16 @@ class PlotHandler(QObject):
 
         # Get the new x and y values
         x_new, y_new = xData[max_y_index], y_values_in_radius.max()
-        scatter_map[name].addPoints(x=x_new, y=y_new)
+        scatter_ref.addPoints(x=x_new, y=y_new)
         # name = "hbr" if "hbr" in name else "ventilation"
         self.peak_edits["added_peaks"][name].append(int(x_new))
+        self.last_edited_index = x_new
         self.sig_peaks_edited.emit(name)
 
     @Slot()
     def show_region_selector(self) -> None:
         name = self._parent.signal_name
-        plot_widget = getattr(self, f"{name}_plot_widget")
+        plot_widget = self.plot_widgets.get_signal_widget(name)
         view_box = plot_widget.getPlotItem().getViewBox()
         selection_box = view_box.selection_box
         selection_box.setVisible(not selection_box.isVisible())

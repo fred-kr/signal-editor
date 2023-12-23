@@ -1,10 +1,15 @@
 import datetime
-from typing import Any, NotRequired
+from typing import TYPE_CHECKING, Any, NotRequired
 
 import numpy as np
 from numpy.typing import ArrayLike
 from PySide6.QtGui import QBrush, QPainter, QPainterPath, QPen
 from typing_extensions import Literal, TypedDict
+
+if TYPE_CHECKING:
+    import pyqtgraph as pg
+
+    from .views.plots import CustomViewBox
 
 # ==================================================================================== #
 #                                     TYPE ALIASES                                     #
@@ -63,12 +68,13 @@ type OxygenCondition = Literal["normoxic", "hypoxic"]
 #                                  TYPED DICTIONARIES                                  #
 # ==================================================================================== #
 
+
 class FileMetadata(TypedDict):
     date_measured: datetime.datetime
     animal_id: str
     oxygen_condition: OxygenCondition
 
-    
+
 # File readers +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
 class EDFReaderKwargs(TypedDict, total=False):
     start: int
@@ -240,3 +246,17 @@ class SpotItemKargs(TypedDict, total=False):
     antialias: bool
     compositionMode: QPainter.CompositionMode
     name: str | None
+
+
+class PlotMethodKargs(TypedDict):
+    clear: bool
+    params: dict[str, Any]
+
+
+class PlotItemKargs(TypedDict):
+    name: str | None
+    labels: dict[str, str] | None
+    title: str | None
+    viewBox: "pg.ViewBox | CustomViewBox | None"
+    axisItems: "dict[str, pg.AxisItem] | None"
+    enableMenu: bool

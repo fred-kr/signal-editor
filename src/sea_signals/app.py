@@ -111,29 +111,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self) -> None:
         super(MainWindow, self).__init__()
         self.setupUi(self)
+        self._add_style_toggle()
+        self.active_style = "dark"
         self.setWindowTitle("Signal Editor")
         self._app_dir: Path = Path.cwd()
         self._data_dir: Path = Path.cwd()
         self._output_dir: Path = Path(self._app_dir / "output")
         self._output_dir.mkdir(exist_ok=True)
+        self._read_settings()
         self.plot = PlotHandler(self)
         self.data = DataHandler(self)
         self.ui = UIHandler(self, self.plot)
         self.file_info: QFileInfo = QFileInfo()
         # self._add_profiler()
         self.connect_signals()
-        self._read_settings()
+        self.set_style(self.active_style)
         self.line_edit_output_dir.setText(self._output_dir.as_posix())
         # FIXME: remove once hdf5 is implemented
         self.btn_save_to_hdf5.setEnabled(False)
-        self.action_pan_mode.setEnabled(False)
-        self.action_pan_mode.setVisible(False)
-        self.action_rect_mode.setEnabled(False)
-        self.action_rect_mode.setVisible(False)
-        self.action_reset_view.setEnabled(False)
-        self.action_reset_view.setVisible(False)
-        self.action_redraw_with_current_values.setEnabled(False)
-        self.action_redraw_with_current_values.setVisible(False)
 
     @property
     def output_dir(self) -> Path:
@@ -166,6 +161,41 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _add_profiler(self) -> None:
         self.menubar.addAction("Start Profiler", self._start_profiler)
         self.menubar.addAction("Stop Profiler", self._stop_profiler)
+
+    def _add_style_toggle(self) -> None:
+        self.menubar.addSeparator()
+        self.menubar.addAction("Switch Theme", self._switch_theme)
+
+    @Slot()
+    def _switch_theme(self) -> None:
+        if self.active_style == "light":
+            self._set_dark_style()
+        else:
+            self._set_light_style()
+
+    def set_style(self, style: Literal["light", "dark"]) -> None:
+        if style == "light":
+            self._set_light_style()
+        elif style == "dark":
+            self._set_dark_style()
+
+    @Slot()
+    def _set_light_style(self) -> None:
+        self.setStyleSheet(
+            qdarkstyle.load_stylesheet(
+                qt_api="pyside6", palette=qdarkstyle.LightPalette
+            )
+        )
+        self.plot.set_style("light")
+        self.active_style = "light"
+
+    @Slot()
+    def _set_dark_style(self) -> None:
+        self.setStyleSheet(
+            qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.DarkPalette)
+        )
+        self.plot.set_style("dark")
+        self.active_style = "dark"
 
     def connect_signals(self) -> None:
         """
@@ -207,9 +237,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.action_get_results.triggered.connect(self.update_results)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_load_state.triggered.connect(self.restore_state)
-        self.action_reset_view.triggered.connect(
-            lambda: self.plot.reset_view(self.signal_name)
-        )
 
         # self.action_rect_mode.toggled.connect(self.plot.set_rect_mode)
         # self.action_pan_mode.toggled.connect(self.plot.set_pan_mode)
@@ -222,7 +249,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot(str)
     def _sync_peaks_data_plot(self, name: SignalName) -> None:
         plot_peak_indices = np.asarray(
-            getattr(self.plot, f"{name}_peaks_scatter").data["x"], dtype=np.int32
+            self.plot.plot_items[name]["peaks"].data["x"], dtype=np.int32
         )
         data_peak_indices = self.data.peaks[name]
         plot_peak_indices.sort()
@@ -333,9 +360,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot(str)
     def _update_plot_view(self, signal_name: SignalName) -> None:
-        widget: pg.PlotWidget = getattr(self.plot, f"{signal_name}_plot_widget")
-        bpm_widget: pg.PlotWidget = getattr(self.plot, f"bpm_{signal_name}_plot_widget")
-        for plot_widget in [widget, bpm_widget]:
+        widget: pg.PlotWidget = self.plot.plot_widgets.get_signal_widget(signal_name)
+        rate_widget: pg.PlotWidget = self.plot.plot_widgets.get_rate_widget(signal_name)
+        for plot_widget in [widget, rate_widget]:
             plot_item = plot_widget.getPlotItem()
             plot_widget.getPlotItem().getViewBox().autoRange()
             plot_item.getViewBox().enableAutoRange("y")
@@ -347,9 +374,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot()
     def handle_plot_draw(self) -> None:
         with pg.BusyCursor():
-            hbr_line_exists = self.plot.hbr_signal_line is not None
-            ventilation_line_exists = self.plot.ventilation_signal_line is not None
+            hbr_line_exists = (
+                self.plot.plot_widgets.get_signal_widget("hbr")
+                .getPlotItem()
+                .listDataItems()
+                .__len__()
+                > 0
+            )
+            ventilation_line_exists = (
+                self.plot.plot_widgets.get_signal_widget("ventilation")
+                .getPlotItem()
+                .listDataItems()
+                .__len__()
+                > 0
+            )
 
+            logger.debug(
+                f"hbr_line_exists: {hbr_line_exists}, ventilation_line_exists: {ventilation_line_exists}"
+            )
             if not hbr_line_exists and not ventilation_line_exists:
                 self._draw_initial_signals()
             else:
@@ -361,20 +403,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             zero_copy_only=True
         )
 
-        self.plot.draw_signal(hbr_data, self.plot.hbr_plot_widget, "hbr")
         self.plot.draw_signal(
-            ventilation_data, self.plot.ventilation_plot_widget, "ventilation"
+            hbr_data, self.plot.plot_widgets.get_signal_widget("hbr"), "hbr"
+        )
+        self.plot.draw_signal(
+            ventilation_data,
+            self.plot.plot_widgets.get_signal_widget("ventilation"),
+            "ventilation",
         )
         self._set_x_ranges()
 
     def _set_x_ranges(self) -> None:
         data_length = self.data.df.height
-        plot_widgets = [
-            self.plot.hbr_plot_widget,
-            self.plot.bpm_hbr_plot_widget,
-            self.plot.ventilation_plot_widget,
-            self.plot.bpm_ventilation_plot_widget,
-        ]
+        plot_widgets = self.plot.plot_widgets.get_all_widgets()
+        # plot_widgets = [
+        # self.plot.hbr_plot_widget,
+        # self.plot.bpm_hbr_plot_widget,
+        # self.plot.ventilation_plot_widget,
+        # self.plot.bpm_ventilation_plot_widget,
+        # ]
         for widget in plot_widgets:
             widget.getPlotItem().getViewBox().setLimits(
                 xMin=-0.25 * data_length,
@@ -388,8 +435,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _update_signal(self, signal_name: SignalName) -> None:
         signal_data = self.data.df.get_column(signal_name).to_numpy(zero_copy_only=True)
-        plot_widget: pg.PlotWidget = getattr(self.plot, f"{signal_name}_plot_widget")
+        plot_widget = self.plot.plot_widgets.get_signal_widget(signal_name)
         self.plot.draw_signal(signal_data, plot_widget, signal_name)
+        self._set_x_ranges()
         self.sig_plot_data_changed.emit(signal_name)
 
     @Slot()
@@ -463,7 +511,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             )
             self.plot.draw_signal(
                 sig=self.data.df.get_column(processed_signal_name).to_numpy(),
-                plot_widget=getattr(self.plot, f"{signal_name}_plot_widget"),
+                plot_widget=self.plot.plot_widgets.get_signal_widget(signal_name),
                 signal_name=signal_name,
             )
         self.sig_plot_data_changed.emit(signal_name)
@@ -474,7 +522,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         peak_params = self.get_peak_detection_values()
         signal_name = self.signal_name
         processed_signal_name = f"{signal_name}_{self.data.processed_suffix}"
-        plot_widget = getattr(self.plot, f"{signal_name}_plot_widget")
+        plot_widget = self.plot.plot_widgets.get_signal_widget(signal_name)
         if processed_signal_name not in self.data.df.columns:
             info_msg = (
                 "Signal needs to be filtered before peak detection can be performed."
@@ -500,7 +548,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot(str)
     def handle_draw_results(self, signal_name: SignalName) -> None:
         rate_name = f"{signal_name}_{self.data.rate_interp_suffix}"
-        rate_plot_widget = getattr(self.plot, f"bpm_{signal_name}_plot_widget")
+        rate_plot_widget = self.plot.plot_widgets.get_rate_widget(signal_name)
         instant_signal_rate = self.data.df.get_column(rate_name).to_numpy()
 
         self.plot.draw_rate(
@@ -532,6 +580,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.data_dir = Path(data_dir)
         output_dir: str = settings.value("outputdir", ".")  # type: ignore
         self.output_dir = Path(output_dir)
+        style = cast(Literal["light", "dark"], settings.value("style", "dark"))
+        self.active_style = style
 
     def _write_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
@@ -541,6 +591,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         output_dir = self.output_dir.as_posix()
         settings.setValue("datadir", data_dir)
         settings.setValue("outputdir", output_dir)
+        style = self.active_style
+        settings.setValue("style", style)
 
     # endregion
 
@@ -681,7 +733,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self,
             "Save State",
             "Data is clean up to (and including) index:",
-            0,
+            int(self.plot.last_edited_index),
             0,
             self.data.df.height,
             1,
@@ -890,9 +942,9 @@ def main(dev_mode: bool = False, antialias: bool = False) -> None:
         level="DEBUG",
     )
     app = QApplication(sys.argv)
-    app.setStyle("Windows")
+    app.setStyle("Default")
     app.setStyleSheet(
-        qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.DarkPalette)
+        qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.LightPalette)
     )
     window = MainWindow()
     window.show()

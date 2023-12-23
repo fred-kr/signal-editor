@@ -156,9 +156,6 @@ def auto_correct_fir_length(
                 required_samples = int(
                     message.split("requires")[1].split("samples")[0].strip()
                 )
-                logger.info(
-                    f"Initial window size ({kwargs['window_size']}) too small, setting to {required_samples}"
-                )
                 kwargs["window_size"] = required_samples
             else:
                 raise

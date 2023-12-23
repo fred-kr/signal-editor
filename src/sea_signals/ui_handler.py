@@ -20,6 +20,7 @@ from PySide6.QtGui import QActionGroup, QStandardItemModel
 from PySide6.QtWidgets import (
     QDockWidget,
     QVBoxLayout,
+    QWidget,
 )
 
 from .models.io import parse_file_name
@@ -366,30 +367,26 @@ class UIHandler(QObject):
         self.window.plot_widget_hbr.setLayout(QVBoxLayout())
         self.window.plot_widget_vent.setLayout(QVBoxLayout())
 
-        self.window.plot_widget_hbr.layout().addWidget(self.plot.hbr_plot_widget)
-        self.window.plot_widget_vent.layout().addWidget(
-            self.plot.ventilation_plot_widget
-        )
+        self.window.plot_widget_hbr.layout().addWidget(self.plot.plot_widgets.get_signal_widget("hbr"))
+        self.window.plot_widget_vent.layout().addWidget(self.plot.plot_widgets.get_signal_widget("ventilation"))
 
-        self.window.plot_widget_hbr.layout().addWidget(self.plot.bpm_hbr_plot_widget)
-        self.window.plot_widget_vent.layout().addWidget(
-            self.plot.bpm_ventilation_plot_widget
-        )
+        self.window.plot_widget_hbr.layout().addWidget(self.plot.plot_widgets.get_rate_widget("hbr"))
+        self.window.plot_widget_vent.layout().addWidget(self.plot.plot_widgets.get_rate_widget("ventilation"))
 
         self.temperature_label_hbr = pg.LabelItem(
             text="Temperature: -",
-            parent=self.plot.hbr_plot_widget.plotItem,
+            parent=self.plot.plot_widgets.get_signal_widget("hbr").plotItem,
             angle=0,
         )
         self.temperature_label_ventilation = pg.LabelItem(
             text="Temperature: -",
-            parent=self.plot.ventilation_plot_widget.plotItem,
+            parent=self.plot.plot_widgets.get_signal_widget("ventilation").plotItem,
             angle=0,
         )
-        self.plot.hbr_plot_widget.plotItem.scene().sigMouseMoved.connect(
+        self.plot.plot_widgets.get_signal_widget("hbr").plotItem.scene().sigMouseMoved.connect(
             lambda pos: self.update_temperature_label("hbr", pos)
         )
-        self.plot.ventilation_plot_widget.plotItem.scene().sigMouseMoved.connect(
+        self.plot.plot_widgets.get_signal_widget("ventilation").plotItem.scene().sigMouseMoved.connect(
             lambda pos: self.update_temperature_label("ventilation", pos)
         )
 
@@ -400,9 +397,7 @@ class UIHandler(QObject):
         if self.window.data.df.is_empty():
             return
         data_pos = int(
-            getattr(self.plot, f"{signal_name}_plot_widget")
-            .plotItem.vb.mapSceneToView(pos)
-            .x()
+            self.plot.plot_widgets.get_signal_widget(signal_name).plotItem.vb.mapSceneToView(pos).x()
         )
         try:
             temp_value = self.window.data.df.get_column("temperature").to_numpy(
