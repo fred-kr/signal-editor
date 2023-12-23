@@ -287,6 +287,7 @@ class PlotHandler(QObject):
 
     sig_rate_updated = Signal(str)
     sig_peaks_edited = Signal(str)
+    sig_excluded_range = Signal(str, int, int)
 
     def __init__(
         self,
@@ -294,7 +295,6 @@ class PlotHandler(QObject):
     ):
         super().__init__(parent=parent)
         self._parent = parent
-        # plot_bg = str(pg.getConfigOption("background"))
         self.click_tolerance = 80
         self.peak_edits: PeakEdits = PeakEdits(
             added_peaks=AddedPoints(hbr=[], ventilation=[]),
@@ -302,7 +302,7 @@ class PlotHandler(QObject):
         )
         self.plot_items = Plots()
         self.plot_widgets = PlotWidgetContainer()
-        self.last_edited_index = 0
+        self._last_edit_index: int = 0
 
         self.plot_widgets.add_widget("hbr", is_rate=False)
         self.plot_widgets.add_widget("ventilation", is_rate=False)
@@ -310,6 +310,14 @@ class PlotHandler(QObject):
         self.plot_widgets.add_widget("ventilation", is_rate=True)
 
         self._prepare_plot_items()
+
+    @property
+    def last_edit_index(self) -> int:
+        return self._last_edit_index
+
+    @last_edit_index.setter
+    def last_edit_index(self, value: int | float) -> None:
+        self._last_edit_index = int(value)
 
     def _init_plot_items(self) -> None:
         self.plot_items.hbr = PlotContent()
@@ -375,7 +383,7 @@ class PlotHandler(QObject):
                 brush="transparent",
                 colCount=2,
             )
-            plot_item.legend.anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(5, -5))
+            plot_item.legend.anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(5, -5))  # type: ignore
             plot_item.register(name)
             plot_item.getViewBox().setAutoVisible(y=True)
             plot_item.setMouseEnabled(x=True, y=False)
@@ -606,7 +614,7 @@ class PlotHandler(QObject):
             new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)
             scatter_plot.setData(x=new_points_x, y=new_points_y)
             self.peak_edits["removed_peaks"][name].append(int(points[0].pos().x()))
-            self.last_edited_index = int(points[0].pos().x())
+            self.last_edit_index = int(points[0].pos().x())
             self.sig_peaks_edited.emit(name)
 
     @Slot()
@@ -649,7 +657,7 @@ class PlotHandler(QObject):
         self.peak_edits["removed_peaks"][name].extend(
             scatter_x[to_remove][:, 0].astype(int).tolist()
         )
-        self.last_edited_index = np.max(scatter_x[to_remove])
+        self.last_edit_index = np.max(scatter_x[to_remove])
         self.sig_peaks_edited.emit(name)
 
     @Slot(object, object)
@@ -679,7 +687,7 @@ class PlotHandler(QObject):
         yData: NDArray[np.float64] = signal_line.yData
 
         # Define the radius within which to search for the max y-value
-        search_radius = 15
+        search_radius = 20
 
         # Find the indices within the radius around the click position
         indices = np.where(
@@ -698,7 +706,7 @@ class PlotHandler(QObject):
         x_new, y_new = xData[max_y_index], y_values_in_radius.max()
         scatter_ref.addPoints(x=x_new, y=y_new)
         self.peak_edits["added_peaks"][name].append(int(x_new))
-        self.last_edited_index = x_new
+        self.last_edit_index = x_new
         self.sig_peaks_edited.emit(name)
 
     @Slot()
@@ -708,6 +716,32 @@ class PlotHandler(QObject):
         view_box = plot_widget.getPlotItem().getViewBox()
         selection_box = view_box.selection_box
         selection_box.setVisible(not selection_box.isVisible())
+
+    @Slot()
+    def show_exclusion_selector(self) -> None:
+        name = self._parent.signal_name
+        plot_widget = self.plot_widgets.get_signal_widget(name)
+        view_box = plot_widget.getPlotItem().getViewBox()
+        deletion_box = view_box.deletion_box
+        deletion_box.setVisible(not deletion_box.isVisible())
+
+    @Slot()
+    def mark_excluded(self) -> None:
+        name = self._parent.signal_name
+        vb: CustomViewBox = (
+            self.plot_widgets.get_signal_widget(name).getPlotItem().getViewBox()
+        )
+        if vb.mapped_deletion_selection is None:
+            return
+        signal_data_ref = self.plot_items[name]["signal"]
+        if signal_data_ref is None:
+            return
+        rect = vb.mapped_deletion_selection.boundingRect().getRect()
+        rect_x, rect_width = int(rect[0]), int(rect[2])
+
+        x_range = (rect_x, rect_x + rect_width)
+
+        self.sig_excluded_range.emit(name, x_range[0], x_range[1])
 
     def get_state(self) -> PeakEdits:
         return self.peak_edits

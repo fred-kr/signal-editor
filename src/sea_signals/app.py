@@ -18,7 +18,6 @@ from PySide6.QtCore import (
     QByteArray,
     QDate,
     QFileInfo,
-    QProcess,
     QSettings,
     Qt,
     Signal,
@@ -240,14 +239,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.action_get_results.triggered.connect(self.update_results)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_load_state.triggered.connect(self.restore_state)
-
-        # self.action_rect_mode.toggled.connect(self.plot.set_rect_mode)
-        # self.action_pan_mode.toggled.connect(self.plot.set_pan_mode)
+        self.action_show_del_roi.triggered.connect(self.plot.show_exclusion_selector)
+        self.action_mark_excluded.triggered.connect(self.plot.mark_excluded)
 
         self.spin_box_fs.valueChanged.connect(self.data.update_fs)
 
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
         self.plot.sig_peaks_edited.connect(self._sync_peaks_data_plot)
+        self.plot.sig_excluded_range.connect(self.data.mark_excluded)
 
     @Slot(str)
     def _sync_peaks_data_plot(self, name: SignalName) -> None:
@@ -272,36 +271,57 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 group.attrs.create(key, value)
             elif isinstance(value, dict):
                 subgrp = group.create_group(key)
-                MainWindow.create_attrs(subgrp, value)
+                MainWindow.create_attrs(subgrp, value)  # type: ignore
             else:
                 group.attrs.create(key, value)
-                
 
     def write_hdf5(self, file_path: str | Path, result: Result) -> None:
         with h5py.File(file_path, "a") as f:
             grp_result = f.create_group("result")
-            self.create_attrs(grp_result.create_group("identifier"), asdict(result.identifier))
-            self.create_attrs(grp_result.create_group("selection_metadata"), asdict(result.info_data_selection))
-            self.create_attrs(grp_result.create_group("processing_metadata"), asdict(result.info_data_processing))
-            self.create_attrs(grp_result.create_group("statistics"), asdict(result.statistics))
+            self.create_attrs(
+                grp_result.create_group("identifier"), asdict(result.identifier)
+            )
+            self.create_attrs(
+                grp_result.create_group("selection_metadata"),
+                asdict(result.info_data_selection),
+            )
+            self.create_attrs(
+                grp_result.create_group("processing_metadata"),
+                asdict(result.info_data_processing),
+            )
+            self.create_attrs(
+                grp_result.create_group("statistics"), asdict(result.statistics)
+            )
 
             grp_manual_edits = grp_result.create_group("manual_edits")
             for edit_type in ["added_peaks", "removed_peaks"]:
                 grp_edit_type = grp_manual_edits.create_group(edit_type)
-                for peak_type in ["hbr", "ventilation"]:
-                    grp_edit_type.create_dataset(peak_type, data=result.manual_edits[edit_type][peak_type])
+                for signal_type in ["hbr", "ventilation"]:
+                    grp_edit_type.create_dataset(
+                        signal_type,
+                        data=result.manual_edits[edit_type][signal_type],  # type: ignore
+                    )
 
-            grp_result.create_dataset("result_data", data=result.result_data.to_numpy(structured=True))
-            grp_result.create_dataset("source_data", data=result.source_data.to_numpy(structured=True))
+            grp_result.create_dataset(
+                "result_data", data=result.result_data.to_numpy(structured=True)
+            )
+            grp_result.create_dataset(
+                "source_data", data=result.source_data.to_numpy(structured=True)
+            )
 
-    @Slot()
-    def run_hdf5view(self) -> None:
-        self.hdf5view_process = QProcess(self)
-        self.hdf5view_process.finished.connect(self.process_finished)
-        self.hdf5view_process.start("hdf5view")
+    # @Slot()
+    # def run_hdf5view(self) -> None:
+    #     """
+    #     Runs `hdf5view.exe` to allow inspecting results stored as HDF5. Made by Martin
+    #     Swarbrick. Link to github repo: https://github.com/marts/hdf5view
+    #     """
+    #     self.hdf5view_process = QProcess(self)
+    #     self.hdf5view_process.finished.connect(self.process_finished)
+    #     self.hdf5view_process.start("hdf5view")
 
-    def process_finished(self) -> None:
-        self.hdf5view_process = None
+    # @Slot()
+    # def process_finished(self) -> None:
+    #     self.hdf5view_process = None
 
     @Slot()
     def save_to_hdf5(self) -> None:
@@ -444,9 +464,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 > 0
             )
 
-            logger.debug(
-                f"hbr_line_exists: {hbr_line_exists}, ventilation_line_exists: {ventilation_line_exists}"
-            )
             if not hbr_line_exists and not ventilation_line_exists:
                 self._draw_initial_signals()
             else:
@@ -625,7 +642,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     # region Settings ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
     def _read_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
-        geometry: QByteArray = settings.value("geometry", QByteArray())
+        geometry: QByteArray = settings.value("geometry", QByteArray())  # type: ignore
         if geometry.size():
             self.restoreGeometry(geometry)
         data_dir: str = settings.value("datadir", ".")  # type: ignore
@@ -667,7 +684,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     # endregion
 
     def get_identifier(self, result_name: SignalName) -> ResultIdentifier:
-        meas_date = getattr(self.data, "meas_date", "unknown")
+        meas_date: datetime | Literal["unknown"] = getattr(
+            self.data, "meas_date", "unknown"
+        )
         result_file_name = f"results_{result_name}_{self.file_info.fileName()}"
         return ResultIdentifier(
             name=result_name,
@@ -692,9 +711,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def get_file_metadata(self) -> FileMetadata:
         return {
-            "date_measured": self.date_edit_file_info.date().toPython(),
+            "date_measured": cast(datetime, self.date_edit_file_info.date().toPython()),
             "animal_id": self.line_edit_subject_id.text(),
-            "oxygen_condition": self.combo_box_oxygen_condition.value(),
+            "oxygen_condition": cast(
+                OxygenCondition, self.combo_box_oxygen_condition.value()
+            ),
         }
 
     def get_filter_values(self) -> SignalFilterParameters:
@@ -748,7 +769,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def make_results(self, result_name: SignalName) -> None:
         with pg.ProgressDialog(
-            "Computing results...", cancelText=None, parent=self, wait=0
+            "Computing results...",
+            cancelText=None,
+            parent=self,
+            wait=0,  # type: ignore
         ) as dlg:
             dlg.setLabelText("Gathering parameters...")
             identifier = self.get_identifier(result_name)
@@ -784,7 +808,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self,
             "Save State",
             "Data is clean up to (and including) index:",
-            int(self.plot.last_edited_index),
+            self.plot.last_edit_index,
             0,
             self.data.df.height,
             1,
@@ -905,6 +929,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.data.restore_state(state["working_data"])
         self.plot.restore_state(state["peak_edits"])
+        self.plot.last_edit_index = state["stopped_at_index"]
 
         self.spin_box_fs.setValue(state["sampling_frequency"])
         self.file_info.setFile(state["source_file_path"])
@@ -993,10 +1018,10 @@ def main(dev_mode: bool = False, antialias: bool = False) -> None:
         level="DEBUG",
     )
     app = QApplication(sys.argv)
-    app.setStyle("Default")
     app.setStyleSheet(
         qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.LightPalette)
     )
+    app.setStyle("Default")
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

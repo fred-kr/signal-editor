@@ -61,7 +61,7 @@ type FilterMethod = Literal[
     "bessel",
     "None",
 ]
-type OxygenCondition = Literal["normoxic", "hypoxic"]
+type OxygenCondition = Literal["normoxic", "hypoxic", "unknown"]
 
 
 # ==================================================================================== #

@@ -163,6 +163,16 @@ class Ui_MainWindow(object):
         icon18.addFile(u":/material-symbols/upload_file_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
         self.action_load_state.setIcon(icon18)
         self.action_load_state.setMenuRole(QAction.NoRole)
+        self.action_mark_excluded = QAction(MainWindow)
+        self.action_mark_excluded.setObjectName(u"action_mark_excluded")
+        icon19 = QIcon()
+        icon19.addFile(u":/material-symbols/variable_remove_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.action_mark_excluded.setIcon(icon19)
+        self.action_mark_excluded.setMenuRole(QAction.NoRole)
+        self.action_show_del_roi = QAction(MainWindow)
+        self.action_show_del_roi.setObjectName(u"action_show_del_roi")
+        self.action_show_del_roi.setIcon(icon12)
+        self.action_show_del_roi.setMenuRole(QAction.NoRole)
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self._2 = QHBoxLayout(self.centralwidget)
@@ -230,9 +240,9 @@ class Ui_MainWindow(object):
 
         self.gridLayout_4.addWidget(self.container_text_info, 1, 1, 1, 1)
 
-        icon19 = QIcon()
-        icon19.addFile(u":/material-symbols/dataset_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.tabs_main.addTab(self.tab_data, icon19, "")
+        icon20 = QIcon()
+        icon20.addFile(u":/material-symbols/dataset_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.tabs_main.addTab(self.tab_data, icon20, "")
         self.tab_plots = QWidget()
         self.tab_plots.setObjectName(u"tab_plots")
         self.verticalLayout_4 = QVBoxLayout(self.tab_plots)
@@ -266,9 +276,9 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_4.addWidget(self.stacked_hbr_vent)
 
-        icon20 = QIcon()
-        icon20.addFile(u":/material-symbols/earthquake_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.tabs_main.addTab(self.tab_plots, icon20, "")
+        icon21 = QIcon()
+        icon21.addFile(u":/material-symbols/earthquake_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.tabs_main.addTab(self.tab_plots, icon21, "")
         self.tab_results = QWidget()
         self.tab_results.setObjectName(u"tab_results")
         sizePolicy2 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
@@ -352,9 +362,9 @@ class Ui_MainWindow(object):
         self.horizontalLayout_6.setContentsMargins(0, 0, 0, 0)
         self.btn_browse_output_dir = QPushButton(self.container_results_output_dir)
         self.btn_browse_output_dir.setObjectName(u"btn_browse_output_dir")
-        icon21 = QIcon()
-        icon21.addFile(u":/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.btn_browse_output_dir.setIcon(icon21)
+        icon22 = QIcon()
+        icon22.addFile(u":/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.btn_browse_output_dir.setIcon(icon22)
 
         self.horizontalLayout_6.addWidget(self.btn_browse_output_dir)
 
@@ -421,9 +431,9 @@ class Ui_MainWindow(object):
 
         self.gridLayout_12.addWidget(self.btn_save_to_hdf5, 6, 1, 1, 1)
 
-        icon22 = QIcon()
-        icon22.addFile(u":/material-symbols/table_chart_view_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.tabs_main.addTab(self.tab_results, icon22, "")
+        icon23 = QIcon()
+        icon23.addFile(u":/material-symbols/table_chart_view_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.tabs_main.addTab(self.tab_results, icon23, "")
 
         self._2.addWidget(self.tabs_main)
 
@@ -1204,6 +1214,9 @@ class Ui_MainWindow(object):
         self.toolbar.addAction(self.action_get_results)
         self.toolbar_plots.addAction(self.action_remove_selected_peaks)
         self.toolbar_plots.addAction(self.action_show_roi)
+        self.toolbar_plots.addSeparator()
+        self.toolbar_plots.addAction(self.action_mark_excluded)
+        self.toolbar_plots.addAction(self.action_show_del_roi)
 
         self.retranslateUi(MainWindow)
         self.tabs_main.currentChanged.connect(self.sidebar.setCurrentIndex)
@@ -1288,7 +1301,7 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(shortcut)
         self.action_toggle_whats_this_mode.setShortcut(QCoreApplication.translate("MainWindow", u"F1", None))
 #endif // QT_CONFIG(shortcut)
-        self.action_show_roi.setText(QCoreApplication.translate("MainWindow", u"Show/Hide Selection Rectangle", None))
+        self.action_show_roi.setText(QCoreApplication.translate("MainWindow", u"Toggle peak selection", None))
 #if QT_CONFIG(tooltip)
         self.action_show_roi.setToolTip(QCoreApplication.translate("MainWindow", u"Hides/shows the selection rectangle for removing multiple peaks at once. Shortcut: Ctrl+F", None))
 #endif // QT_CONFIG(tooltip)
@@ -1322,6 +1335,20 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(tooltip)
         self.action_load_state.setToolTip(QCoreApplication.translate("MainWindow", u"Load a state snapshot file", None))
 #endif // QT_CONFIG(tooltip)
+        self.action_mark_excluded.setText(QCoreApplication.translate("MainWindow", u"Mark as Excluded", None))
+#if QT_CONFIG(tooltip)
+        self.action_mark_excluded.setToolTip(QCoreApplication.translate("MainWindow", u"Sets the data inside the red selection rectangle to null and prevent its inclusion in the calculations for the result", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(shortcut)
+        self.action_mark_excluded.setShortcut(QCoreApplication.translate("MainWindow", u"Alt+D", None))
+#endif // QT_CONFIG(shortcut)
+        self.action_show_del_roi.setText(QCoreApplication.translate("MainWindow", u"Toggle data selection", None))
+#if QT_CONFIG(tooltip)
+        self.action_show_del_roi.setToolTip(QCoreApplication.translate("MainWindow", u"Toggles visibility of data exclusion rectangle. Shortcut: Alt+F", None))
+#endif // QT_CONFIG(tooltip)
+#if QT_CONFIG(shortcut)
+        self.action_show_del_roi.setShortcut(QCoreApplication.translate("MainWindow", u"Alt+F", None))
+#endif // QT_CONFIG(shortcut)
         self.label_19.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:14pt; font-weight:700;\">Info</span></p></body></html>", None))
         self.text_info_loading_data.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
@@ -1387,7 +1414,7 @@ class Ui_MainWindow(object):
 "li.unchecked::marker { content: \"\\2610\"; }\n"
 "li.checked::marker { content: \"\\2612\"; }\n"
 "</style></head><body style=\" font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:12px; margin-bottom:1px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700; text-decoration: underline;\">(Required) </span><span style=\" text-decoration: underline;\">Sampling Frequency:</span></p></body></html>", None))
+"<p style=\" margin-top:12px; margin-bottom:1px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-size:11pt; font-weight:700; text-decoration: underline;\">(Required) </span><span style=\" font-size:11pt; text-decoration: underline;\">Sampling Frequency:</span></p></body></html>", None))
 #if QT_CONFIG(tooltip)
         self.spin_box_fs.setToolTip(QCoreApplication.translate("MainWindow", u"Frequency with which the data was recorded in Hz (samples per second) ", None))
 #endif // QT_CONFIG(tooltip)

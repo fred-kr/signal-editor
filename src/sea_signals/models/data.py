@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Literal, Unpack, cast
+from typing import TYPE_CHECKING, Any, Iterable, Literal, NamedTuple, Unpack, cast
+from collections import namedtuple
 
 import neurokit2 as nk
 import numpy as np
@@ -156,6 +157,34 @@ def standardize(
     return scale_signal(sig, robust=is_robust, window_size=window_size, rolling_window=rolling_window).to_numpy()
 
 
+class ExclusionIndices(NamedTuple):
+    start: int
+    stop: int
+    
+@dataclass(slots=True, kw_only=True)
+class ExclusionMask:
+    hbr: list[ExclusionIndices] = field(default_factory=list)
+    ventilation: list[ExclusionIndices] = field(default_factory=list)
+
+    def __getitem__(self, key: SignalName) -> list[ExclusionIndices]:
+        return getattr(self, key, [])
+
+    def add_range(self, name: SignalName, start: int, stop: int) -> None:
+        self[name].append(ExclusionIndices(start=start, stop=stop))
+
+    def remove_range(self, name: SignalName, start: int, stop: int) -> None:
+        self[name].remove(ExclusionIndices(start=start, stop=stop))
+
+    def clear_all(self) -> None:
+        self.hbr = []
+        self.ventilation = []
+
+    def get_starts(self, name: SignalName) -> dict[int, int]:
+        return {i: r.start for i, r in enumerate(self[name])}
+
+    def get_stops(self, name: SignalName) -> dict[int, int]:
+        return {i: r.stop for i, r in enumerate(self[name])}
+
 class DataHandler(QObject):
     """
     Handles storing and operating on data.
@@ -181,6 +210,8 @@ class DataHandler(QObject):
         self.peaks_suffix = "peaks"
         self.rate_no_interp_suffix = "rate"
         self.rate_interp_suffix = "rate_interpolated"
+        self.exclusion_ranges: ExclusionMask = ExclusionMask()
+        self.cw_df: pl.DataFrame = pl.DataFrame()
 
     @property
     def fs(self) -> int:
@@ -222,6 +253,10 @@ class DataHandler(QObject):
 
         self.df = self._lazy_df.collect()
         self.calc_minmax()
+        self.df = self.df.with_columns(
+            pl.repeat(1, self.df.height, dtype=pl.Int8).alias("hbr_is_included"),
+            pl.repeat(1, self.df.height, dtype=pl.Int8).alias("ventilation_is_included"),
+        )
 
     @staticmethod
     def get_slice_indices(
@@ -490,6 +525,25 @@ class DataHandler(QObject):
         self.restore_peaks(state.peaks)
         self.restore_rate(state.rate)
 
+    @Slot(str, int, int)
+    def mark_excluded(self, name: SignalName, start: int, stop: int) -> None:
+        # if self.cw_df.is_empty():
+        #     self.cw_df = self.df.lazy().select(
+        #         pl.col("index", "time_s", "temperature", name, f"{name}_{self.processed_suffix}"),
+        #         pl.when((pl.col("index").is_in(self.peaks[name]))).then(True).otherwise(False).alias(f"{name}_is_peak"),
+        #         pl.repeat(True, self.df.height, dtype=pl.Boolean).alias(f"{name}_is_included")
+        #     ).collect()
+        if len(self.exclusion_ranges[name]) == 0:
+            setattr(self, f"_{name}_all", self.df.lazy().clone())
+        self.exclusion_ranges.add_range(name, start, stop)
+        self.df = self.df.with_columns(
+            pl.when((pl.col("index").is_between(start, stop))).then(None).otherwise(pl.col(f"{name}_is_included")).alias(f"{name}_is_included")
+        )
+        self.df = self.df.drop_nulls()
+
+    def reset_exclusions(self, name: SignalName) -> None:
+        init_df: pl.LazyFrame = getattr(self, f"_{name}_all")
+        self.df = init_df.collect()
 
 class CompactDFModel(QAbstractTableModel):
     """

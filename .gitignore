@@ -152,3 +152,6 @@ comment-files
 *.csv
 *.pkl
 *.hdf5
+**/dist/**
+build/
+**/_internal
