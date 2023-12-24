@@ -18,6 +18,7 @@ from PySide6.QtCore import (
     QByteArray,
     QDate,
     QFileInfo,
+    QProcess,
     QSettings,
     Qt,
     Signal,
@@ -123,12 +124,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.data = DataHandler(self)
         self.ui = UIHandler(self, self.plot)
         self.file_info: QFileInfo = QFileInfo()
-        # self._add_profiler()
+        self._add_profiler()
         self.connect_signals()
         self.set_style(self.active_style)
         self.line_edit_output_dir.setText(self._output_dir.as_posix())
-        # FIXME: remove once hdf5 is implemented
-        # self.btn_save_to_hdf5.setEnabled(False)
 
     @property
     def output_dir(self) -> Path:
@@ -162,6 +161,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.menubar.addAction("Start Profiler", self._start_profiler)
         self.menubar.addAction("Stop Profiler", self._stop_profiler)
 
+    # region Theme Switcher
     def _add_style_toggle(self) -> None:
         self.menubar.addSeparator()
         self.menubar.addAction("Switch Theme", self._switch_theme)
@@ -196,7 +196,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         self.plot.set_style("dark")
         self.active_style = "dark"
-
+    # endregion Theme Switcher
     def connect_signals(self) -> None:
         """
         Connect signals to slots.
@@ -309,19 +309,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 "source_data", data=result.source_data.to_numpy(structured=True)
             )
 
-    # @Slot()
-    # def run_hdf5view(self) -> None:
-    #     """
-    #     Runs `hdf5view.exe` to allow inspecting results stored as HDF5. Made by Martin
-    #     Swarbrick. Link to github repo: https://github.com/marts/hdf5view
-    #     """
-    #     self.hdf5view_process = QProcess(self)
-    #     self.hdf5view_process.finished.connect(self.process_finished)
-    #     self.hdf5view_process.start("hdf5view")
+    @Slot()
+    def run_hdf5view(self) -> None:
+        """
+        Runs `hdf5view.exe` to allow inspecting results stored as HDF5. Made by Martin
+        Swarbrick. Link to github repo: https://github.com/marts/hdf5view
+        """
+        self.hdf5view_process = QProcess(self)
+        self.hdf5view_process.finished.connect(self.process_finished)
+        self.hdf5view_process.start("hdf5view")
 
-    # @Slot()
-    # def process_finished(self) -> None:
-    #     self.hdf5view_process = None
+    @Slot()
+    def process_finished(self) -> None:
+        self.hdf5view_process = None
 
     @Slot()
     def save_to_hdf5(self) -> None:

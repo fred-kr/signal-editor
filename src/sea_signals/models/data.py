@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Literal, NamedTuple, Unpack, cast
-from collections import namedtuple
+from typing import TYPE_CHECKING, Any, Iterable, NamedTuple, Unpack, cast
 
 import neurokit2 as nk
 import numpy as np
@@ -154,13 +153,16 @@ def standardize(
         return sig
     is_robust = method == "mad"
 
-    return scale_signal(sig, robust=is_robust, window_size=window_size, rolling_window=rolling_window).to_numpy()
+    return scale_signal(
+        sig, robust=is_robust, window_size=window_size, rolling_window=rolling_window
+    ).to_numpy()
 
 
 class ExclusionIndices(NamedTuple):
     start: int
     stop: int
-    
+
+
 @dataclass(slots=True, kw_only=True)
 class ExclusionMask:
     hbr: list[ExclusionIndices] = field(default_factory=list)
@@ -184,6 +186,7 @@ class ExclusionMask:
 
     def get_stops(self, name: SignalName) -> dict[int, int]:
         return {i: r.stop for i, r in enumerate(self[name])}
+
 
 class DataHandler(QObject):
     """
@@ -255,7 +258,9 @@ class DataHandler(QObject):
         self.calc_minmax()
         self.df = self.df.with_columns(
             pl.repeat(1, self.df.height, dtype=pl.Int8).alias("hbr_is_included"),
-            pl.repeat(1, self.df.height, dtype=pl.Int8).alias("ventilation_is_included"),
+            pl.repeat(1, self.df.height, dtype=pl.Int8).alias(
+                "ventilation_is_included"
+            ),
         )
 
     @staticmethod
@@ -429,11 +434,16 @@ class DataHandler(QObject):
         )
 
         if name_rate_interp in self.df.columns:
-            self.df = self.df.drop(name_rate_interp)
-        self.df.hstack(
-            [pl.Series(name_rate_interp, rate_interp, dtype=pl.Float64).round(1)],
-            in_place=True,
-        )
+            self.df.replace(
+                name_rate_interp,
+                pl.Series(name_rate_interp, rate_interp, dtype=pl.Float64).round(1),
+            )
+            # self.df = self.df.drop(name_rate_interp)
+        else:
+            self.df.hstack(
+                [pl.Series(name_rate_interp, rate_interp, dtype=pl.Float64).round(1)],
+                in_place=True,
+            )
 
         self.rate.update(name, rate_no_interp)
 
@@ -527,23 +537,28 @@ class DataHandler(QObject):
 
     @Slot(str, int, int)
     def mark_excluded(self, name: SignalName, start: int, stop: int) -> None:
-        # if self.cw_df.is_empty():
-        #     self.cw_df = self.df.lazy().select(
-        #         pl.col("index", "time_s", "temperature", name, f"{name}_{self.processed_suffix}"),
-        #         pl.when((pl.col("index").is_in(self.peaks[name]))).then(True).otherwise(False).alias(f"{name}_is_peak"),
-        #         pl.repeat(True, self.df.height, dtype=pl.Boolean).alias(f"{name}_is_included")
-        #     ).collect()
         if len(self.exclusion_ranges[name]) == 0:
             setattr(self, f"_{name}_all", self.df.lazy().clone())
         self.exclusion_ranges.add_range(name, start, stop)
         self.df = self.df.with_columns(
-            pl.when((pl.col("index").is_between(start, stop))).then(None).otherwise(pl.col(f"{name}_is_included")).alias(f"{name}_is_included")
+            pl.when((pl.col("index").is_between(start, stop)))
+            .then(None)
+            .otherwise(pl.col(f"{name}_is_included"))
+            .alias(f"{name}_is_included")
         )
-        self.df = self.df.drop_nulls()
+        self.df.drop_nulls(f"{name}_is_included")
 
     def reset_exclusions(self, name: SignalName) -> None:
         init_df: pl.LazyFrame = getattr(self, f"_{name}_all")
         self.df = init_df.collect()
+
+    # def apply_exclusion_mask(self, name: SignalName) -> None:
+    # sub_sections = []
+    # for masked_range in self.exclusion_ranges[name]:
+    # sub_df = self.df.slice(masked_range.start, masked_range.stop - masked_range.start)
+    # sub_sections.append(sub_df)
+    # lr_marker = pg.LinearRegionItem(values=(masked_range.start, masked_range.stop), movable=False)
+
 
 class CompactDFModel(QAbstractTableModel):
     """
@@ -609,6 +624,8 @@ class CompactDFModel(QAbstractTableModel):
                 return "..."
             if "index" in col_name or "peak" in col_name:
                 return f"{int(self._data[row][column]):_}"
+            elif "is_included" in col_name:
+                return f"{self._data[row][column]}"
             elif "time" in col_name:
                 return f"{float(self._data[row][column]):_.5f}"
             elif "rate" in col_name:

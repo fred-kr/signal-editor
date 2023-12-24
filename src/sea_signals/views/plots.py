@@ -191,11 +191,18 @@ type PlotContentValue = pg.PlotDataItem | pg.ScatterPlotItem | pg.InfiniteLine
 
 
 @dataclass(slots=True, kw_only=True)
+class ExcludedRegions:
+    hbr: list[pg.LinearRegionItem] = field(default_factory=list)
+    ventilation: list[pg.LinearRegionItem] = field(default_factory=list)
+
+
+@dataclass(slots=True, kw_only=True)
 class PlotContent:
     signal: pg.PlotDataItem | None = None
     peaks: pg.ScatterPlotItem | None = None
     rate: pg.PlotDataItem | None = None
     rate_mean: pg.InfiniteLine | None = None
+    excluded_regions: list[pg.LinearRegionItem] | None = None
 
     def __getitem__(self, key: PlotContentProp) -> PlotContentValue | None:
         return getattr(self, key, None)
@@ -373,6 +380,7 @@ class PlotHandler(QObject):
 
         for pw, name in plot_widgets:
             plot_item = pw.getPlotItem()
+
             plot_item.showGrid(x=False, y=True)
             plot_item.getViewBox().enableAutoRange("y")
             plot_item.setDownsampling(auto=True)
@@ -740,7 +748,7 @@ class PlotHandler(QObject):
         rect_x, rect_width = int(rect[0]), int(rect[2])
 
         x_range = (rect_x, rect_x + rect_width)
-
+        lr_marker = pg.LinearRegionItem(values=x_range, movable=False)
         self.sig_excluded_range.emit(name, x_range[0], x_range[1])
 
     def get_state(self) -> PeakEdits:

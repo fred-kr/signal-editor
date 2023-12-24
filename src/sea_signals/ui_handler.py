@@ -16,11 +16,10 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QActionGroup, QStandardItemModel
+from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QDockWidget,
     QVBoxLayout,
-    QWidget,
 )
 
 from .models.io import parse_file_name
@@ -182,6 +181,45 @@ INITIAL_STATE_METHODS_MAP = {
     "date": "setDate",
 }
 
+FILTER_INPUT_STATES = {
+    "butterworth": {
+        "container_lowcut": True,
+        "container_highcut": True,
+        "container_order_inputs": True,
+        "container_window_size": False,
+    },
+    "butterworth_ba": {
+        "container_lowcut": True,
+        "container_highcut": True,
+        "container_order_inputs": True,
+        "container_window_size": False,
+    },
+    "bessel": {
+        "container_lowcut": True,
+        "container_highcut": True,
+        "container_order_inputs": True,
+        "container_window_size": False,
+    },
+    "fir": {
+        "container_lowcut": True,
+        "container_highcut": True,
+        "container_order_inputs": False,
+        "container_window_size": True,
+    },
+    "savgol": {
+        "container_lowcut": False,
+        "container_highcut": False,
+        "container_order_inputs": True,
+        "container_window_size": True,
+    },
+    "None": {
+        "container_lowcut": False,
+        "container_highcut": False,
+        "container_order_inputs": False,
+        "container_window_size": False,
+    },
+}
+
 
 class UIHandler(QObject):
     sig_filter_inputs_ready = Signal()
@@ -213,7 +251,7 @@ class UIHandler(QObject):
         self._prepare_toolbars()
 
         # Plots
-        self._prepare_plots()
+        self._setup_active_plot_btn_grp()
         self.create_plot_widgets()
 
         # Console
@@ -231,7 +269,7 @@ class UIHandler(QObject):
         # Peak Detection
         self.window.combo_box_peak_detection_method.setCurrentIndex(0)
 
-    def _prepare_plots(self) -> None:
+    def _setup_active_plot_btn_grp(self) -> None:
         self.window.stacked_hbr_vent.setCurrentIndex(0)
         self.window.btn_group_plot_view.setId(self.window.btn_view_hbr, 0)
         self.window.btn_group_plot_view.setId(self.window.btn_view_vent, 1)
@@ -260,11 +298,6 @@ class UIHandler(QObject):
 
     def _prepare_toolbars(self) -> None:
         self.window.toolbar_plots.setVisible(False)
-
-        # self.action_group_mouse_mode = QActionGroup(self.window)
-        # self.action_group_mouse_mode.setExclusive(True)
-        # self.action_group_mouse_mode.addAction(self.window.action_rect_mode)
-        # self.action_group_mouse_mode.addAction(self.window.action_pan_mode)
 
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():
@@ -367,26 +400,38 @@ class UIHandler(QObject):
         self.window.plot_widget_hbr.setLayout(QVBoxLayout())
         self.window.plot_widget_vent.setLayout(QVBoxLayout())
 
-        self.window.plot_widget_hbr.layout().addWidget(self.plot.plot_widgets.get_signal_widget("hbr"))
-        self.window.plot_widget_vent.layout().addWidget(self.plot.plot_widgets.get_signal_widget("ventilation"))
+        self.window.plot_widget_hbr.layout().addWidget(
+            self.plot.plot_widgets.get_signal_widget("hbr")
+        )
+        self.window.plot_widget_vent.layout().addWidget(
+            self.plot.plot_widgets.get_signal_widget("ventilation")
+        )
 
-        self.window.plot_widget_hbr.layout().addWidget(self.plot.plot_widgets.get_rate_widget("hbr"))
-        self.window.plot_widget_vent.layout().addWidget(self.plot.plot_widgets.get_rate_widget("ventilation"))
+        self.window.plot_widget_hbr.layout().addWidget(
+            self.plot.plot_widgets.get_rate_widget("hbr")
+        )
+        self.window.plot_widget_vent.layout().addWidget(
+            self.plot.plot_widgets.get_rate_widget("ventilation")
+        )
 
         self.temperature_label_hbr = pg.LabelItem(
-            text="Temperature: -",
+            text="<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: -</span>",
             parent=self.plot.plot_widgets.get_signal_widget("hbr").plotItem,
             angle=0,
         )
         self.temperature_label_ventilation = pg.LabelItem(
-            text="Temperature: -",
+            text="<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: -</span>",
             parent=self.plot.plot_widgets.get_signal_widget("ventilation").plotItem,
             angle=0,
         )
-        self.plot.plot_widgets.get_signal_widget("hbr").plotItem.scene().sigMouseMoved.connect(
+        self.plot.plot_widgets.get_signal_widget(
+            "hbr"
+        ).plotItem.scene().sigMouseMoved.connect(
             lambda pos: self.update_temperature_label("hbr", pos)
         )
-        self.plot.plot_widgets.get_signal_widget("ventilation").plotItem.scene().sigMouseMoved.connect(
+        self.plot.plot_widgets.get_signal_widget(
+            "ventilation"
+        ).plotItem.scene().sigMouseMoved.connect(
             lambda pos: self.update_temperature_label("ventilation", pos)
         )
 
@@ -397,7 +442,9 @@ class UIHandler(QObject):
         if self.window.data.df.is_empty():
             return
         data_pos = int(
-            self.plot.plot_widgets.get_signal_widget(signal_name).plotItem.vb.mapSceneToView(pos).x()
+            self.plot.plot_widgets.get_signal_widget(signal_name)
+            .plotItem.vb.mapSceneToView(pos)
+            .x()
         )
         try:
             temp_value = self.window.data.df.get_column("temperature").to_numpy(
@@ -414,10 +461,12 @@ class UIHandler(QObject):
                 zero_copy_only=True
             )[default_index]
         if signal_name == "hbr":
-            self.temperature_label_hbr.setText(f"Temperature: {temp_value:.1f}°C")
+            self.temperature_label_hbr.setText(
+                f"<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: {temp_value:.1f} °C, cursor position: {data_pos}</span>"
+            )
         elif signal_name == "ventilation":
             self.temperature_label_ventilation.setText(
-                f"Temperature: {temp_value:.1f}°C, cursor position: {data_pos}"
+                f"<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: {temp_value:.1f} °C, cursor position: {data_pos}</span>"
             )
         self.window.statusbar.showMessage(
             f"Temperature: {temp_value:.1f}°C, {data_pos=}"
@@ -447,7 +496,7 @@ class UIHandler(QObject):
         )
         self.console_dock = QDockWidget("Console")
         self.console_dock.setWidget(self.console)
-        self.console_dock.setMinimumSize(600, 300)
+        self.console_dock.setMinimumSize(800, 600)
         self.console_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
         self.console_dock.setFeatures(
             QDockWidget.DockWidgetFeature.DockWidgetFloatable
@@ -467,41 +516,8 @@ class UIHandler(QObject):
     def handle_filter_method_changed(self, text: str) -> None:
         method = cast(FilterMethod, self.window.combo_box_filter_method.value())
 
-        if method != "None":
-            states = {
-                "butterworth": {
-                    "container_lowcut": True,
-                    "container_highcut": True,
-                    "container_order_inputs": True,
-                    "container_window_size": False,
-                },
-                "butterworth_ba": {
-                    "container_lowcut": True,
-                    "container_highcut": True,
-                    "container_order_inputs": True,
-                    "container_window_size": False,
-                },
-                "bessel": {
-                    "container_lowcut": True,
-                    "container_highcut": True,
-                    "container_order_inputs": True,
-                    "container_window_size": False,
-                },
-                "fir": {
-                    "container_lowcut": True,
-                    "container_highcut": True,
-                    "container_order_inputs": False,
-                    "container_window_size": True,
-                },
-                "savgol": {
-                    "container_lowcut": False,
-                    "container_highcut": False,
-                    "container_order_inputs": True,
-                    "container_window_size": True,
-                },
-            }
-            for widget_name, enabled in states[method].items():
-                getattr(self.window, widget_name).setEnabled(enabled)
+        for widget_name, enabled in FILTER_INPUT_STATES[method].items():
+            getattr(self.window, widget_name).setEnabled(enabled)
 
         self.sig_filter_inputs_ready.emit()
 
