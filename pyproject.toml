@@ -1,14 +1,14 @@
 [tool.poetry]
-name = "sea-signals"
-version = "0.1.0"
+name = "signal-editor"
+version = "0.2.0"
 description = ""
 authors = ["Frederik Krämer <frdrkkraemer@gmail.com>"]
 readme = "README.md"
-packages = [{include = "sea_signals", from = "src"}]
+packages = [{ include = "signal_editor", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
-pyqtgraph = {git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "master"}
+pyqtgraph = { git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "master" }
 pyopengl-accelerate = "^3.1.7"
 pyarrow = "^14.0.1"
 wfdb = "^4.1.2"

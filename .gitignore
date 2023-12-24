@@ -155,3 +155,4 @@ comment-files
 **/dist/**
 build/
 **/_internal
+pickles/
