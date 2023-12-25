@@ -2,15 +2,13 @@ import datetime
 from typing import TYPE_CHECKING, Any, NotRequired
 
 import numpy as np
-from numpy.typing import ArrayLike
 from PySide6.QtGui import QBrush, QPainter, QPainterPath, QPen
+from numpy.typing import ArrayLike
 from typing_extensions import Literal, TypedDict
+import pyqtgraph as pg
 
 if TYPE_CHECKING:
-    import pyqtgraph as pg
-
-    from .views.plots import CustomViewBox
-
+    from .handlers.plot_handler import CustomViewBox
 # ==================================================================================== #
 #                                     TYPE ALIASES                                     #
 # ==================================================================================== #
@@ -259,5 +257,5 @@ class PlotItemKargs(TypedDict):
     labels: dict[str, str] | None
     title: str | None
     viewBox: "pg.ViewBox | CustomViewBox | None"
-    axisItems: "dict[str, pg.AxisItem] | None"
+    axisItems: dict[str, pg.AxisItem] | None
     enableMenu: bool

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1964</width>
+    <width>2404</width>
     <height>1224</height>
    </rect>
   </property>
@@ -124,7 +124,7 @@
           </attribute>
          </widget>
         </item>
-        <item row="1" column="1">
+        <item row="3" column="0">
          <widget class="QFrame" name="container_text_info">
           <layout class="QVBoxLayout" name="verticalLayout_8">
            <item>
@@ -440,7 +440,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                </widget>
               </item>
               <item row="1" column="3">
-               <widget class="QPushButton" name="btn_export_to_excel">
+               <widget class="FeedbackButton" name="btn_export_to_excel">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
                   <horstretch>0</horstretch>
@@ -459,7 +459,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                </widget>
               </item>
               <item row="1" column="2">
-               <widget class="QPushButton" name="btn_export_to_text">
+               <widget class="FeedbackButton" name="btn_export_to_text">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
                   <horstretch>0</horstretch>
@@ -478,7 +478,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                </widget>
               </item>
               <item row="1" column="1">
-               <widget class="QPushButton" name="btn_export_to_csv">
+               <widget class="FeedbackButton" name="btn_export_to_csv">
                 <property name="sizePolicy">
                  <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
                   <horstretch>0</horstretch>
@@ -529,7 +529,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
          </widget>
         </item>
         <item row="6" column="1">
-         <widget class="QPushButton" name="btn_save_to_hdf5">
+         <widget class="FeedbackButton" name="btn_save_to_hdf5">
           <property name="minimumSize">
            <size>
             <width>0</width>
@@ -556,7 +556,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1964</width>
+     <width>2404</width>
      <height>22</height>
     </rect>
    </property>
@@ -568,7 +568,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
      <bool>true</bool>
     </property>
     <addaction name="separator"/>
-    <addaction name="action_show_roi"/>
+    <addaction name="action_remove_peak_rect"/>
     <addaction name="action_remove_selected_peaks"/>
     <addaction name="separator"/>
    </widget>
@@ -580,6 +580,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <addaction name="separator"/>
     <addaction name="action_save_state"/>
     <addaction name="action_load_state"/>
+    <addaction name="separator"/>
+    <addaction name="action_exit"/>
    </widget>
    <widget class="QMenu" name="menu_info">
     <property name="title">
@@ -587,9 +589,16 @@ li.checked::marker { content: &quot;\2612&quot;; }
     </property>
     <addaction name="action_toggle_whats_this_mode"/>
    </widget>
+   <widget class="QMenu" name="menuDebug">
+    <property name="title">
+     <string>Debug</string>
+    </property>
+    <addaction name="action_open_console"/>
+   </widget>
    <addaction name="menu_file"/>
    <addaction name="menu_info"/>
    <addaction name="menu_editing_tools"/>
+   <addaction name="menuDebug"/>
   </widget>
   <widget class="QToolBar" name="toolbar">
    <property name="windowTitle">
@@ -619,14 +628,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="action_open_console"/>
+   <addaction name="action_select_file"/>
+   <addaction name="action_save_to_hdf5"/>
    <addaction name="separator"/>
    <addaction name="action_save_state"/>
    <addaction name="action_load_state"/>
-   <addaction name="separator"/>
-   <addaction name="action_run_preprocessing"/>
-   <addaction name="action_run_peak_detection"/>
-   <addaction name="action_get_results"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <widget class="QDockWidget" name="dock_widget_sidebar">
@@ -985,7 +991,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
              </widget>
             </item>
             <item row="8" column="0" colspan="2">
-             <widget class="QPushButton" name="btn_load_selection">
+             <widget class="FeedbackButton" name="btn_load_selection">
               <property name="enabled">
                <bool>false</bool>
               </property>
@@ -1141,7 +1147,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
        <widget class="QWidget" name="sidebar_page_plots">
         <layout class="QGridLayout" name="gridLayout_6">
          <item row="7" column="1">
-          <widget class="QPushButton" name="btn_compute_results">
+          <widget class="FeedbackButton" name="btn_compute_results">
            <property name="enabled">
             <bool>false</bool>
            </property>
@@ -1527,8 +1533,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
                     <property name="suffix">
                      <string> Hz</string>
                     </property>
+                    <property name="decimals">
+                     <number>1</number>
+                    </property>
                     <property name="maximum">
-                     <double>999.990000000000009</double>
+                     <double>1000.000000000000000</double>
                     </property>
                     <property name="singleStep">
                      <double>0.100000000000000</double>
@@ -1629,8 +1638,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
                     <property name="suffix">
                      <string> Hz</string>
                     </property>
+                    <property name="decimals">
+                     <number>1</number>
+                    </property>
                     <property name="maximum">
-                     <double>999.990000000000009</double>
+                     <double>1000.000000000000000</double>
                     </property>
                     <property name="singleStep">
                      <double>0.100000000000000</double>
@@ -1802,6 +1814,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
                     <property name="suffix">
                      <string> Hz</string>
                     </property>
+                    <property name="decimals">
+                     <number>1</number>
+                    </property>
                     <property name="maximum">
                      <double>500.000000000000000</double>
                     </property>
@@ -1892,7 +1907,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
           </widget>
          </item>
          <item row="7" column="0">
-          <widget class="QPushButton" name="btn_detect_peaks">
+          <widget class="FeedbackButton" name="btn_detect_peaks">
            <property name="enabled">
             <bool>true</bool>
            </property>
@@ -1926,7 +1941,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
           </widget>
          </item>
          <item row="3" column="0" colspan="2">
-          <widget class="QPushButton" name="btn_apply_filter">
+          <widget class="FeedbackButton" name="btn_apply_filter">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
              <horstretch>0</horstretch>
@@ -2167,8 +2182,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <property name="windowTitle">
     <string>toolbar_plots</string>
    </property>
-   <property name="layoutDirection">
-    <enum>Qt::RightToLeft</enum>
+   <property name="movable">
+    <bool>false</bool>
    </property>
    <property name="allowedAreas">
     <set>Qt::RightToolBarArea|Qt::TopToolBarArea</set>
@@ -2188,11 +2203,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="action_remove_selected_peaks"/>
-   <addaction name="action_show_roi"/>
+   <addaction name="action_reset_view"/>
    <addaction name="separator"/>
-   <addaction name="action_mark_excluded"/>
-   <addaction name="action_show_del_roi"/>
+   <addaction name="action_remove_selected_peaks"/>
+   <addaction name="action_remove_peak_rect"/>
+   <addaction name="separator"/>
+   <addaction name="action_remove_selected_data"/>
+   <addaction name="action_remove_deletion_rect"/>
   </widget>
   <action name="action_open_console">
    <property name="checked">
@@ -2266,16 +2283,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <action name="action_update_result">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/output_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/output_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material-symbols/refresh_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/refresh_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Update result preview</string>
    </property>
    <property name="toolTip">
     <string>Updates the results from the current values, viewable in the &quot;Results&quot; tab</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+S</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
@@ -2324,24 +2338,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="toolTip">
     <string>Adjusts the plot view to include all existing values</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+Shift+A</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
-  <action name="action_redraw_with_current_values">
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/refresh_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/refresh_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Redraw plot</string>
-   </property>
-   <property name="toolTip">
-    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Re-draws the plots using the current values from the input widgets, unless there is no difference between the previous and current input values, in which case it just resets the view to show the entire dataset without changing anything.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+R</string>
@@ -2407,13 +2403,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_show_roi">
+  <action name="action_remove_peak_rect">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
      <normaloff>:/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Toggle peak selection</string>
+    <string>Hide blue rectangle</string>
    </property>
    <property name="toolTip">
     <string>Hides/shows the selection rectangle for removing multiple peaks at once. Shortcut: Ctrl+F</string>
@@ -2479,7 +2475,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
      <normaloff>:/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Remove Selected</string>
+    <string>Remove Selected Peaks</string>
    </property>
    <property name="toolTip">
     <string>Remove the peaks inside the selection rectangle. Shortcut: Ctrl+D</string>
@@ -2524,31 +2520,31 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_mark_excluded">
+  <action name="action_remove_selected_data">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
      <normaloff>:/material-symbols/variable_remove_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/variable_remove_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Mark as Excluded</string>
+    <string>Remove Selected Section</string>
    </property>
    <property name="toolTip">
-    <string>Sets the data inside the red selection rectangle to null and prevent its inclusion in the calculations for the result</string>
+    <string>Removes the data between the left and right selection bounds (red rectangle)</string>
    </property>
    <property name="shortcut">
     <string>Alt+D</string>
    </property>
    <property name="menuRole">
-    <enum>QAction::NoRole</enum>
+    <enum>QAction::ApplicationSpecificRole</enum>
    </property>
   </action>
-  <action name="action_show_del_roi">
+  <action name="action_remove_deletion_rect">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
      <normaloff>:/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Toggle data selection</string>
+    <string>Remove red rectangle</string>
    </property>
    <property name="toolTip">
     <string>Toggles visibility of data exclusion rectangle. Shortcut: Alt+F</string>
@@ -2560,11 +2556,34 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
+  <action name="action_save_to_hdf5">
+   <property name="icon">
+    <iconset resource="../../resources/icons/icons.qrc">
+     <normaloff>:/material-symbols/save_as_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/save_as_FILL0_wght400_GRAD0_opsz24.png</iconset>
+   </property>
+   <property name="text">
+    <string>Save to HDF5</string>
+   </property>
+   <property name="toolTip">
+    <string>Store results as a HDF5 file</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
  </widget>
  <customwidgets>
   <customwidget>
    <class>ComboBox</class>
    <extends>QComboBox</extends>
+   <header>pyqtgraph</header>
+  </customwidget>
+  <customwidget>
+   <class>FeedbackButton</class>
+   <extends>QPushButton</extends>
    <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>

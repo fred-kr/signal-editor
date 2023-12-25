@@ -22,18 +22,18 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from .models.io import parse_file_name
-from .models.peaks import UIPeakDetection
-from .type_aliases import (
+from ..handlers.plot_handler import PlotHandler
+from ..models.io import parse_file_name
+from ..models.peaks import UIPeakDetection
+from ..type_aliases import (
     FilterMethod,
     PeakDetectionMethod,
     Pipeline,
     SignalName,
 )
-from .views.plots import PlotHandler
 
 if TYPE_CHECKING:
-    from .app import MainWindow
+    from ..app import MainWindow
 
 COMBO_BOX_ITEMS = {
     "combo_box_peak_detection_method": {
@@ -387,7 +387,7 @@ class UIHandler(QObject):
         try:
             self.peak_params.set_method(method)
         except NotImplementedError as e:
-            self.window.sig_show_message.emit(str(e), "warning")
+            self.window.sig_show_message.emit(str(e), "info")
 
     @Slot(int)
     def on_main_tab_changed(self, index: int) -> None:

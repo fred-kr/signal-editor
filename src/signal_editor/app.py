@@ -5,6 +5,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
+import time
 from typing import Any, Literal, TypedDict, cast
 
 import h5py
@@ -12,7 +13,6 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 import qdarkstyle
-from loguru import logger
 from PySide6.QtCore import (
     QAbstractTableModel,
     QByteArray,
@@ -24,7 +24,7 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -34,11 +34,13 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTableView,
 )
+from loguru import logger
 
+from .handlers.data_handler import DescriptiveStatistics, DataHandler
+from .handlers.plot_handler import PlotHandler
+from .handlers.ui_handler import UIHandler
 from .models.data import (
     CompactDFModel,
-    DataHandler,
-    DescriptiveStatistics,
     DescriptiveStatsModel,
     PolarsModel,
 )
@@ -54,9 +56,7 @@ from .type_aliases import (
     SignalName,
     StandardizeParameters,
 )
-from .ui_handler import UIHandler
 from .views.main_window import Ui_MainWindow
-from .views.plots import PlotHandler
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -113,7 +113,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         super(MainWindow, self).__init__()
         self.setupUi(self)
         self._add_style_toggle()
-        self.active_style = "dark"
+        self.active_style: Literal["light", "dark"] = "dark"
         self.setWindowTitle("Signal Editor")
         self._app_dir: Path = Path.cwd()
         self._data_dir: Path = Path.cwd()
@@ -196,6 +196,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         self.plot.set_style("dark")
         self.active_style = "dark"
+
     # endregion Theme Switcher
     def connect_signals(self) -> None:
         """
@@ -209,6 +210,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.sig_plot_data_changed.connect(self._update_plot_view)
         self.sig_show_message.connect(self.show_message)
         self.sig_data_restored.connect(self.refresh_app_state)
+        self.sig_data_loaded.connect(lambda: self.tabs_main.setCurrentIndex(1))
 
         self.btn_apply_filter.clicked.connect(self.handle_apply_filter)
         self.btn_detect_peaks.clicked.connect(self.handle_peak_detection)
@@ -230,23 +232,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.stacked_hbr_vent.setCurrentIndex
         )
 
-        self.action_exit.triggered.connect(self.closeEvent)
+        self.action_exit.triggered.connect(self.close)
         self.action_select_file.triggered.connect(self.select_data_file)
-        self.action_show_roi.triggered.connect(self.plot.show_region_selector)
+        self.action_remove_peak_rect.triggered.connect(self.plot.show_region_selector)
         self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected)
         self.action_run_peak_detection.triggered.connect(self.handle_peak_detection)
         self.action_run_preprocessing.triggered.connect(self.handle_apply_filter)
         self.action_get_results.triggered.connect(self.update_results)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_load_state.triggered.connect(self.restore_state)
-        self.action_show_del_roi.triggered.connect(self.plot.show_exclusion_selector)
-        self.action_mark_excluded.triggered.connect(self.plot.mark_excluded)
+        self.action_remove_deletion_rect.triggered.connect(self.plot.show_exclusion_selector)
+        self.action_remove_selected_data.triggered.connect(self.plot.mark_excluded)
 
         self.spin_box_fs.valueChanged.connect(self.data.update_fs)
 
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
         self.plot.sig_peaks_edited.connect(self._sync_peaks_data_plot)
         self.plot.sig_excluded_range.connect(self.data.mark_excluded)
+
+        self.action_reset_view.triggered.connect(lambda: self.plot.reset_views(self.data.df.height))
 
     @Slot(str)
     def _sync_peaks_data_plot(self, name: SignalName) -> None:
@@ -299,7 +303,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 for signal_type in ["hbr", "ventilation"]:
                     grp_edit_type.create_dataset(
                         signal_type,
-                        data=result.manual_edits[edit_type][signal_type],  # type: ignore
+                        data=result.manual_edits[edit_type][signal_type],
                     )
 
             grp_result.create_dataset(
@@ -308,6 +312,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             grp_result.create_dataset(
                 "source_data", data=result.source_data.to_numpy(structured=True)
             )
+
+    def read_hdf5(self, file_path: str | Path) -> None:
+        with h5py.File(file_path, "r") as f:
+            self.restore_state()
 
     @Slot()
     def run_hdf5view(self) -> None:
@@ -343,7 +351,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot(str)
     def export_results(
-        self, file_type: Literal["csv", "excel", "txt", "feather"]
+        self, file_type: Literal["csv", "excel", "txt"]
     ) -> None:
         if not hasattr(self, f"{self.result_name}_results"):
             error_msg = f"No existing results for `{self.result_name}`. Results can be created using the `Compute Results` button in the `Plots` tab."
@@ -356,17 +364,31 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         result_table: pl.DataFrame = getattr(
             self, f"{self.result_name}_results"
         ).result_data
-        if file_type == "csv":
-            result_table.write_csv(f"{result_file_name}.csv")
-        elif file_type == "excel":
-            result_table.write_excel(f"{result_file_name}.xlsx")
-        elif file_type == "txt":
-            result_table.write_csv(f"{result_file_name}.txt", separator="\t")
-        elif file_type == "feather":
-            result_table.write_ipc(f"{result_file_name}.feather")
-        else:
-            warning_msg = f"Exporting to {file_type} is not supported."
-            self.sig_show_message.emit(warning_msg, "warning")
+        btn = None
+        try:
+            if file_type == "csv":
+                btn = self.btn_export_to_csv
+                self.btn_export_to_csv.processing()
+                result_table.write_csv(f"{result_file_name}.csv")
+                self.btn_export_to_csv.success("Success!")
+            elif file_type == "excel":
+                btn = self.btn_export_to_excel
+                self.btn_export_to_excel.processing()
+                result_table.write_excel(f"{result_file_name}.xlsx")
+                self.btn_export_to_excel.success("Success!")
+            elif file_type == "txt":
+                btn = self.btn_export_to_text
+                self.btn_export_to_text.processing()
+                result_table.write_csv(f"{result_file_name}.txt", separator="\t")
+                self.btn_export_to_text.success("Success!")
+            # elif file_type == "feather":
+            #     btn = None
+            #     result_table.write_ipc(f"{result_file_name}.feather")
+        except Exception as e:
+            if btn:
+                btn.failure("Failed!")
+            error_msg = f"Failed to export results: {e}"
+            self.sig_show_message.emit(error_msg, "error")
 
     @Slot(str, str)
     def show_message(
@@ -376,6 +398,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             "info": QMessageBox.Icon.Information,
             "warning": QMessageBox.Icon.Warning,
             "critical": QMessageBox.Icon.Critical,
+            "error": QMessageBox.Icon.Critical,
         }
         msg_box = QMessageBox(icon_map[level], "Notice", text)
         msg_box.exec()
@@ -415,6 +438,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def handle_load_selection(self) -> None:
+        self.btn_load_selection.processing()
         try:
             if self.group_box_subset_params.isChecked():
                 filter_col = self.combo_box_filter_column.currentText()
@@ -428,8 +452,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 f"Loaded {self.data.df.shape[0]} rows from {self.data.df.shape[1]} columns, size {self.data.df.estimated_size('mb'):.2f} MB"
             )
 
+            self.btn_load_selection.success("Success!")
             self.sig_data_loaded.emit()
         except Exception as e:
+            self.btn_load_selection.failure("Failed!")
             logger.error(f"Failed to load data: {e}")
             self.statusbar.showMessage(f"Failed to load data: {e}")
 
@@ -439,12 +465,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         rate_widget: pg.PlotWidget = self.plot.plot_widgets.get_rate_widget(signal_name)
         for plot_widget in [widget, rate_widget]:
             plot_item = plot_widget.getPlotItem()
-            plot_widget.getPlotItem().getViewBox().autoRange()
-            plot_item.getViewBox().enableAutoRange("y")
+            view_box = plot_item.getViewBox()
+            view_box.autoRange()
+            view_box.enableAutoRange("y")
             plot_item.setDownsampling(auto=True)
             plot_item.setClipToView(True)
-            plot_item.getViewBox().setAutoVisible(y=True)
-            plot_item.getViewBox().setMouseEnabled(x=True, y=False)
+            view_box.setAutoVisible(y=True)
+            view_box.setMouseEnabled(x=True, y=False)
 
     @Slot()
     def handle_plot_draw(self) -> None:
@@ -560,31 +587,36 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def handle_apply_filter(self) -> None:
-        with pg.BusyCursor():
-            filter_params = self.get_filter_values()
-            standardize_params = self.get_standardization_values()
+        self.btn_apply_filter.processing("Applying filter to signal...")
+        filter_start = time.perf_counter()
+        filter_params = self.get_filter_values()
+        standardize_params = self.get_standardization_values()
 
-            pipeline = cast(Pipeline, self.combo_box_preprocess_pipeline.value())
+        pipeline = cast(Pipeline, self.combo_box_preprocess_pipeline.value())
 
-            signal_name = self.signal_name
-            processed_signal_name = f"{signal_name}_{self.data.processed_suffix}"
+        signal_name = self.signal_name
+        processed_signal_name = f"{signal_name}_{self.data.processed_suffix}"
 
-            self.data.run_preprocessing(
-                name=signal_name,
-                pipeline=pipeline,
-                filter_params=filter_params,
-                standardize_params=standardize_params,
-            )
-            self.plot.draw_signal(
-                sig=self.data.df.get_column(processed_signal_name).to_numpy(),
-                plot_widget=self.plot.plot_widgets.get_signal_widget(signal_name),
-                signal_name=signal_name,
-            )
+        self.data.run_preprocessing(
+            name=signal_name,
+            pipeline=pipeline,
+            filter_params=filter_params,
+            standardize_params=standardize_params,
+        )
+        self.plot.draw_signal(
+            sig=self.data.df.get_column(processed_signal_name).to_numpy(),
+            plot_widget=self.plot.plot_widgets.get_signal_widget(signal_name),
+            signal_name=signal_name,
+        )
+        filter_stop = time.perf_counter()
+        self.btn_apply_filter.success(tip=f"Last run took {filter_stop - filter_start:.2f}s")
         self.sig_plot_data_changed.emit(signal_name)
         self.sig_data_filtered.emit(signal_name)
 
     @Slot()
     def handle_peak_detection(self) -> None:
+        self.btn_detect_peaks.processing("Detecting peaks...")
+        peak_start = time.perf_counter()
         peak_params = self.get_peak_detection_values()
         signal_name = self.signal_name
         processed_signal_name = f"{signal_name}_{self.data.processed_suffix}"
@@ -596,19 +628,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.sig_show_message.emit(info_msg, "info")
             return
 
-        with pg.BusyCursor():
-            self.data.run_peak_detection(
-                name=signal_name,
-                **peak_params,
-            )
-            peaks = self.data.peaks[signal_name]
+        self.data.run_peak_detection(
+            name=signal_name,
+            **peak_params,
+        )
+        peaks = self.data.peaks[signal_name]
 
-            self.plot.draw_peaks(
-                pos_x=peaks,
-                pos_y=self.data.df.get_column(processed_signal_name).to_numpy()[peaks],
-                plot_widget=plot_widget,
-                signal_name=signal_name,
-            )
+        self.plot.draw_peaks(
+            pos_x=peaks,
+            pos_y=self.data.df.get_column(processed_signal_name).to_numpy()[peaks],
+            plot_widget=plot_widget,
+            signal_name=signal_name,
+        )
+        peak_stop = time.perf_counter()
+        self.btn_detect_peaks.success(tip=f"Last run took {peak_stop - peak_start:.2f}s")
         self.sig_peaks_updated.emit(signal_name)
 
     @Slot(str)
@@ -629,7 +662,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.data.compute_rate(name)
         self.sig_peaks_updated.emit(name)
 
-    @Slot()
+    @Slot(QCloseEvent)
     def closeEvent(self, event: QCloseEvent) -> None:
         self._write_settings()
         if hasattr(self, "hdf5view_process") and self.hdf5view_process:
@@ -637,7 +670,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.hdf5view_process = None
         if self.ui.console_dock.isVisible():
             self.ui.console_dock.close()
-        QMainWindow.closeEvent(self, event)
+        
+        super().closeEvent(event)
 
     # region Settings ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
     def _read_settings(self) -> None:
@@ -768,39 +802,30 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     def make_results(self, result_name: SignalName) -> None:
-        with pg.ProgressDialog(
-            "Computing results...",
-            cancelText=None,
-            parent=self,
-            wait=0,  # type: ignore
-        ) as dlg:
-            dlg.setLabelText("Gathering parameters...")
-            identifier = self.get_identifier(result_name)
-            data_info = self.get_data_info()
-            processing_info = self.get_processing_info()
-            results_df = self.data.get_result_df(result_name)
-            statistics = self.data.get_descriptive_stats(result_name)
-            manual_edits = self.plot.peak_edits
-            dlg.setValue(20)
-            dlg.setLabelText("Creating result table...")
-            result_table: QTableView = getattr(
-                self, f"table_view_results_{result_name}"
-            )
-            self._set_table_model(result_table, PolarsModel(results_df))
-            dlg.setValue(70)
-            dlg.setLabelText("Creating results object...")
-            results = Result(
-                identifier=identifier,
-                info_data_selection=data_info,
-                info_data_processing=processing_info,
-                statistics=statistics,
-                result_data=results_df,
-                source_data=self.data.df,
-                manual_edits=manual_edits,
-            )
-            setattr(self, f"{result_name}_results", results)
-            dlg.setLabelText("Done!")
-            dlg.setValue(100)
+        self.btn_compute_results.processing("Getting results...")
+        
+        identifier = self.get_identifier(result_name)
+        data_info = self.get_data_info()
+        processing_info = self.get_processing_info()
+        results_df = self.data.get_result_df(result_name)
+        statistics = self.data.get_descriptive_stats(result_name)
+        manual_edits = self.plot.peak_edits
+        result_table: QTableView = getattr(
+            self, f"table_view_results_{result_name}"
+        )
+        self._set_table_model(result_table, PolarsModel(results_df))
+        results = Result(
+            identifier=identifier,
+            info_data_selection=data_info,
+            info_data_processing=processing_info,
+            statistics=statistics,
+            result_data=results_df,
+            source_data=self.data.df,
+            manual_edits=manual_edits,
+        )
+        setattr(self, f"{result_name}_results", results)
+        self.btn_compute_results.success()
+        self.tabs_main.setCurrentIndex(2)
 
     @Slot()
     def save_state(self) -> None:
@@ -849,17 +874,25 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self,
                 "Restore State",
                 self.output_dir.as_posix(),
-                "Pickle Files (*.pkl)",
+                "Pickle Files (*.pkl);;Result Files (*.hdf5 *.h5);;All Files (*.pkl *.hdf5 *.h5)",
             )
-        if file_path:
+        if not file_path:
+            return
+        if Path(file_path).suffix == ".pkl":
             try:
                 self.restore_from_pickle(file_path)
             except Exception as e:
                 msg = f"Failed to restore state: {e}"
                 self.sig_show_message.emit(msg, "warning")
-        else:
-            msg = "No state file specified. Data not restored."
-            self.sig_show_message.emit(msg, "warning")
+        elif Path(file_path).suffix in [".hdf5", ".h5"]:
+            msg = "Restore not yet implemented for HDF5 files."
+            self.sig_show_message.emit(msg, "info")
+            # TODO: implement way to load the result files for viewing
+            # try:
+            #     self.restore_from_hdf5(file_path)
+            # except Exception as e:
+            #     msg = f"Failed to restore state: {e}"
+            #     self.sig_show_message.emit(msg, "warning")
 
     def restore_input_values(
         self,

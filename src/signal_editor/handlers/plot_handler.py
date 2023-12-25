@@ -3,16 +3,28 @@ from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6 import QtGui, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QObject, QRectF, Qt, Signal, Slot
 from PySide6.QtGui import QFont
 from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
 
-from ..type_aliases import AddedPoints, PeakEdits, RemovedPoints, SignalName
+from ..type_aliases import (
+    AddedPoints,
+    PeakEdits,
+    RemovedPoints,
+    SignalName,
+    SpotItemDict,
+)
 
 if TYPE_CHECKING:
     from ..app import MainWindow
+
+
+class ScatterPlotItemError(Exception):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 class CustomViewBox(pg.ViewBox):
@@ -75,7 +87,7 @@ class CustomViewBox(pg.ViewBox):
 
     @override
     def mouseDragEvent(
-            self, ev: mouseEvents.MouseDragEvent, axis: int | float | None = None
+        self, ev: mouseEvents.MouseDragEvent, axis: int | float | None = None
     ) -> None:
         ev.accept()
 
@@ -93,14 +105,14 @@ class CustomViewBox(pg.ViewBox):
 
         def is_left_button_with_control(ev: mouseEvents.MouseDragEvent) -> bool:
             return (
-                    ev.button() == Qt.MouseButton.LeftButton
-                    and ev.modifiers() & Qt.KeyboardModifier.ControlModifier
+                ev.button() == Qt.MouseButton.LeftButton
+                and ev.modifiers() & Qt.KeyboardModifier.ControlModifier
             )
 
         def is_left_button_with_alt(ev: mouseEvents.MouseDragEvent) -> bool:
             return (
-                    ev.button() == Qt.MouseButton.LeftButton
-                    and ev.modifiers() & Qt.KeyboardModifier.AltModifier
+                ev.button() == Qt.MouseButton.LeftButton
+                and ev.modifiers() & Qt.KeyboardModifier.AltModifier
             )
 
         def is_left_button(ev: mouseEvents.MouseDragEvent) -> bool:
@@ -186,9 +198,19 @@ class CustomViewBox(pg.ViewBox):
         self.deletion_box.show()
 
 
+type CustomScatterPlotItemArgs = (
+    list[SpotItemDict]
+    | tuple[NDArray[np.float_ | np.int_], NDArray[np.float_ | np.int_]]
+)
+
+
 class CustomScatterPlotItem(pg.ScatterPlotItem):
     @override
-    def addPoints(self, *args, **kargs):
+    def addPoints(
+        self,
+        *args: Any,
+        **kargs: Any,
+    ) -> None:
         """
         Add new points to the scatter plot.
         Arguments are the same as setData()
@@ -196,19 +218,19 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
 
         ## deal with non-keyword arguments
         if len(args) == 1:
-            kargs['spots'] = args[0]
+            kargs["spots"] = args[0]
         elif len(args) == 2:
-            kargs['x'] = args[0]
-            kargs['y'] = args[1]
+            kargs["x"] = args[0]
+            kargs["y"] = args[1]
         elif len(args) > 2:
-            raise Exception('Only accepts up to two non-keyword arguments.')
+            raise ScatterPlotItemError("Only accepts up to two non-keyword arguments.")
 
         ## convert 'pos' argument to 'x' and 'y'
-        if 'pos' in kargs:
-            pos = kargs['pos']
+        if "pos" in kargs:
+            pos = kargs["pos"]
             if isinstance(pos, np.ndarray):
-                kargs['x'] = pos[:, 0]
-                kargs['y'] = pos[:, 1]
+                kargs["x"] = pos[:, 0]
+                kargs["y"] = pos[:, 1]
             else:
                 x = []
                 y = []
@@ -219,93 +241,92 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
                     else:
                         x.append(p[0])
                         y.append(p[1])
-                kargs['x'] = x
-                kargs['y'] = y
+                kargs["x"] = x
+                kargs["y"] = y
 
         ## determine how many spots we have
-        if 'spots' in kargs:
-            numPts = len(kargs['spots'])
-        elif 'y' in kargs and kargs['y'] is not None and hasattr(kargs['y'],
-                                                                 '__len__'):
-            numPts = len(kargs['y'])
-        elif 'y' in kargs and kargs['y'] is not None and not hasattr(kargs['y'],
-                                                                     '__len__'):
+        if "spots" in kargs:
+            numPts = len(kargs["spots"])
+        elif "y" in kargs and kargs["y"] is not None and hasattr(kargs["y"], "__len__"):
+            numPts = len(kargs["y"])
+        elif "y" in kargs and kargs["y"] is not None:
             numPts = 1
         else:
-            kargs['x'] = []
-            kargs['y'] = []
+            kargs["x"] = []
+            kargs["y"] = []
             numPts = 0
 
         ## Clear current SpotItems since the data references they contain will no longer be current
-        self.data['item'][...] = None
+        self.data["item"][...] = None
 
         ## Extend record array
         oldData = self.data
         self.data = np.empty(len(oldData) + numPts, dtype=self.data.dtype)
-        ## note that np.empty initializes object fields to None and string fields to ''
 
-        self.data[:len(oldData)] = oldData
-        # for i in range(len(oldData)):
-        # oldData[i]['item']._data = self.data[i]  ## Make sure items have proper reference to new array
+        self.data[: len(oldData)] = oldData
 
-        newData = self.data[len(oldData):]
-        newData['size'] = -1  ## indicates to use default size
-        newData['visible'] = True
+        newData = self.data[len(oldData) :]
+        newData["size"] = -1  ## indicates to use default size
+        newData["visible"] = True
 
-        if 'spots' in kargs:
-            spots = kargs['spots']
+        if "spots" in kargs:
+            spots = kargs["spots"]
             for i in range(len(spots)):
                 spot = spots[i]
                 for k in spot:
-                    if k == 'pos':
+                    if k == "pos":
                         pos = spot[k]
                         if isinstance(pos, QtCore.QPointF):
                             x, y = pos.x(), pos.y()
                         else:
                             x, y = pos[0], pos[1]
-                        newData[i]['x'] = x
-                        newData[i]['y'] = y
-                    elif k == 'pen':
-                        newData[i][k] = _mkPen(spot[k])
-                    elif k == 'brush':
-                        newData[i][k] = _mkBrush(spot[k])
-                    elif k in ['x', 'y', 'size', 'symbol', 'data']:
+                        newData[i]["x"] = x
+                        newData[i]["y"] = y
+                    elif k == "pen":
+                        newData[i][k] = pg.mkPen(spot[k])
+                    elif k == "brush":
+                        newData[i][k] = pg.mkBrush(spot[k])
+                    elif k in ["x", "y", "size", "symbol", "data"]:
                         newData[i][k] = spot[k]
                     else:
-                        raise Exception("Unknown spot parameter: %s" % k)
-        elif 'y' in kargs:
-            newData['x'] = kargs['x']
-            newData['y'] = kargs['y']
+                        raise ScatterPlotItemError(f"Unknown spot parameter: {k}")
+        elif "y" in kargs:
+            newData["x"] = kargs["x"]
+            newData["y"] = kargs["y"]
 
-        if 'name' in kargs:
-            self.opts['name'] = kargs['name']
-        if 'pxMode' in kargs:
-            self.setPxMode(kargs['pxMode'])
-        if 'antialias' in kargs:
-            self.opts['antialias'] = kargs['antialias']
-        if 'hoverable' in kargs:
-            self.opts['hoverable'] = bool(kargs['hoverable'])
-        if 'tip' in kargs:
-            self.opts['tip'] = kargs['tip']
-        if 'useCache' in kargs:
-            self.opts['useCache'] = kargs['useCache']
+        if "name" in kargs:
+            self.opts["name"] = kargs["name"]
+        if "pxMode" in kargs:
+            self.setPxMode(kargs["pxMode"])
+        if "antialias" in kargs:
+            self.opts["antialias"] = kargs["antialias"]
+        if "hoverable" in kargs:
+            self.opts["hoverable"] = bool(kargs["hoverable"])
+        if "tip" in kargs:
+            self.opts["tip"] = kargs["tip"]
+        if "useCache" in kargs:
+            self.opts["useCache"] = kargs["useCache"]
 
         ## Set any extra parameters provided in keyword arguments
-        for k in ['pen', 'brush', 'symbol', 'size']:
+        for k in ["pen", "brush", "symbol", "size"]:
             if k in kargs:
-                setMethod = getattr(self, 'set' + k[0].upper() + k[1:])
-                setMethod(kargs[k], update=False, dataSet=newData,
-                          mask=kargs.get('mask', None))
-            kh = 'hover' + k.title()
+                setMethod = getattr(self, f"set{k[0].upper()}{k[1:]}")
+                setMethod(
+                    kargs[k],
+                    update=False,
+                    dataSet=newData,
+                    mask=kargs.get("mask", None),
+                )
+            kh = f"hover{k.title()}"
             if kh in kargs:
                 vh = kargs[kh]
-                if k == 'pen':
-                    vh = _mkPen(vh)
-                elif k == 'brush':
-                    vh = _mkBrush(vh)
+                if k == "pen":
+                    vh = pg.mkPen(vh)
+                elif k == "brush":
+                    vh = pg.mkBrush(vh)
                 self.opts[kh] = vh
-        if 'data' in kargs:
-            self.setPointData(kargs['data'], dataSet=newData)
+        if "data" in kargs:
+            self.setPointData(kargs["data"], dataSet=newData)
 
         self.prepareGeometryChange()
         self.informViewBoundsChanged()
@@ -363,19 +384,18 @@ class Plots:
             setattr(self, key, value)
 
     def set_plot_item(
-            self, key: SignalName, item_name: PlotContentProp,
-            item_value: PlotContentValue
+        self, key: SignalName, item_name: PlotContentProp, item_value: PlotContentValue
     ) -> None:
         self[key][item_name] = item_value
 
     def get_plot_item(
-            self, key: SignalName, item_name: PlotContentProp
+        self, key: SignalName, item_name: PlotContentProp
     ) -> PlotContentValue:
         return self[key][item_name]
 
 
 def make_plot_widget(
-        background_color: str, view_box: pg.ViewBox | CustomViewBox | None = None
+    background_color: str, view_box: pg.ViewBox | CustomViewBox | None = None
 ) -> pg.PlotWidget:
     return pg.PlotWidget(
         viewBox=view_box,
@@ -427,8 +447,8 @@ class PlotHandler(QObject):
     sig_excluded_range = Signal(str, int, int)
 
     def __init__(
-            self,
-            parent: "MainWindow",
+        self,
+        parent: "MainWindow",
     ):
         super().__init__(parent=parent)
         self._parent = parent
@@ -462,7 +482,7 @@ class PlotHandler(QObject):
 
     @staticmethod
     def set_plot_titles_and_labels(
-            plot_item: pg.PlotItem, title: str, left_label: str, bottom_label: str
+        plot_item: pg.PlotItem, title: str, left_label: str, bottom_label: str
     ) -> None:
         plot_item.setTitle(title)
         plot_item.setLabel(axis="left", text=left_label)
@@ -521,8 +541,7 @@ class PlotHandler(QObject):
                 brush="transparent",
                 colCount=2,
             )
-            plot_item.legend.anchor(itemPos=(0, 1), parentPos=(0, 1),
-                                    offset=(5, -5))  # type: ignore
+            plot_item.legend.anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(5, -5))  # type: ignore
             plot_item.register(name)
             plot_item.getViewBox().setAutoVisible(y=True)
             plot_item.setMouseEnabled(x=True, y=False)
@@ -543,7 +562,7 @@ class PlotHandler(QObject):
             rate_pw.getPlotItem().getViewBox().setMouseMode(pg.ViewBox.RectMode)
 
     def _set_plot_labels(
-            self, color: str, font_family: str = "Segoe UI", title_font_size: int = 12
+        self, color: str, font_family: str = "Segoe UI", title_font_size: int = 12
     ) -> None:
         self.set_plot_titles_and_labels(
             self.plot_widgets.get_signal_widget("hbr").getPlotItem(),
@@ -570,14 +589,6 @@ class PlotHandler(QObject):
             bottom_label=f"<span style='color: {color};'>n samples</span>",
         )
 
-    # @Slot(QPointF)
-    # def update_target_pos(self, signal_name: SignalName, pos: QPointF) -> None:
-    #     # scene_pos: QPointF = getattr(
-    #         # self, f"{signal_name}_plot_widget"
-    #     # ).plotItem.vb.mapSceneToView(pos)
-    #     scene_pos: QPointF = self.plot_widgets.get_signal_widget(signal_name).plotItem.vb.mapSceneToView(pos)
-    #     getattr(self, f"{signal_name}_target").setPos(scene_pos)
-
     @Slot()
     def reset_plots(self) -> None:
         for name in {"hbr", "ventilation"}:
@@ -590,11 +601,18 @@ class PlotHandler(QObject):
 
         self._prepare_plot_items()
 
+    @Slot(int)
+    def reset_views(self, upper_range: int) -> None:
+        for name in {"hbr", "ventilation"}:
+            name = cast(SignalName, name)
+            self.plot_widgets.get_signal_widget(name).getPlotItem().getViewBox().setXRange(0, upper_range)
+            self.plot_widgets.get_rate_widget(name).getPlotItem().getViewBox().setXRange(0, upper_range)
+            
     def draw_signal(
-            self,
-            sig: NDArray[np.float32 | np.float64],
-            plot_widget: pg.PlotWidget,
-            signal_name: SignalName,
+        self,
+        sig: NDArray[np.float32 | np.float64],
+        plot_widget: pg.PlotWidget,
+        signal_name: SignalName,
     ) -> None:
         color = "crimson" if signal_name == "hbr" else "royalblue"
         signal_line = pg.PlotDataItem(
@@ -629,16 +647,16 @@ class PlotHandler(QObject):
         self.plot_items[signal_name]["signal"] = signal_line
 
     def draw_peaks(
-            self,
-            pos_x: NDArray[np.int32],
-            pos_y: NDArray[np.float32 | np.float64],
-            plot_widget: pg.PlotWidget,
-            signal_name: SignalName,
+        self,
+        pos_x: NDArray[np.int32],
+        pos_y: NDArray[np.float32 | np.float64],
+        plot_widget: pg.PlotWidget,
+        signal_name: SignalName,
     ) -> None:
         brush_color = "goldenrod"
         hover_brush_color = "red"
 
-        peaks_scatter = pg.ScatterPlotItem(
+        peaks_scatter = CustomScatterPlotItem(
             x=pos_x,
             y=pos_y,
             pxMode=True,
@@ -667,11 +685,11 @@ class PlotHandler(QObject):
         self.plot_items[signal_name]["peaks"] = peaks_scatter
 
     def draw_rate(
-            self,
-            rate_data: NDArray[np.float32 | np.float64],
-            plot_widget: pg.PlotWidget,
-            signal_name: SignalName,
-            **kwargs: float,
+        self,
+        rate_data: NDArray[np.float32 | np.float64],
+        plot_widget: pg.PlotWidget,
+        signal_name: SignalName,
+        **kwargs: float,
     ) -> None:
         rate_mean = kwargs.get(
             "mean_peak_interval", np.mean(rate_data, dtype=np.float64)
@@ -723,10 +741,10 @@ class PlotHandler(QObject):
 
     @Slot(object, object, object)
     def remove_clicked_point(
-            self,
-            sender: pg.ScatterPlotItem,
-            points: np.ndarray[pg.SpotItem, Any],
-            ev: mouseEvents.MouseClickEvent,
+        self,
+        sender: pg.ScatterPlotItem,
+        points: np.ndarray[pg.SpotItem, Any],
+        ev: mouseEvents.MouseClickEvent,
     ) -> None:
         """
         Remove clicked point from plot.
@@ -801,7 +819,7 @@ class PlotHandler(QObject):
 
     @Slot(object, object)
     def add_clicked_point(
-            self, sender: pg.PlotCurveItem, ev: mouseEvents.MouseClickEvent
+        self, sender: pg.PlotCurveItem, ev: mouseEvents.MouseClickEvent
     ) -> None:
         """
         Add scatter point to plot.
@@ -852,17 +870,19 @@ class PlotHandler(QObject):
     def show_region_selector(self) -> None:
         name = self._parent.signal_name
         plot_widget = self.plot_widgets.get_signal_widget(name)
-        view_box = plot_widget.getPlotItem().getViewBox()
+        view_box = cast(CustomViewBox, plot_widget.getPlotItem().getViewBox())
         selection_box = view_box.selection_box
         selection_box.setVisible(not selection_box.isVisible())
+        selection_box.setEnabled(not selection_box.isEnabled())
 
     @Slot()
     def show_exclusion_selector(self) -> None:
         name = self._parent.signal_name
         plot_widget = self.plot_widgets.get_signal_widget(name)
-        view_box = plot_widget.getPlotItem().getViewBox()
+        view_box = cast(CustomViewBox, plot_widget.getPlotItem().getViewBox())
         deletion_box = view_box.deletion_box
         deletion_box.setVisible(not deletion_box.isVisible())
+        deletion_box.setEnabled(not deletion_box.isEnabled())
 
     @Slot()
     def mark_excluded(self) -> None:

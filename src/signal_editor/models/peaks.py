@@ -1,6 +1,6 @@
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import Any, Callable, Literal, Unpack
+from typing import Any, Callable, Literal, Unpack, cast
 
 import neurokit2 as nk
 import numpy as np
@@ -14,6 +14,7 @@ from scipy import ndimage, signal, stats
 
 from ..type_aliases import (
     GeneralParameterOptions,
+    PeakDetectionInputValues,
     PeakDetectionMethod,
     PeakDetectionParameters,
     WFDBPeakDirection,
@@ -33,12 +34,12 @@ MIN_DIST = 15
 class UIPeakDetection(pTypes.GroupParameter):
     def __init__(
         self,
-        method: PeakDetectionMethod | None = None,
+        method: PeakDetectionMethod = "elgendi_ppg",
         **kwargs: Unpack[GeneralParameterOptions],
     ) -> None:
         pTypes.GroupParameter.__init__(self, **kwargs)
 
-        self._active_method = method
+        self.active_method = method
         self._relevant_children = []
         self._PARAMETER_MAP = {
             "elgendi_ppg": ELGENDI_PPG,
@@ -50,7 +51,7 @@ class UIPeakDetection(pTypes.GroupParameter):
         }
 
     def set_method(self, method: PeakDetectionMethod) -> None:
-        self._active_method = method
+        self.active_method = method
         self.clearChildren()
         if method not in self._PARAMETER_MAP:
             raise NotImplementedError(f"Method `{method}` not implemented.")
@@ -69,10 +70,10 @@ class UIPeakDetection(pTypes.GroupParameter):
         Returns:
             PeakDetectionKwargs: Dictionary with the selected method name and its parameters
         """
-        if not hasattr(self, "_active_method") or self._active_method is None:
+        if not hasattr(self, "active_method"):
             raise ValueError("No method is set. Use `set_method` to set one.")
         values = {name: self.names[name].value() for name in self._relevant_children}
-        if self._active_method == "wfdb_xqrs":
+        if self.active_method == "wfdb_xqrs":
             values["corrections"] = {
                 name: values.pop(name)
                 for name in {"search_radius", "smooth_window_size", "peak_dir"}
@@ -80,8 +81,8 @@ class UIPeakDetection(pTypes.GroupParameter):
             if values["sampto"] == 0:
                 values["sampto"] = "end"
         return PeakDetectionParameters(
-            method=self._active_method,
-            input_values=values,
+            method=cast(PeakDetectionMethod, self.active_method),
+            input_values=cast(PeakDetectionInputValues, values),
         )
 
 
