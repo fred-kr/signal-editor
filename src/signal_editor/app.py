@@ -775,10 +775,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def get_standardization_values(self) -> StandardizeParameters:
         method = cast(ScaleMethod, self.combo_box_scale_method.value())
-        window_size = self.spin_box_scale_window_size.value()
-        rolling_window = self.container_scale_window_inputs.isChecked()
+        if self.container_scale_window_inputs.isChecked():
+            window_size = self.spin_box_scale_window_size.value()
+        else:
+            window_size = None
+        # rolling_window = self.container_scale_window_inputs.isChecked()
         return StandardizeParameters(
-            method=method, window_size=window_size, rolling_window=rolling_window
+            method=method, window_size=window_size
         )
 
     def get_peak_detection_values(self) -> PeakDetectionParameters:

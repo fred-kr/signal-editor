@@ -58,8 +58,8 @@ def rolling_z(sig: pl.Series, window_size: int) -> pl.Series:
 def scale_signal(
     sig: pl.Series | NDArray[np.float32 | np.float64],
     robust: bool = False,
-    window_size: int = 500,
-    rolling_window: bool = True,
+    window_size: int | None = None,
+    # rolling_window: bool = True,
 ) -> pl.Series:
     """
     Scales a signal series using either Z-score or median absolute
@@ -92,10 +92,10 @@ def scale_signal(
         sig = pl.Series("", sig)
     sig = sig.cast(pl.Float64)
 
-    if not rolling_window:
-        return scale_mad(sig) if robust else scale_z(sig)
-    else:
+    if window_size:
         return rolling_mad(sig, window_size) if robust else rolling_z(sig, window_size)
+    else:
+        return scale_mad(sig) if robust else scale_z(sig)
 
 
 def filter_elgendi(sig: NDArray[np.float64], sampling_rate: int) -> NDArray[np.float64]:

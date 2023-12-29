@@ -2,13 +2,13 @@ import datetime
 from typing import TYPE_CHECKING, Any, NotRequired
 
 import numpy as np
+import pyqtgraph as pg
 from PySide6.QtGui import QBrush, QPainter, QPainterPath, QPen
 from numpy.typing import ArrayLike
 from typing_extensions import Literal, TypedDict
-import pyqtgraph as pg
 
 if TYPE_CHECKING:
-    from .handlers.plot_handler import CustomViewBox
+    pass
 # ==================================================================================== #
 #                                     TYPE ALIASES                                     #
 # ==================================================================================== #
@@ -97,8 +97,8 @@ class SignalFilterParameters(RequiredParameters, total=False):
 
 class StandardizeParameters(TypedDict):
     method: ScaleMethod
-    window_size: int
-    rolling_window: bool
+    window_size: int | None
+    # rolling_window: bool
 
 
 # Plot Handler +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
@@ -259,3 +259,12 @@ class PlotItemKargs(TypedDict):
     viewBox: "pg.ViewBox | CustomViewBox | None"
     axisItems: dict[str, pg.AxisItem] | None
     enableMenu: bool
+
+
+# region Signal ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+class SignalSection(TypedDict):
+    index_start: int
+    index_stop: int
+
+
+# endregion

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import polars as pl
 import pyqtgraph as pg
-import rich
+from devtools import debug
 from pyqtgraph.console import ConsoleWidget
 from pyqtgraph.parametertree import ParameterTree
 from PySide6.QtCore import (
@@ -478,14 +478,14 @@ class UIHandler(QObject):
             "pg (pyqtgraph)",
             "np (numpy)",
             "pl (polars)",
-            "rich (rich)",
+            "devtools.debug (devtools)",
         ]
         namespace: "dict[str, types.ModuleType | MainWindow]" = {
             "self": self.window,
             "pg": pg,
             "np": np,
             "pl": pl,
-            "rich": rich,
+            
         }
         startup_message = f"Available namespaces: {*module_names, = }"
         self.console = ConsoleWidget(
