@@ -1,3 +1,4 @@
+from functools import partial
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Any, Callable, Literal, Unpack, cast
@@ -93,6 +94,7 @@ def find_ppg_peaks_elgendi(
     beatwindow: float = 0.667,
     beatoffset: float = 0.02,
     mindelay: float = 0.3,
+    **kwargs: Any,
 ) -> NDArray[np.int32]:
     """
     Find the peaks in a PPG (Photoplethysmography) signal using the algorithm proposed
@@ -345,6 +347,7 @@ def find_peaks_xqrs(
     peak_dir: WFDBPeakDirection,
     sampfrom: int = 0,
     sampto: int = 0,
+    **kwargs: Any,
 ) -> NDArray[np.int32]:
     if sampto == 0:
         sampto = len(sig)
@@ -379,15 +382,15 @@ type NKECGAlgorithms = Literal[
 def neurokit2_find_peaks(
     sig: NDArray[np.float32 | np.float64],
     sampling_rate: int,
-    algorithm: NKECGAlgorithms,
+    method: NKECGAlgorithms,
     **options: Any,
 ) -> NDArray[np.int32]:
     artifact_correction = options.pop("correct_artifacts", False)
-    if algorithm == "promac":
+    if method == "promac":
         return _ecg_findpeaks_promac_sequential(
             sig, sampling_rate, artifact_correction, **options
         )
-    peak_finder = _ecg_findpeaks_findmethod(algorithm)
+    peak_finder = _ecg_findpeaks_findmethod(method)
     peaks = peak_finder(sig, sampling_rate=sampling_rate, **options)
     peaks = (
         _signal_fixpeaks_kubios(peaks, sampling_rate)[1]
@@ -528,3 +531,34 @@ def _ecg_findpeaks_promac_sequential(
         progress += 1
 
         return np.asarray(peaks, dtype=np.int32)
+
+
+def find_peak_function(method: PeakDetectionMethod) -> Callable[..., NDArray[np.int32]]:
+    if method == "elgendi_ppg":
+        func = find_ppg_peaks_elgendi
+    elif method == "local":
+        func = find_local_peaks
+    elif method == "neurokit2":
+        func = partial(neurokit2_find_peaks, method="neurokit2")
+    elif method == "pantompkins":
+        func = partial(neurokit2_find_peaks, method="pantompkins")
+    elif method == "promac":
+        func = partial(neurokit2_find_peaks, method="promac")
+    elif method == "wfdb_xqrs":
+        func = find_peaks_xqrs
+    else:
+        raise ValueError(f"Method `{method}` unknown or not implemented.")
+
+    return func
+
+
+def find_peaks(
+    sig: NDArray[np.float64],
+    sampling_rate: int,
+    method: PeakDetectionMethod,
+    input_values: PeakDetectionInputValues,
+) -> NDArray[np.int32]:
+    peak_detection_func = find_peak_function(method)
+    if method == "local":
+        return peak_detection_func(sig, **input_values)
+    return peak_detection_func(sig, sampling_rate, **input_values)

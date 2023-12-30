@@ -444,7 +444,7 @@ class PlotHandler(QObject):
 
     sig_rate_updated = Signal(str)
     sig_peaks_edited = Signal(str)
-    sig_excluded_range = Signal(str, int, int)
+    sig_excluded_range = Signal(int, int)
 
     def __init__(
         self,
@@ -900,7 +900,7 @@ class PlotHandler(QObject):
 
         x_range = (rect_x, rect_x + rect_width)
         lr_marker = pg.LinearRegionItem(values=x_range, movable=False)
-        self.sig_excluded_range.emit(name, x_range[0], x_range[1])
+        self.sig_excluded_range.emit(x_range[0], x_range[1])
 
     def get_state(self) -> PeakEdits:
         return self.peak_edits

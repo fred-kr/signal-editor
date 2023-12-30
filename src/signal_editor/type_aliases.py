@@ -8,7 +8,7 @@ from numpy.typing import ArrayLike
 from typing_extensions import Literal, TypedDict
 
 if TYPE_CHECKING:
-    pass
+    from .handlers.plot_handler import CustomViewBox
 # ==================================================================================== #
 #                                     TYPE ALIASES                                     #
 # ==================================================================================== #
@@ -156,7 +156,7 @@ class PeakDetectionPantompkins(TypedDict):
 class CorrectXQRS(TypedDict):
     search_radius: int
     smooth_window_size: int
-    peak_dir: NotRequired[WFDBPeakDirection]
+    peak_dir: NotRequired[WFDBPeakDirection] 
 
 
 class PeakDetectionXQRS(TypedDict):
@@ -178,6 +178,7 @@ type PeakDetectionInputValues = (
 class PeakDetectionParameters(TypedDict):
     method: PeakDetectionMethod
     input_values: PeakDetectionInputValues
+
 
 
 # Results ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
@@ -261,10 +262,6 @@ class PlotItemKargs(TypedDict):
     enableMenu: bool
 
 
-# region Signal ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 class SignalSection(TypedDict):
     index_start: int
     index_stop: int
-
-
-# endregion
