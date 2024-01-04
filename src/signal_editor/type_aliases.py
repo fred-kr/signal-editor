@@ -1,14 +1,18 @@
 import datetime
 from typing import TYPE_CHECKING, Any, NotRequired
 
-import numpy as np
-import pyqtgraph as pg
-from PySide6.QtGui import QBrush, QPainter, QPainterPath, QPen
-from numpy.typing import ArrayLike
+import numpy.typing as npt
+from PySide6 import QtGui
 from typing_extensions import Literal, TypedDict
 
 if TYPE_CHECKING:
-    from .handlers.plot_handler import CustomViewBox
+    from .handlers.data_handler import DataState
+    from .models.result import (
+        ManualPeakEdits,
+        ProcessingParameters,
+        SelectionParameters,
+    )
+
 # ==================================================================================== #
 #                                     TYPE ALIASES                                     #
 # ==================================================================================== #
@@ -25,24 +29,7 @@ type Pipeline = Literal[
     "ecg_engzeemod2012",
 ]
 type PeakDetectionMethod = Literal[
-    "elgendi_ppg",
-    "local",
-    "wfdb_xqrs",
-    "neurokit2",
-    "promac",
-    "pantompkins",
-    "nabian",
-    "gamboa",
-    "slopesumfunction",
-    "zong",
-    "hamilton",
-    "christov",
-    "engzeemod",
-    "elgendi",
-    "kalidas",
-    "martinez",
-    "rodrigues",
-    "vgraph",
+    "elgendi_ppg", "local", "neurokit2", "promac", "wfdb_xqrs", "pantompkins"
 ]
 type WFDBPeakDirection = Literal[
     "up",
@@ -62,49 +49,29 @@ type FilterMethod = Literal[
 type OxygenCondition = Literal["normoxic", "hypoxic", "unknown"]
 
 
-# ==================================================================================== #
-#                                  TYPED DICTIONARIES                                  #
-# ==================================================================================== #
-
-
 class FileMetadata(TypedDict):
-    date_measured: datetime.datetime
+    date_recorded: datetime.datetime
     animal_id: str
     oxygen_condition: OxygenCondition
 
 
-# File readers +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
 class EDFReaderKwargs(TypedDict, total=False):
     start: int
     stop: int | None
 
 
-# Data Handler +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-
-
-# Signal Preprocessing +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-class RequiredParameters(TypedDict):
-    method: FilterMethod
-
-
-class SignalFilterParameters(RequiredParameters, total=False):
+class SignalFilterParameters(TypedDict):
     lowcut: float | None
     highcut: float | None
+    method: FilterMethod
     order: int
     window_size: int | Literal["default"]
-    powerline: int
+    powerline: int | float
 
 
 class StandardizeParameters(TypedDict):
-    method: ScaleMethod
+    robust: bool
     window_size: int | None
-    # rolling_window: bool
-
-
-# Plot Handler +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
-class OldPeaks(TypedDict, total=False):
-    hbr: list[tuple[np.int32, np.float64]]
-    ventilation: list[tuple[np.int32, np.float64]]
 
 
 class AddedPoints(TypedDict):
@@ -122,7 +89,6 @@ class PeakEdits(TypedDict):
     removed_peaks: RemovedPoints
 
 
-# Peak Detection +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
 class PeakDetectionElgendiPPG(TypedDict):
     peakwindow: float
     beatwindow: float
@@ -156,7 +122,7 @@ class PeakDetectionPantompkins(TypedDict):
 class CorrectXQRS(TypedDict):
     search_radius: int
     smooth_window_size: int
-    peak_dir: NotRequired[WFDBPeakDirection] 
+    peak_dir: NotRequired[WFDBPeakDirection]
 
 
 class PeakDetectionXQRS(TypedDict):
@@ -180,8 +146,6 @@ class PeakDetectionParameters(TypedDict):
     input_values: PeakDetectionInputValues
 
 
-
-# Results ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
 class GeneralParameterOptions(TypedDict, total=False):
     name: str
     readonly: bool
@@ -213,55 +177,54 @@ type PGSymbols = (
         "arrow_left",  # arrow pointing left
         "crosshair",  # crosshair
     ]
-    | QPainterPath
+    | QtGui.QPainterPath
 )
 
 
 class SpotItemDict(TypedDict):
     pos: tuple[int | float, int | float]
     size: int
-    pen: QPen
-    brush: QBrush
+    pen: QtGui.QPen
+    brush: QtGui.QBrush
     symbol: PGSymbols
 
 
 class SpotItemKargs(TypedDict, total=False):
     spots: list[SpotItemDict]
-    x: ArrayLike
-    y: ArrayLike
-    pos: ArrayLike | list[tuple[int | float, int | float]]
+    x: npt.ArrayLike
+    y: npt.ArrayLike
+    pos: npt.ArrayLike | list[tuple[int | float, int | float]]
     pxMode: bool
     symbol: PGSymbols | list[PGSymbols]
-    pen: QPen | list[QPen]
-    brush: QBrush | list[QBrush]
+    pen: QtGui.QPen | list[QtGui.QPen]
+    brush: QtGui.QBrush | list[QtGui.QBrush]
     size: int | list[int]
     data: list[object]
     hoverable: bool
     tip: str | None
     hoverSymbol: PGSymbols | None
     hoverSize: int | Literal[-1]
-    hoverPen: QPen | None
-    hoverBrush: QBrush | None
+    hoverPen: QtGui.QPen | None
+    hoverBrush: QtGui.QBrush | None
     useCache: bool
     antialias: bool
-    compositionMode: QPainter.CompositionMode
+    compositionMode: QtGui.QPainter.CompositionMode
     name: str | None
-
-
-class PlotMethodKargs(TypedDict):
-    clear: bool
-    params: dict[str, Any]
-
-
-class PlotItemKargs(TypedDict):
-    name: str | None
-    labels: dict[str, str] | None
-    title: str | None
-    viewBox: "pg.ViewBox | CustomViewBox | None"
-    axisItems: dict[str, pg.AxisItem] | None
-    enableMenu: bool
 
 
 class SignalSection(TypedDict):
     index_start: int
     index_stop: int
+
+
+class StateDict(TypedDict):
+    active_signal: SignalName | str
+    source_file_path: str
+    output_dir: str
+    data_selection_params: "SelectionParameters"
+    data_processing_params: "ProcessingParameters"
+    file_metadata: FileMetadata
+    sampling_frequency: int
+    peak_edits: "dict[SignalName | str, ManualPeakEdits]"
+    data_state: "DataState"
+    stopped_at_index: int

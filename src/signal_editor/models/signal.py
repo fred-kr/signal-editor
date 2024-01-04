@@ -1,5 +1,6 @@
+import copy
 from dataclasses import dataclass, field
-from typing import NamedTuple, Unpack
+from typing import Iterable, Mapping, NamedTuple, Unpack
 
 import neurokit2 as nk
 import numpy as np
@@ -9,7 +10,6 @@ from numpy.typing import NDArray
 from ..type_aliases import (
     PeakDetectionInputValues,
     PeakDetectionMethod,
-    PeakDetectionParameters,
     Pipeline,
     SignalFilterParameters,
     SignalName,
@@ -127,6 +127,27 @@ class SignalData:
     def signal_rate(self) -> RateData:
         return self._signal_rate
 
+    def _active_is_saved(self) -> bool:
+        active_section_indices = self.active_section.get_column("index")
+        filtered_data = self.data.select(
+            "index", "temperature", self.name, self.processed_name, "is_peak"
+        ).filter(pl.col("index").is_in(active_section_indices))
+        return filtered_data.equals(self.active_section)
+
+    def get_data(self) -> pl.DataFrame:
+        """
+        Saves any changes from the currently active section to `self.data` and returns
+        it.
+
+        Returns
+        -------
+        pl.DataFrame
+            The updated `self.data` DataFrame.
+        """
+        if not self._active_is_saved():
+            self.save_active()
+        return self.data
+
     def set_active(self, start: int, stop: int) -> None:
         """
         Set the active section of the data based on the given start and stop indices.
@@ -243,7 +264,7 @@ class SignalData:
         col_name : SignalName | str | None, optional
             The name of the column to filter. If None, the name of the signal
             itself is used.
-        **kwargs : Unpack[SignalFilterParameters]
+        kwargs : Unpack[SignalFilterParameters]
             Additional keyword arguments specifying filter parameters. The
             expected parameters depend on the selected pipeline or custom
             method.
@@ -296,8 +317,10 @@ class SignalData:
             use_col = self.name
         else:
             use_col = self.processed_name
-        scaled = scale_signal(self.active_section.get_column(use_col), robust, window_size)
-        
+        scaled = scale_signal(
+            self.active_section.get_column(use_col), robust, window_size
+        )
+
         self.active_section = self.active_section.with_columns(
             (scaled).alias(self.processed_name)
         )
@@ -329,7 +352,10 @@ class SignalData:
         )
 
         # Drop the temporary active column
-        self.data = coalesced_data.drop(f"{self.processed_name}_active", "is_peak_active")
+        self.data = coalesced_data.drop(
+            f"{self.processed_name}_active", "is_peak_active"
+        )
+        self.mark_processed()
 
     def get_remaining(self) -> pl.DataFrame:
         """
@@ -337,7 +363,9 @@ class SignalData:
         """
         return self.data.filter(pl.col("is_processed").not_())
 
-    def detect_peaks(self, method: PeakDetectionMethod, input_values: PeakDetectionInputValues) -> None:
+    def detect_peaks(
+        self, method: PeakDetectionMethod, input_values: PeakDetectionInputValues
+    ) -> None:
         sig = self.active_section.get_column(self.processed_name).to_numpy()
 
         self.peaks = find_peaks(
@@ -356,12 +384,33 @@ class SignalData:
             self.active_section.filter(pl.col("is_peak")).get_column("index").to_numpy()
         )
 
-    def get_peak_diffs(self) -> NDArray[np.int32]:
+    def get_peak_diffs(self, nan_to_zero: bool = True) -> NDArray[np.int32]:
+        """
+        Calculates the differences between adjacent peaks.
+
+        Returns
+        -------
+        NDArray[np.int32]
+            If less than 2 peaks are detected, returns an empty array. Otherwise,
+            returns the differences between adjacent peaks,
+        """
         if self.peaks.size < 2:
             return np.array([], dtype=np.int32)
-        return np.ediff1d(self.peaks, to_begin=[0])
+        return (
+            np.ediff1d(self.peaks, to_begin=[0])
+            if nan_to_zero
+            else np.ediff1d(self.peaks)
+        )
 
     def calculate_rate(self) -> None:
+        """
+        Calculates signal rate using `neurokit2.signal_rate`.
+
+        Raises
+        ------
+        ValueError
+            If there are less than 3 peaks.
+        """
         peaks = self.peaks
         if peaks.size < 3:
             raise ValueError("Too few peaks to calculate rate.")
@@ -388,3 +437,37 @@ class SignalData:
             dtype=np.float64,
         )
         self.signal_rate.update(rate=rate, rate_interpolated=rate_interp)
+
+
+class SignalStorage(Mapping[SignalName | str, SignalData]):
+    """
+    A container for SignalData objects.
+    """
+
+    def __init__(self, signal_items: Iterable[SignalData] = ()) -> None:
+        """
+        Initialize the SignalStore.
+
+        Parameters
+        ----------
+        signal_items : Iterable[SignalData], optional
+            SignalData objects to store, by default `()`.
+        """
+        self._store: dict[SignalName | str, SignalData] = {}
+        for sig in signal_items:
+            self._store[sig.name] = sig
+
+    def __setitem__(self, key: SignalName | str, value: SignalData) -> None:
+        self._store[key] = value
+
+    def __getitem__(self, item: SignalName | str) -> SignalData:
+        return self._store[item]
+
+    def deepcopy(self) -> "SignalStorage":
+        return copy.deepcopy(self)
+
+    def update(self, *args: SignalData, **kwargs: SignalData) -> None:
+        """
+        Update the SignalStore with new SignalData objects.
+        """
+        self._store.update({sig.name: sig for sig in args}, **kwargs)

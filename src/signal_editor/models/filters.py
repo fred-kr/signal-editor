@@ -1,4 +1,4 @@
-from typing import Unpack
+from typing import Iterator, Literal, Self, TypedDict, Unpack
 
 import neurokit2 as nk
 import numpy as np
@@ -7,6 +7,7 @@ from loguru import logger
 from numpy.typing import NDArray
 
 from ..type_aliases import (
+    FilterMethod,
     SignalFilterParameters,
 )
 
@@ -37,15 +38,6 @@ def rolling_mad(
 
     scaled_signal = deviation / mad
     return scaled_signal.fill_nan(0)
-    # return (
-    #     (sig - sig.rolling_median(window_size, min_periods=0))
-    #     / (
-    #         (sig - sig.rolling_median(window_size, min_periods=0))
-    #         .abs()
-    #         .rolling_median(window_size, min_periods=0)
-    #         * constant
-    #     )
-    # ).fill_nan(sig[0])
 
 
 def rolling_z(sig: pl.Series, window_size: int) -> pl.Series:
@@ -127,6 +119,7 @@ def filter_custom(
     )
 
 
+# TODO: Find the correct window size via calculations and not through raised error messages
 def auto_correct_fir_length(
     sig: NDArray[np.float64],
     sampling_rate: int,
@@ -160,3 +153,74 @@ def auto_correct_fir_length(
                 kwargs["window_size"] = required_samples
             else:
                 raise
+
+
+type FilterArgument = Literal[
+    "lowcut", "highcut", "method", "order", "window_size", "powerline"
+]
+
+
+class FilterKeyValueMap(TypedDict, total=False):
+    lowcut: float | None
+    highcut: float | None
+    method: FilterMethod
+    order: int
+    window_size: int | Literal["default"]
+    powerline: int | float
+
+
+class FilterInputs:
+    @classmethod
+    def for_elgendi_ppg(cls) -> Self:
+        return cls(
+            lowcut=0.5,
+            highcut=8,
+            method="butterworth",
+            order=3,
+            window_size="default",
+            powerline=50,
+        )
+
+    def __init__(
+        self,
+        lowcut: float | None = None,
+        highcut: float | None = None,
+        method: FilterMethod = "butterworth",
+        order: int = 2,
+        window_size: int | Literal["default"] = "default",
+        powerline: int | float = 50,
+    ):
+        self.lowcut = lowcut
+        self.highcut = highcut
+        self.method = method
+        self.order = order
+        self.window_size = window_size
+        self.powerline = powerline
+
+    def __getitem__(
+        self, key: str
+    ) -> float | int | Literal["default"] | FilterMethod | str | None:
+        return vars(self).get(key)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(vars(self))
+
+    def __len__(self) -> int:
+        return len(vars(self))
+
+    def as_dict(self) -> SignalFilterParameters:
+        return SignalFilterParameters(**vars(self))
+
+
+def filter_signal(
+    sig: NDArray[np.float64],
+    sampling_rate: int,
+    **kwargs: Unpack[SignalFilterParameters],
+) -> NDArray[np.float64]:
+    method = kwargs["method"]
+
+    return (
+        auto_correct_fir_length(sig, sampling_rate, **kwargs)
+        if method == "fir"
+        else filter_custom(sig, sampling_rate, **kwargs)
+    )

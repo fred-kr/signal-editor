@@ -1,60 +1,65 @@
 import types
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, override
+import rich as r
 
 import numpy as np
 import polars as pl
 import pyqtgraph as pg
-from devtools import debug
-from pyqtgraph.console import ConsoleWidget
-from pyqtgraph.parametertree import ParameterTree
 from PySide6.QtCore import (
     QDate,
+    QModelIndex,
     QObject,
+    QPersistentModelIndex,
     QPointF,
     Qt,
     Signal,
     Slot,
+    QAbstractItemModel,
 )
-from PySide6.QtGui import QStandardItemModel
+from PySide6.QtGui import QStandardItemModel, QStandardItem
 from PySide6.QtWidgets import (
+    QComboBox,
     QDockWidget,
     QVBoxLayout,
+    QWidget,
 )
+from pyqtgraph.console import ConsoleWidget
+from pyqtgraph.parametertree import ParameterTree
 
 from ..handlers.plot_handler import PlotHandler
 from ..models.io import parse_file_name
 from ..models.peaks import UIPeakDetection
 from ..type_aliases import (
     FilterMethod,
-    PeakDetectionMethod,
     Pipeline,
     SignalName,
+    PeakDetectionMethod,
 )
 
 if TYPE_CHECKING:
     from ..app import MainWindow
 
+# "Nabian (ECG)": "nabian",
+# "Gamboa (ECG)": "gamboa",
+# "Slope Sum Function (ECG)": "slopesumfunction",
+# "Zong (ECG)": "zong",
+# "Hamilton (ECG)": "hamilton",
+# "Christov (ECG)": "christov",
+# "Engzeemod (ECG)": "engzeemod",
+# "Elgendi (ECG)": "elgendi_ecg",
+# "Kalidas (ECG)": "kalidas",
+# "Martinez (ECG)": "martinez",
+# "Rodrigues (ECG)": "rodrigues",
+# "VGraph (ECG)": "vgraph",
 COMBO_BOX_ITEMS = {
     "combo_box_peak_detection_method": {
         "Elgendi (PPG, fast)": "elgendi_ppg",
         "Local Maxima (Any, fast)": "local",
-        "XQRS (ECG, medium)": "wfdb_xqrs",
         "Neurokit (ECG, fast)": "neurokit2",
         "ProMAC (ECG, slow)": "promac",
         "Pan and Tompkins (ECG, medium)": "pantompkins",
-        "Nabian (ECG)": "nabian",
-        "Gamboa (ECG)": "gamboa",
-        "Slope Sum Function (ECG)": "slopesumfunction",
-        "Zong (ECG)": "zong",
-        "Hamilton (ECG)": "hamilton",
-        "Christov (ECG)": "christov",
-        "Engzeemod (ECG)": "engzeemod",
-        "Elgendi (ECG)": "elgendi_ecg",
-        "Kalidas (ECG)": "kalidas",
-        "Martinez (ECG)": "martinez",
-        "Rodrigues (ECG)": "rodrigues",
-        "VGraph (ECG)": "vgraph",
+        "XQRS (ECG, medium)": "wfdb_xqrs",
     },
     "combo_box_filter_method": {
         "Butterworth (SOS)": "butterworth",
@@ -80,6 +85,35 @@ COMBO_BOX_ITEMS = {
         "Neurokit (ECG)": "ecg_neurokit2",
     },
 }
+class ComboBoxMappingModel(QAbstractItemModel):
+    def __init__(self, items: dict[str, str], parent: QObject | None=None) -> None:
+        super().__init__(parent)
+        self._items = items
+
+    @override
+    def index(self, row: int, column: int, parent: QModelIndex | QPersistentModelIndex=QModelIndex()) -> QModelIndex:
+        if not self.hasIndex(row, column, parent):
+            return QModelIndex()
+        return self.createIndex(row, column)
+
+    @override
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex=QModelIndex()) -> int:
+        return len(self._items)
+
+    @override
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex=QModelIndex()) -> int:
+        return 1
+
+    @override
+    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> str | None:
+        if not index.isValid():
+            return None
+        if role == Qt.ItemDataRole.DisplayRole:
+            return list(self._items.keys())[index.row()]
+        elif role == Qt.ItemDataRole.UserRole:
+            return list(self._items.values())[index.row()]
+        return None
+
 
 INITIAL_STATE_MAP = {
     "table_data_preview": {
@@ -239,13 +273,13 @@ class UIHandler(QObject):
         self._prepare_inputs()
 
         # Peak Detection
-        self.create_peak_detection_trees()
+        # self.create_peak_detection_trees()
 
         # File Info
         self._prepare_widgets()
 
         # Statusbar
-        self.window.statusbar.showMessage("Ready")
+        self.window.statusbar.showMessage("Idle")
 
         # Toolbar Plots
         self._prepare_toolbars()
@@ -267,7 +301,10 @@ class UIHandler(QObject):
         self._set_elgendi_cleaning_params()
 
         # Peak Detection
+        # peak_method_model = ComboBoxMappingModel(items=COMBO_BOX_ITEMS["combo_box_peak_detection_method"])
+        # self.window.combo_box_peak_detection_method.setModel(peak_method_model)
         self.window.combo_box_peak_detection_method.setCurrentIndex(0)
+        self.window.stacked_peak_parameters.setCurrentIndex(0)
 
     def _setup_active_plot_btn_grp(self) -> None:
         self.window.stacked_hbr_vent.setCurrentIndex(0)
@@ -301,8 +338,9 @@ class UIHandler(QObject):
 
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():
-            getattr(self.window, key).clear()
-            getattr(self.window, key).setItems(value)
+            combo_box: pg.ComboBox = getattr(self.window, key)
+            combo_box.clear()
+            combo_box.setItems(value)
 
     def update_data_selection_widgets(self, path: str) -> None:
         self.window.container_file_info.setEnabled(True)
@@ -326,7 +364,7 @@ class UIHandler(QObject):
             self.window.combo_box_oxygen_condition.setValue(parsed_oxy)
         except Exception:
             self.window.date_edit_file_info.setDate(QDate(1970, 1, 1))
-            self.window.line_edit_subject_id.setText("")
+            self.window.line_edit_subject_id.setText("unknown")
             self.window.combo_box_oxygen_condition.setValue("unknown")
 
     @Slot(str)
@@ -381,11 +419,8 @@ class UIHandler(QObject):
 
     @Slot()
     def on_peak_detection_method_changed(self) -> None:
-        method = cast(
-            PeakDetectionMethod, self.window.combo_box_peak_detection_method.value()
-        )
         try:
-            self.peak_params.set_method(method)
+            self.peak_params.set_method(self.window.peak_detection_method)
         except NotImplementedError as e:
             self.window.sig_show_message.emit(str(e), "info")
 
@@ -441,25 +476,20 @@ class UIHandler(QObject):
             return
         if self.window.data.df.is_empty():
             return
-        data_pos = int(
-            self.plot.plot_widgets.get_signal_widget(signal_name)
-            .plotItem.vb.mapSceneToView(pos)
-            .x()
-        )
+        view_box = self.plot.plot_widgets.get_view_box(signal_name)
+        mapped_pos: QPointF = view_box.mapSceneToView(pos)
+        data_pos = int(mapped_pos.x())
+        temperature_column = self.window.data.sigs[signal_name].get_data().get_column("temperature").to_numpy(zero_copy_only=True)
         try:
-            temp_value = self.window.data.df.get_column("temperature").to_numpy(
-                zero_copy_only=True
-            )[np.clip(data_pos, 0, self.window.data.df.shape[0] - 1)]
+            temp_value = temperature_column[np.clip(data_pos, 0, temperature_column.size - 1)]
         except Exception:
             if data_pos < 0:
                 default_index = 0
-            elif data_pos > self.window.data.df.shape[0]:
+            elif data_pos > temperature_column.size:
                 default_index = -1
             else:
                 default_index = data_pos
-            temp_value = self.window.data.df.get_column("temperature").to_numpy(
-                zero_copy_only=True
-            )[default_index]
+            temp_value = temperature_column[default_index]
         if signal_name == "hbr":
             self.temperature_label_hbr.setText(
                 f"<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: {temp_value:.1f} °C, cursor position: {data_pos}</span>"
@@ -469,32 +499,32 @@ class UIHandler(QObject):
                 f"<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: {temp_value:.1f} °C, cursor position: {data_pos}</span>"
             )
         self.window.statusbar.showMessage(
-            f"Temperature: {temp_value:.1f}°C, {data_pos=}"
+            f"Temperature: {temp_value:.1f}°C, {data_pos = }"
         )
 
     def create_console_widget(self) -> None:
         module_names = [
-            "self (App)",
+            "self (MainWindow)",
             "pg (pyqtgraph)",
             "np (numpy)",
             "pl (polars)",
-            "devtools.debug (devtools)",
+            "r (rich)",
         ]
         namespace: "dict[str, types.ModuleType | MainWindow]" = {
             "self": self.window,
             "pg": pg,
             "np": np,
             "pl": pl,
-            
+            "r": r,
         }
-        startup_message = f"Available namespaces: {*module_names, = }"
+        startup_message = f"Available namespaces: {', '.join(module_names)}.\n\nUse `r.print()` for more readable formatting."
         self.console = ConsoleWidget(
             parent=self.window,
             namespace=namespace,
             historyFile="history.pickle",
             text=startup_message,
         )
-        self.console_dock = QDockWidget("Console")
+        self.console_dock = QDockWidget("Debug Console")
         self.console_dock.setWidget(self.console)
         self.console_dock.setMinimumSize(800, 600)
         self.console_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
@@ -514,7 +544,7 @@ class UIHandler(QObject):
 
     @Slot(str)
     def handle_filter_method_changed(self, text: str) -> None:
-        method = cast(FilterMethod, self.window.combo_box_filter_method.value())
+        method = self.window.filter_method
 
         for widget_name, enabled in FILTER_INPUT_STATES[method].items():
             getattr(self.window, widget_name).setEnabled(enabled)
@@ -535,9 +565,7 @@ class UIHandler(QObject):
 
     @Slot()
     def handle_preprocess_pipeline_changed(self) -> None:
-        pipeline_value = cast(
-            Pipeline, self.window.combo_box_preprocess_pipeline.value()
-        )
+        pipeline_value = self.window.pipeline
         if pipeline_value == "custom":
             self.window.container_custom_filter_inputs.setEnabled(True)
             selected_filter = cast(str, self.window.combo_box_filter_method.value())
@@ -552,10 +580,13 @@ class UIHandler(QObject):
             msg = f"Selected pipeline {pipeline_value} not yet implemented, use either 'custom' or 'ppg_elgendi'."
             self.window.sig_show_message.emit(msg, "info")
             return
-            # logger.warning(f"Pipeline {pipeline} not implemented yet.")
-            # "ecg_neurokit2"
-            # "ecg_biosppy"
-            # "ecg_pantompkins1985"
-            # "ecg_hamilton2002"
-            # "ecg_elgendi2010"
-            # "ecg_engzeemod2012"
+
+
+def make_combo_box_model(items: dict[str, str]) -> QStandardItemModel:
+    model = QStandardItemModel()
+    for display_text, internal_value in items.items():
+        item = QStandardItem(display_text)
+        item.setData(internal_value, Qt.ItemDataRole.UserRole)
+        model.appendRow(item)
+    return model
+

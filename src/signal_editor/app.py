@@ -3,7 +3,7 @@ import os
 import pickle
 import sys
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, TypedDict, cast
@@ -13,7 +13,6 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 import qdarkstyle
-from loguru import logger
 from PySide6.QtCore import (
     QAbstractTableModel,
     QByteArray,
@@ -35,8 +34,9 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTableView,
 )
+from loguru import logger
 
-from .handlers.data_handler import DataHandler2, DescriptiveStatistics
+from .handlers.data_handler import DataHandler, DataState
 from .handlers.plot_handler import PlotHandler
 from .handlers.ui_handler import UIHandler
 from .models.data import (
@@ -44,10 +44,18 @@ from .models.data import (
     DescriptiveStatsModel,
     PolarsModel,
 )
+from .models.result import (
+    Result,
+    ProcessingParameters,
+    SelectionParameters,
+    ResultIdentifier,
+    DescriptiveStatistics,
+)
 from .type_aliases import (
     FileMetadata,
     FilterMethod,
     OxygenCondition,
+    PeakDetectionMethod,
     PeakDetectionParameters,
     PeakEdits,
     Pipeline,
@@ -55,48 +63,49 @@ from .type_aliases import (
     SignalFilterParameters,
     SignalName,
     StandardizeParameters,
+    StateDict,
 )
 from .views.main_window import Ui_MainWindow
 
 
-@dataclass(slots=True, kw_only=True, frozen=True)
-class ProcessingParameters:
-    sampling_rate: int
-    pipeline: Pipeline
-    filter_parameters: SignalFilterParameters
-    standardization_parameters: StandardizeParameters
-    peak_detection_parameters: PeakDetectionParameters
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class SelectionParameters:
-    subset_column: str
-    lower_limit: int | float
-    upper_limit: int | float
-    length_selection: int
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class ResultIdentifier:
-    name: SignalName
-    animal_id: str
-    environmental_condition: OxygenCondition
-    data_file_name: str
-    data_measured_date: datetime | Literal["unknown"]
-    result_file_name: str
-    result_creation_date: datetime
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class Result:
-    identifier: ResultIdentifier
-    info_data_selection: SelectionParameters
-    info_data_processing: ProcessingParameters
-    statistics: DescriptiveStatistics
-    result_data: pl.DataFrame
-    source_data: pl.DataFrame
-    manual_edits: PeakEdits
-    other: dict[str, Any] = field(default_factory=dict)
+# @dataclass(slots=True, kw_only=True, frozen=True)
+# class ProcessingParameters:
+#     sampling_rate: int
+#     pipeline: Pipeline
+#     filter_parameters: SignalFilterParameters
+#     standardization_parameters: StandardizeParameters
+#     peak_detection_parameters: PeakDetectionParameters
+#
+#
+# @dataclass(slots=True, kw_only=True, frozen=True)
+# class SelectionParameters:
+#     subset_column: str
+#     lower_limit: int | float
+#     upper_limit: int | float
+#     length_selection: int
+#
+#
+# @dataclass(slots=True, kw_only=True, frozen=True)
+# class ResultIdentifier:
+#     name: SignalName
+#     animal_id: str
+#     environmental_condition: OxygenCondition
+#     data_file_name: str
+#     data_measured_date: datetime | Literal["unknown"]
+#     result_file_name: str
+#     result_creation_date: datetime
+#
+#
+# @dataclass(slots=True, kw_only=True, frozen=True)
+# class Result:
+#     identifier: ResultIdentifier
+#     info_data_selection: SelectionParameters
+#     info_data_processing: ProcessingParameters
+#     statistics: DescriptiveStatistics
+#     result_data: pl.DataFrame
+#     source_data: pl.DataFrame
+#     manual_edits: PeakEdits
+#     other: dict[str, Any] = field(default_factory=dict)
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
@@ -121,7 +130,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._output_dir.mkdir(exist_ok=True)
         self._read_settings()
         self.plot = PlotHandler(self)
-        self.data = DataHandler2(self)
+        self.data = DataHandler(self)
         self.ui = UIHandler(self, self.plot)
         self.file_info: QFileInfo = QFileInfo()
         self._add_profiler()
@@ -156,6 +165,26 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @property
     def result_name(self) -> SignalName:
         return "hbr" if self.tabs_result.currentIndex() == 0 else "ventilation"
+
+    @property
+    def scale_method(self) -> ScaleMethod:
+        return cast(ScaleMethod, self.combo_box_scale_method.value())
+
+    @property
+    def pipeline(self) -> Pipeline:
+        return cast(Pipeline, self.combo_box_preprocess_pipeline.value())
+
+    @property
+    def filter_method(self) -> FilterMethod:
+        return cast(FilterMethod, self.combo_box_filter_method.value())
+
+    @property
+    def filter_parameters(self) -> SignalFilterParameters:
+        return self.get_filter_values()
+
+    @property
+    def peak_detection_method(self) -> PeakDetectionMethod:
+        return cast(PeakDetectionMethod, self.combo_box_peak_detection_method.value())
 
     def _add_profiler(self) -> None:
         self.menubar.addAction("Start Profiler", self._start_profiler)
@@ -290,36 +319,35 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 grp_result.create_group("identifier"), asdict(result.identifier)
             )
             self.create_attrs(
-                grp_result.create_group("selection_metadata"),
-                asdict(result.info_data_selection),
+                grp_result.create_group("selection_parameters"),
+                asdict(result.selection_parameters),
             )
             self.create_attrs(
-                grp_result.create_group("processing_metadata"),
-                asdict(result.info_data_processing),
+                grp_result.create_group("processing_parameters"),
+                asdict(result.processing_parameters),
             )
             self.create_attrs(
-                grp_result.create_group("statistics"), asdict(result.statistics)
+                grp_result.create_group("statistics"), asdict(result.summary_statistics)
             )
 
             grp_manual_edits = grp_result.create_group("manual_edits")
-            for edit_type in ["added_peaks", "removed_peaks"]:
+            for edit_type in ["added", "removed"]:
                 grp_edit_type = grp_manual_edits.create_group(edit_type)
                 for signal_type in ["hbr", "ventilation"]:
                     grp_edit_type.create_dataset(
-                        signal_type,
-                        data=result.manual_edits[edit_type][signal_type],
+                        signal_type, data=getattr(result.manual_peak_edits, edit_type)
                     )
 
             grp_result.create_dataset(
-                "result_data", data=result.result_data.to_numpy(structured=True)
+                "result_data", data=result.focused_result.to_polars().to_numpy(structured=True)
             )
             grp_result.create_dataset(
-                "source_data", data=result.source_data.to_numpy(structured=True)
+                "source_data", data=result.source_data.data.to_numpy(structured=True)
             )
 
     def read_hdf5(self, file_path: str | Path) -> None:
         with h5py.File(file_path, "r") as f:
-            self.restore_state()
+            self.restore_state(f)
 
     @Slot()
     def run_hdf5view(self) -> None:
@@ -337,14 +365,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def save_to_hdf5(self) -> None:
-        if (
-            file_path := QFileDialog.getSaveFileName(
-                self,
-                "Save to HDF5",
-                f"{self.output_dir.as_posix()}/{self.file_info.completeBaseName()}_results.hdf5",
-                "HDF5 Files (*.hdf5 *.h5)",
-            )[0]
-        ):
+        if file_path := QFileDialog.getSaveFileName(
+            self,
+            "Save to HDF5",
+            f"{self.output_dir.as_posix()}/{self.file_info.completeBaseName()}_results.hdf5",
+            "HDF5 Files (*.hdf5 *.h5)",
+        )[0]:
             self.write_hdf5(file_path, getattr(self, f"{self.result_name}_results"))
 
     @Slot()
@@ -501,7 +527,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         for name in {"hbr", "ventilation"}:
             name = cast(SignalName, name)
             data = self.data.sigs[name].data.get_column(name).to_numpy()
-            self.plot.draw_signal(data, self.plot.plot_widgets.get_signal_widget(name), name)
+            self.plot.draw_signal(
+                data, self.plot.plot_widgets.get_signal_widget(name), name
+            )
         self._set_x_ranges()
 
     def _set_x_ranges(self) -> None:
@@ -519,7 +547,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._update_plot_view("ventilation")
 
     def _update_signal(self, signal_name: SignalName) -> None:
-        signal_data = self.data.sigs[signal_name].active_section.get_column(signal_name).to_numpy()
+        signal_data = (
+            self.data.sigs[signal_name]
+            .active_section.get_column(signal_name)
+            .to_numpy()
+        )
         plot_widget = self.plot.plot_widgets.get_signal_widget(signal_name)
         self.plot.draw_signal(signal_data, plot_widget, signal_name)
         self._set_x_ranges()
@@ -587,7 +619,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         pipeline = cast(Pipeline, self.combo_box_preprocess_pipeline.value())
 
         signal_name = self.signal_name
-        # processed_signal_name = f"{signal_name}_{self.data.processed_suffix}"
 
         self.data.run_preprocessing(
             name=signal_name,
@@ -602,21 +633,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         filter_stop = time.perf_counter()
         self.btn_apply_filter.success(
-            tip=f"Last run took {filter_stop - filter_start:.2f}s"
+            tip=f"Last run took {filter_stop - filter_start:.2f}s", limitedTime=False
         )
         self.sig_plot_data_changed.emit(signal_name)
         self.sig_data_filtered.emit(signal_name)
+        self.btn_apply_filter.reset()
 
     @Slot()
     def handle_peak_detection(self) -> None:
         self.btn_detect_peaks.processing("Detecting peaks...")
         peak_start = time.perf_counter()
         peak_params = self.get_peak_detection_values()
-        signal_name = self.signal_name
-        # processed_signal_name = f"{signal_name}_{self.data.processed_suffix}"
-        processed_name = self.data.sigs[signal_name].processed_name
-        plot_widget = self.plot.plot_widgets.get_signal_widget(signal_name)
-        if processed_name not in self.data.sigs[signal_name].data.columns:
+        name = self.signal_name
+        processed_name = self.data.sigs[name].processed_name
+        plot_widget = self.plot.plot_widgets.get_signal_widget(name)
+        if processed_name not in self.data.sigs[name].data.columns:
             info_msg = (
                 "Signal needs to be filtered before peak detection can be performed."
             )
@@ -624,29 +655,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
 
         self.data.run_peak_detection(
-            name=signal_name,
+            name=name,
             peak_parameters=peak_params,
         )
-        peaks = self.data.sigs[signal_name].peaks
-        peaks_y = self.data.sigs[signal_name].processed_data[peaks]
+        peaks = self.data.sigs[name].peaks
+        peaks_y = self.data.sigs[name].processed_data[peaks]
 
         self.plot.draw_peaks(
             pos_x=peaks,
             pos_y=peaks_y,
             plot_widget=plot_widget,
-            signal_name=signal_name,
+            signal_name=name,
         )
         peak_stop = time.perf_counter()
         self.btn_detect_peaks.success(
             tip=f"Last run took {peak_stop - peak_start:.2f}s"
         )
-        self.sig_peaks_updated.emit(signal_name)
+        self.sig_peaks_updated.emit(name)
 
     @Slot(str)
     def handle_draw_results(self, signal_name: SignalName) -> None:
-        # rate_name = f"{signal_name}_{self.data.rate_interp_suffix}"
         rate_plot_widget = self.plot.plot_widgets.get_rate_widget(signal_name)
-        # instant_signal_rate = self.data.df.get_column(rate_name).to_numpy()
         rate_interp = self.data.sigs[signal_name].signal_rate.rate_interpolated
 
         self.plot.draw_rate(
@@ -672,7 +701,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         super().closeEvent(event)
 
-    # region Settings ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
     def _read_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
         geometry: QByteArray = settings.value("geometry", QByteArray())  # type: ignore
@@ -696,9 +724,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         style = self.active_style
         settings.setValue("style", style)
 
-    # endregion
-
-    # region Profiler ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ #
     @Slot()
     def _start_profiler(self):
         self.profiler = cProfile.Profile()
@@ -714,42 +739,40 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             f"./logs/profiler_{int(datetime.timestamp(datetime.now()))}.pstats"
         )
 
-    # endregion
-
     def get_identifier(self, result_name: SignalName) -> ResultIdentifier:
-        meas_date: datetime | Literal["unknown"] = getattr(
-            self.data, "meas_date", "unknown"
-        )
+        metadata = self.get_file_metadata()
         result_file_name = f"results_{result_name}_{self.file_info.fileName()}"
         return ResultIdentifier(
             name=result_name,
-            animal_id=self.line_edit_subject_id.text(),
-            environmental_condition=cast(
-                OxygenCondition, self.combo_box_oxygen_condition.currentText()
-            ),
-            data_file_name=self.file_info.fileName(),
-            data_measured_date=meas_date,
+            animal_id=metadata["animal_id"],
+            oxygen_condition=metadata["oxygen_condition"],
+            source_file_name=self.file_info.fileName(),
+            date_recorded=metadata["date_recorded"],
             result_file_name=result_file_name,
-            result_creation_date=datetime.now(),
+            creation_date=datetime.now(),
         )
 
-    def get_data_info(self) -> SelectionParameters:
+    def get_data_selection_info(self) -> SelectionParameters:
         subset_col = self.combo_box_filter_column.currentText()
+        lower_bound = self.dbl_spin_box_subset_min.value()
+        upper_bound = self.dbl_spin_box_subset_max.value()
+        length_overall = self.data.df.height
         return SelectionParameters(
-            subset_column=subset_col,
-            lower_limit=cast(float, self.data.minmax_map[subset_col]["min"]),
-            upper_limit=cast(float, self.data.minmax_map[subset_col]["max"]),
-            length_selection=self.data.df.height,
+            filter_column=subset_col,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
+            length_overall=length_overall,
         )
 
     def get_file_metadata(self) -> FileMetadata:
-        return {
-            "date_measured": cast(datetime, self.date_edit_file_info.date().toPython()),
-            "animal_id": self.line_edit_subject_id.text(),
-            "oxygen_condition": cast(
-                OxygenCondition, self.combo_box_oxygen_condition.value()
-            ),
-        }
+        date_recorded = cast(datetime, self.date_edit_file_info.date().toPython())
+        animal_id = self.line_edit_subject_id.text()
+        oxygen_condition = cast(OxygenCondition, self.combo_box_oxygen_condition.value())
+        return FileMetadata(
+            date_recorded=date_recorded,
+            animal_id=animal_id,
+            oxygen_condition=oxygen_condition,
+        )
 
     def get_filter_values(self) -> SignalFilterParameters:
         if self.combo_box_preprocess_pipeline.value() != "custom":
@@ -757,7 +780,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         method = cast(FilterMethod, self.combo_box_filter_method.value())
 
-        filter_params = SignalFilterParameters(method=method)
+
+        filter_params = SignalFilterParameters(
+            lowcut=None,
+            highcut=None,
+            method=method,
+            order=2,
+            window_size="default",
+            powerline=50,
+        )
         if filter_params["method"] != "None":
             filter_widgets = {
                 "lowcut": self.dbl_spin_box_lowcut,
@@ -774,16 +805,20 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def get_standardization_values(self) -> StandardizeParameters:
         method = cast(ScaleMethod, self.combo_box_scale_method.value())
+        robust = method.lower() == "mad"
         if self.container_scale_window_inputs.isChecked():
             window_size = self.spin_box_scale_window_size.value()
         else:
             window_size = None
         # rolling_window = self.container_scale_window_inputs.isChecked()
-        return StandardizeParameters(method=method, window_size=window_size)
+        return StandardizeParameters(robust=robust, window_size=window_size)
 
     def get_peak_detection_values(self) -> PeakDetectionParameters:
         if hasattr(self.ui, "peak_params"):
-            return self.ui.peak_params.get_values()
+            method = cast(
+                PeakDetectionMethod, self.combo_box_peak_detection_method.value()
+            )
+            return self.ui.peak_params.get_values(method)
         else:
             raise ValueError(
                 "Could not get peak detection values, make sure the UIHandler is properly configured."
@@ -797,7 +832,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             sampling_rate=self.data.fs,
             pipeline=cast(Pipeline, self.combo_box_preprocess_pipeline.value()),
             filter_parameters=filter_params,
-            standardization_parameters=standardization_params,
+            scaling_parameters=standardization_params,
             peak_detection_parameters=peak_detection_params,
         )
 
@@ -805,22 +840,24 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.btn_compute_results.processing("Getting results...")
 
         identifier = self.get_identifier(result_name)
-        data_info = self.get_data_info()
+        data_info = self.get_data_selection_info()
         processing_info = self.get_processing_info()
-        results_df = self.data.get_result_df(result_name)
+        focused_result = self.data.focused_results[result_name]
+        focused_result_df = self.data.get_focused_result_df(result_name)
         statistics = self.data.get_descriptive_stats(result_name)
-        manual_edits = self.plot.peak_edits
-        result_table: QTableView = getattr(self, f"table_view_results_{result_name}")
-        self._set_table_model(result_table, PolarsModel(results_df))
+        manual_edits = self.plot.peak_edits[result_name]
+        source_data = self.data.sigs[result_name]
         results = Result(
             identifier=identifier,
-            info_data_selection=data_info,
-            info_data_processing=processing_info,
-            statistics=statistics,
-            result_data=results_df,
-            source_data=self.data.df,
-            manual_edits=manual_edits,
+            selection_parameters=data_info,
+            processing_parameters=processing_info,
+            summary_statistics=statistics,
+            focused_result=focused_result,
+            manual_peak_edits=manual_edits,
+            source_data=source_data,
         )
+        result_table: QTableView = getattr(self, f"table_view_results_{result_name}")
+        self._set_table_model(result_table, PolarsModel(focused_result_df))
         setattr(self, f"{result_name}_results", results)
         self.btn_compute_results.success()
         self.tabs_main.setCurrentIndex(2)
@@ -833,31 +870,29 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             "Data is clean up to (and including) index:",
             self.plot.last_edit_index,
             0,
-            self.data.df.height,
+            self.data.sigs[self.signal_name].get_data().height - 1,
             1,
         )
         if not ok:
             return
-        if (
-            file_path := QFileDialog.getSaveFileName(
-                self,
-                "Save State",
-                f"{self.output_dir.as_posix()}/snapshot_at_{stopped_at_index}_{self.file_info.completeBaseName()}",
-                "Pickle Files (*.pkl)",
-            )[0]
-        ):
-            state_dict = {
-                "active_signal": self.signal_name,
-                "source_file_path": self._file_path,
-                "output_dir": self.output_dir.as_posix(),
-                "data_selection_params": self.get_data_info(),
-                "data_processing_params": self.get_processing_info(),
-                "file_metadata": self.get_file_metadata(),
-                "sampling_frequency": self.data.fs,
-                "peak_edits": self.plot.peak_edits,
-                "working_data": self.data.get_state(),
-                "stopped_at_index": stopped_at_index,
-            }
+        if file_path := QFileDialog.getSaveFileName(
+            self,
+            "Save State",
+            f"{self.output_dir.as_posix()}/snapshot_at_{stopped_at_index}_{self.file_info.completeBaseName()}",
+            "Pickle Files (*.pkl)",
+        )[0]:
+            state_dict = StateDict(
+                active_signal=self.signal_name,
+                source_file_path=self.file_info.filePath(),
+                output_dir=self.output_dir.as_posix(),
+                data_selection_params=self.get_data_selection_info(),
+                data_processing_params=self.get_processing_info(),
+                file_metadata=self.get_file_metadata(),
+                sampling_frequency=self.data.fs,
+                peak_edits=self.plot.peak_edits,
+                data_state=self.data.get_state(),
+                stopped_at_index=stopped_at_index,
+            )
 
             with open(file_path, "wb") as f:
                 pickle.dump(state_dict, f)
@@ -898,9 +933,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         processing_params: ProcessingParameters,
         file_metadata: FileMetadata,
     ) -> None:
-        self.combo_box_filter_column.setCurrentText(selection_params.subset_column)
-        self.dbl_spin_box_subset_min.setValue(selection_params.lower_limit)
-        self.dbl_spin_box_subset_max.setValue(selection_params.upper_limit)
+        self.combo_box_filter_column.setCurrentText(selection_params.filter_column or "")
+        self.dbl_spin_box_subset_min.setValue(selection_params.lower_bound)
+        self.dbl_spin_box_subset_max.setValue(selection_params.upper_bound)
 
         self.spin_box_fs.setValue(processing_params.sampling_rate)
 
@@ -923,13 +958,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
         self.combo_box_scale_method.setValue(
-            processing_params.standardization_parameters.get("method", "None")
+            processing_params.scaling_parameters.get("method", "None")
         )
         self.spin_box_scale_window_size.setValue(
-            processing_params.standardization_parameters.get("window_size", 2000)
+            processing_params.scaling_parameters.get("window_size", 250)
         )
 
-        self.combo_box_peak_detection_method.setValue(
+        self.combo_box_peak_detection_method.setCurrentText(self.combo_box_peak_detection_method.model().data())
             processing_params.peak_detection_parameters.get("method", "elgendi_ppg")
         )
         self.ui.peak_params.set_method(
@@ -942,9 +977,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.date_edit_file_info.setDate(
             QDate(
-                file_metadata["date_measured"].year,
-                file_metadata["date_measured"].month,
-                file_metadata["date_measured"].day,
+                file_metadata["date_recorded"].year,
+                file_metadata["date_recorded"].month,
+                file_metadata["date_recorded"].day,
             )
         )
         self.line_edit_subject_id.setText(file_metadata["animal_id"])
@@ -992,7 +1027,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             processed_name = self.data.sigs[s_name].processed_name
             if processed_name not in self.data.df.columns:
                 self.plot.draw_signal(
-                    self.data.sigs[s_name].active_section.get_column(s_name).to_numpy(), signal_widget, s_name
+                    self.data.sigs[s_name].active_section.get_column(s_name).to_numpy(),
+                    signal_widget,
+                    s_name,
                 )
                 continue
             processed_signal = self.data.sigs[s_name].processed_data
@@ -1005,7 +1042,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.plot.draw_rate(rate, rate_widget, s_name)
             self._set_table_model(
                 getattr(self, f"table_view_results_{s_name}"),
-                PolarsModel(self.data.result_dfs[s_name]),
+                PolarsModel(self.data.focused_results[s_name].to_polars()),
             )
 
 
@@ -1018,13 +1055,10 @@ class State(TypedDict):
     file_metadata: FileMetadata
     sampling_frequency: int
     peak_edits: PeakEdits
-    working_data: DataHandler2.DataState
+    working_data: DataState
     stopped_at_index: int
 
 
-# ==================================================================================== #
-#                                      MAIN METHOD                                     #
-# ==================================================================================== #
 def main(dev_mode: bool = False, antialias: bool = False) -> None:
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"
@@ -1047,10 +1081,10 @@ def main(dev_mode: bool = False, antialias: bool = False) -> None:
         level="DEBUG",
     )
     app = QApplication(sys.argv)
+    app.setStyle("Default")
     app.setStyleSheet(
         qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.LightPalette)
     )
-    app.setStyle("Default")
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

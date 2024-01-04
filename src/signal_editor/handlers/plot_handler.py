@@ -1,13 +1,15 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, cast, override
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Mapping, cast, override
 
 import numpy as np
 import pyqtgraph as pg
+from numpy.typing import NDArray
+from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QObject, QRectF, Qt, Signal, Slot
 from PySide6.QtGui import QFont
-from numpy.typing import NDArray
-from pyqtgraph.GraphicsScene import mouseEvents
+
+from ..models.result import ManualPeakEdits
 
 from ..type_aliases import (
     AddedPoints,
@@ -19,6 +21,67 @@ from ..type_aliases import (
 
 if TYPE_CHECKING:
     from ..app import MainWindow
+
+
+def _pinv_fallback(tr: QtGui.QTransform) -> QtGui.QTransform:
+    """
+    Calculate the pseudo-inverse of a QTransform object.
+
+    Parameters
+    ----------
+    tr : QtGui.QTransform
+        The QTransform object to calculate the pseudo-inverse of.
+
+    Returns
+    -------
+    QtGui.QTransform
+        The pseudo-inverse of the QTransform object.
+    """
+    arr = np.array(
+        [
+            tr.m11(),
+            tr.m12(),
+            tr.m13(),
+            tr.m21(),
+            tr.m22(),
+            tr.m23(),
+            tr.m31(),
+            tr.m32(),
+            tr.m33(),
+        ]
+    )
+    arr.shape = (3, 3)
+    pinv = np.linalg.pinv(arr)
+    return QtGui.QTransform(*pinv.ravel().tolist())
+
+
+def invertQTransform(tr: QtGui.QTransform) -> QtGui.QTransform:
+    """
+    Return a QTransform that is the inverse of `tr`.
+    A pseudo-inverse is returned if tr is not invertible.
+
+    Note that this function is preferred over `QTransform.inverted()` due to
+    bugs in that method. (specifically, Qt has floating-point precision issues
+    when determining whether a matrix is invertible)
+
+    Parameters
+    ----------
+    tr : QtGui.QTransform
+        The QTransform to get the inverse of.
+
+    Returns
+    -------
+    QtGui.QTransform
+        The (pseudo-)inverse of the QTransform object.
+    """
+    try:
+        det = tr.determinant()
+        detr = 1.0 / det  # let singular matrices raise ZeroDivisionError
+        inv = tr.adjoint()
+        inv *= detr
+        return inv
+    except ZeroDivisionError:
+        return _pinv_fallback(tr)
 
 
 class ScatterPlotItemError(Exception):
@@ -55,11 +118,11 @@ class CustomViewBox(pg.ViewBox):
             self.removeItem(self._selection_box)
         self._selection_box = selection_box
         if selection_box is None:
-            return None
+            return
         selection_box.setZValue(1e9)
         selection_box.hide()
         self.addItem(selection_box, ignoreBounds=True)
-        return None
+        return
 
     @property
     def deletion_box(self) -> QtWidgets.QGraphicsRectItem:
@@ -79,11 +142,11 @@ class CustomViewBox(pg.ViewBox):
             self.removeItem(self._deletion_box)
         self._deletion_box = deletion_box
         if deletion_box is None:
-            return None
+            return
         deletion_box.setZValue(1e9)
         deletion_box.hide()
         self.addItem(deletion_box, ignoreBounds=True)
-        return None
+        return
 
     @override
     def mouseDragEvent(
@@ -149,7 +212,7 @@ class CustomViewBox(pg.ViewBox):
                 else:
                     self.updateScaleBox(ev.buttonDownPos(), ev.pos())
             else:
-                tr = pg.invertQTransform(self.childGroup.transform())
+                tr = invertQTransform(self.childGroup.transform())
                 tr = tr.map(dif * mask) - tr.map(pg.Point(0, 0))
 
                 x = tr.x() if mask[0] == 1 else None
@@ -167,11 +230,12 @@ class CustomViewBox(pg.ViewBox):
                 [
                     -(ev.screenPos().x() - ev.lastScreenPos().x()),
                     ev.screenPos().y() - ev.lastScreenPos().y(),
-                ]
+                ],
+                dtype=np.float64,
             )
             s = ((mask * 0.02) + 1) ** dif
 
-            tr = pg.invertQTransform(self.childGroup.transform())
+            tr = invertQTransform(self.childGroup.transform())
 
             x = s[0] if mouseEnabled[0] == 1 else None
             y = s[1] if mouseEnabled[1] == 1 else None
@@ -211,12 +275,6 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         *args: Any,
         **kargs: Any,
     ) -> None:
-        """
-        Add new points to the scatter plot.
-        Arguments are the same as setData()
-        """
-
-        ## deal with non-keyword arguments
         if len(args) == 1:
             kargs["spots"] = args[0]
         elif len(args) == 2:
@@ -225,7 +283,6 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         elif len(args) > 2:
             raise ScatterPlotItemError("Only accepts up to two non-keyword arguments.")
 
-        ## convert 'pos' argument to 'x' and 'y'
         if "pos" in kargs:
             pos = kargs["pos"]
             if isinstance(pos, np.ndarray):
@@ -244,7 +301,6 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
                 kargs["x"] = x
                 kargs["y"] = y
 
-        ## determine how many spots we have
         if "spots" in kargs:
             numPts = len(kargs["spots"])
         elif "y" in kargs and kargs["y"] is not None and hasattr(kargs["y"], "__len__"):
@@ -256,17 +312,15 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
             kargs["y"] = []
             numPts = 0
 
-        ## Clear current SpotItems since the data references they contain will no longer be current
         self.data["item"][...] = None
 
-        ## Extend record array
         oldData = self.data
         self.data = np.empty(len(oldData) + numPts, dtype=self.data.dtype)
 
         self.data[: len(oldData)] = oldData
 
         newData = self.data[len(oldData) :]
-        newData["size"] = -1  ## indicates to use default size
+        newData["size"] = -1
         newData["visible"] = True
 
         if "spots" in kargs:
@@ -307,7 +361,6 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         if "useCache" in kargs:
             self.opts["useCache"] = kargs["useCache"]
 
-        ## Set any extra parameters provided in keyword arguments
         for k in ["pen", "brush", "symbol", "size"]:
             if k in kargs:
                 setMethod = getattr(self, f"set{k[0].upper()}{k[1:]}")
@@ -341,57 +394,64 @@ type PlotContentValue = pg.PlotDataItem | pg.ScatterPlotItem | pg.InfiniteLine
 
 
 @dataclass(slots=True, kw_only=True)
-class ExcludedRegions:
-    hbr: list[pg.LinearRegionItem] = field(default_factory=list)
-    ventilation: list[pg.LinearRegionItem] = field(default_factory=list)
-
-
-@dataclass(slots=True, kw_only=True)
 class PlotContent:
+    name: SignalName | str
     signal: pg.PlotDataItem | None = None
     peaks: pg.ScatterPlotItem | None = None
     rate: pg.PlotDataItem | None = None
     rate_mean: pg.InfiniteLine | None = None
-    excluded_regions: list[pg.LinearRegionItem] | None = None
+    # excluded_regions: list[pg.LinearRegionItem] | None = None
+    _expected_types: dict[PlotContentProp, type[PlotContentValue]] = field(
+        default_factory=dict
+    )
 
-    def __getitem__(self, key: PlotContentProp) -> PlotContentValue | None:
-        return getattr(self, key, None)
-
-    def __setitem__(self, key: PlotContentProp, value: PlotContentValue) -> None:
-        expected_types = {
+    def __post_init__(self) -> None:
+        _expected_types: dict[PlotContentProp, type[PlotContentValue]] = {
             "signal": pg.PlotDataItem,
             "peaks": pg.ScatterPlotItem,
             "rate": pg.PlotDataItem,
             "rate_mean": pg.InfiniteLine,
         }
-        if key in expected_types:
-            expected_type = expected_types[key]
+        self._expected_types = _expected_types
+
+    def __getitem__(self, key: PlotContentProp) -> PlotContentValue | None:
+        return getattr(self, key, None)
+
+    def __setitem__(self, key: PlotContentProp, value: PlotContentValue) -> None:
+        if key in self._expected_types:
+            expected_type = self._expected_types[key]
             if not isinstance(value, expected_type):
                 raise ValueError(f"{key} must be a {expected_type.__name__}")
             setattr(self, key, value)
 
 
-@dataclass(slots=True, kw_only=True)
-class Plots:
-    hbr: PlotContent = field(default_factory=PlotContent)
-    ventilation: PlotContent = field(default_factory=PlotContent)
+class PlotItemStorage(Mapping[SignalName | str, PlotContent]):
+    def __init__(self, plots: Iterable[PlotContent] = ()) -> None:
+        self._plot_items: dict[SignalName | str, PlotContent] = {}
+        for plot in plots:
+            self._plot_items[plot.name] = plot
 
-    def __getitem__(self, key: SignalName) -> PlotContent:
-        return getattr(self, key)
+    def __setitem__(self, key: SignalName | str, value: PlotContent) -> None:
+        self._plot_items[key] = value
 
-    def __setitem__(self, key: SignalName, value: PlotContent) -> None:
-        if key in {"hbr", "ventilation"}:
-            setattr(self, key, value)
+    def __getitem__(self, key: SignalName | str) -> PlotContent:
+        return self._plot_items[key]
+
+    def get_plot_item(
+        self, key: SignalName | str, item_name: PlotContentProp
+    ) -> PlotContentValue:
+        return self[key][item_name]
 
     def set_plot_item(
-        self, key: SignalName, item_name: PlotContentProp, item_value: PlotContentValue
+        self,
+        key: SignalName | str,
+        item_name: PlotContentProp,
+        item_value: PlotContentValue,
     ) -> None:
         self[key][item_name] = item_value
 
-    def get_plot_item(
-        self, key: SignalName, item_name: PlotContentProp
-    ) -> PlotContentValue:
-        return self[key][item_name]
+    def add_plot_content(self, plot_content: PlotContent) -> None:
+        self[plot_content.name] = plot_content
 
 
 def make_plot_widget(
@@ -411,19 +471,19 @@ class PlotWidgetContainer:
     hbr_rate: pg.PlotWidget = field(default_factory=pg.PlotWidget)
     ventilation_rate: pg.PlotWidget = field(default_factory=pg.PlotWidget)
 
-    def get_signal_widget(self, key: SignalName) -> pg.PlotWidget:
+    def get_signal_widget(self, key: SignalName | str) -> pg.PlotWidget:
         if key in {"hbr", "ventilation"}:
             return getattr(self, key)
         else:
             raise ValueError(f"{key} is not a valid signal name")
 
-    def get_rate_widget(self, key: SignalName) -> pg.PlotWidget:
+    def get_rate_widget(self, key: SignalName | str) -> pg.PlotWidget:
         if key in {"hbr", "ventilation"}:
             return getattr(self, f"{key}_rate")
         else:
             raise ValueError(f"{key} is not a valid signal name")
 
-    def add_widget(self, name: SignalName, is_rate: bool = False) -> None:
+    def add_widget(self, name: SignalName | str, is_rate: bool = False) -> None:
         bg_col = str(pg.getConfigOption("background"))
         if is_rate:
             widget = make_plot_widget(bg_col)
@@ -435,6 +495,18 @@ class PlotWidgetContainer:
 
     def get_all_widgets(self) -> list[pg.PlotWidget]:
         return [self.hbr, self.ventilation, self.hbr_rate, self.ventilation_rate]
+
+    def get_view_box(
+        self, name: SignalName | str, is_rate: bool = False
+    ) -> pg.ViewBox | CustomViewBox:
+        return (
+            self.get_rate_widget(name).getPlotItem().getViewBox()
+            if is_rate
+            else cast(
+                CustomViewBox,
+                self.get_signal_widget(name).getPlotItem().getViewBox(),
+            )
+        )
 
 
 class PlotHandler(QObject):
@@ -453,11 +525,12 @@ class PlotHandler(QObject):
         super().__init__(parent=parent)
         self._parent = parent
         self.click_tolerance = 80
-        self.peak_edits: PeakEdits = PeakEdits(
-            added_peaks=AddedPoints(hbr=[], ventilation=[]),
-            removed_peaks=RemovedPoints(hbr=[], ventilation=[]),
-        )
-        self.plot_items = Plots()
+        # self.peak_edits: PeakEdits = PeakEdits(
+        #     added_peaks=AddedPoints(hbr=[], ventilation=[]),
+        #     removed_peaks=RemovedPoints(hbr=[], ventilation=[]),
+        # )
+        self.peak_edits: dict[SignalName | str, ManualPeakEdits] = {}
+        self.plot_items = PlotItemStorage()
         self.plot_widgets = PlotWidgetContainer()
         self._last_edit_index: int = 0
 
@@ -477,8 +550,8 @@ class PlotHandler(QObject):
         self._last_edit_index = int(value)
 
     def _init_plot_items(self) -> None:
-        self.plot_items.hbr = PlotContent()
-        self.plot_items.ventilation = PlotContent()
+        self.plot_items.add_plot_content(PlotContent(name="hbr"))
+        self.plot_items.add_plot_content(PlotContent(name="ventilation"))
 
     @staticmethod
     def set_plot_titles_and_labels(
@@ -592,7 +665,6 @@ class PlotHandler(QObject):
     @Slot()
     def reset_plots(self) -> None:
         for name in {"hbr", "ventilation"}:
-            name = cast(SignalName, name)
             self.plot_widgets.get_signal_widget(name).getPlotItem().clear()
             self.plot_widgets.get_signal_widget(name).getPlotItem().legend.clear()
             self.plot_widgets.get_rate_widget(name).getPlotItem().clear()
@@ -604,15 +676,18 @@ class PlotHandler(QObject):
     @Slot(int)
     def reset_views(self, upper_range: int) -> None:
         for name in {"hbr", "ventilation"}:
-            name = cast(SignalName, name)
-            self.plot_widgets.get_signal_widget(name).getPlotItem().getViewBox().setXRange(0, upper_range)
-            self.plot_widgets.get_rate_widget(name).getPlotItem().getViewBox().setXRange(0, upper_range)
-            
+            self.plot_widgets.get_signal_widget(
+                name
+            ).getPlotItem().getViewBox().setXRange(0, upper_range)
+            self.plot_widgets.get_rate_widget(
+                name
+            ).getPlotItem().getViewBox().setXRange(0, upper_range)
+
     def draw_signal(
         self,
-        sig: NDArray[np.float32 | np.float64],
+        sig: NDArray[np.float64],
         plot_widget: pg.PlotWidget,
-        signal_name: SignalName,
+        signal_name: SignalName | str,
     ) -> None:
         color = "crimson" if signal_name == "hbr" else "royalblue"
         signal_line = pg.PlotDataItem(
@@ -649,9 +724,9 @@ class PlotHandler(QObject):
     def draw_peaks(
         self,
         pos_x: NDArray[np.int32],
-        pos_y: NDArray[np.float32 | np.float64],
+        pos_y: NDArray[np.float64],
         plot_widget: pg.PlotWidget,
-        signal_name: SignalName,
+        signal_name: SignalName | str,
     ) -> None:
         brush_color = "goldenrod"
         hover_brush_color = "red"
@@ -686,9 +761,9 @@ class PlotHandler(QObject):
 
     def draw_rate(
         self,
-        rate_data: NDArray[np.float32 | np.float64],
+        rate_data: NDArray[np.float64],
         plot_widget: pg.PlotWidget,
-        signal_name: SignalName,
+        signal_name: SignalName | str,
         **kwargs: float,
     ) -> None:
         rate_mean = kwargs.get(
@@ -764,13 +839,14 @@ class PlotHandler(QObject):
 
         to_remove_index = points[0].index()
 
-        name = "hbr" if "hbr" in sender.name() else "ventilation"
+        name = "hbr" if "hbr" in f"{sender.name()}" else "ventilation"
 
         if scatter_plot := self.plot_items[name]["peaks"]:
             new_points_x = np.delete(scatter_plot.data["x"], to_remove_index)
             new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)
             scatter_plot.setData(x=new_points_x, y=new_points_y)
-            self.peak_edits["removed_peaks"][name].append(int(points[0].pos().x()))
+            self.peak_edits[name].added.append(int(points[0].pos().x()))
+            # self.peak_edits["removed_peaks"][name].append(int(points[0].pos().x()))
             self.last_edit_index = int(points[0].pos().x())
             self.sig_peaks_edited.emit(name)
 
@@ -780,7 +856,7 @@ class PlotHandler(QObject):
         Removes peaks inside a rectangular selection.
         """
         name = self._parent.signal_name
-        vb = self.plot_widgets.get_signal_widget(name).getPlotItem().getViewBox()
+        vb = self.plot_widgets.get_view_box(name)
         if vb.mapped_peak_selection is None:
             return
         scatter_ref = self.plot_items[name]["peaks"]
@@ -798,6 +874,8 @@ class PlotHandler(QObject):
         y_range = (rect_y, rect_y + rect_height)
 
         scatter_x, scatter_y = scatter_ref.getData()
+        if scatter_x is None or scatter_y is None:
+            return
         to_remove = np.argwhere(
             (scatter_x >= x_range[0])
             & (scatter_x <= x_range[1])
@@ -811,7 +889,7 @@ class PlotHandler(QObject):
             x=np.delete(scatter_x, to_remove), y=np.delete(scatter_y, to_remove)
         )
 
-        self.peak_edits["removed_peaks"][name].extend(
+        self.peak_edits[name].removed.extend(
             scatter_x[to_remove][:, 0].astype(int).tolist()
         )
         self.last_edit_index = np.max(scatter_x[to_remove])
@@ -833,7 +911,7 @@ class PlotHandler(QObject):
         """
         ev.accept()
         click_x = int(ev.pos().x())
-        name = self._parent.signal_name
+        name = "hbr" if "hbr" in f"{sender.name()}" else "ventilation"
         signal_line = self.plot_items[name]["signal"]
         scatter_ref = self.plot_items[name]["peaks"]
 
@@ -862,7 +940,7 @@ class PlotHandler(QObject):
         # Get the new x and y values
         x_new, y_new = xData[max_y_index], y_values_in_radius.max()
         scatter_ref.addPoints(x=x_new, y=y_new)
-        self.peak_edits["added_peaks"][name].append(int(x_new))
+        self.peak_edits[name].added.append(int(x_new))
         self.last_edit_index = x_new
         self.sig_peaks_edited.emit(name)
 
@@ -887,8 +965,9 @@ class PlotHandler(QObject):
     @Slot()
     def mark_excluded(self) -> None:
         name = self._parent.signal_name
-        vb: CustomViewBox = (
-            self.plot_widgets.get_signal_widget(name).getPlotItem().getViewBox()
+        vb = cast(
+            CustomViewBox,
+            self.plot_widgets.get_signal_widget(name).getPlotItem().getViewBox(),
         )
         if vb.mapped_deletion_selection is None:
             return
@@ -902,8 +981,8 @@ class PlotHandler(QObject):
         lr_marker = pg.LinearRegionItem(values=x_range, movable=False)
         self.sig_excluded_range.emit(x_range[0], x_range[1])
 
-    def get_state(self) -> PeakEdits:
+    def get_state(self) -> dict[SignalName | str, ManualPeakEdits]:
         return self.peak_edits
 
-    def restore_state(self, state: PeakEdits) -> None:
+    def restore_state(self, state: dict[SignalName | str, ManualPeakEdits]) -> None:
         self.peak_edits = state

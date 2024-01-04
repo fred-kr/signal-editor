@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'main_window.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.6.0
+## Created by: Qt User Interface Compiler version 6.6.1
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -17,14 +17,14 @@ from PySide6.QtGui import (QAction, QBrush, QColor, QConicalGradient,
     QPainter, QPalette, QPixmap, QRadialGradient,
     QTransform)
 from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QAbstractSpinBox, QApplication,
-    QButtonGroup, QComboBox, QDateEdit, QDockWidget,
-    QDoubleSpinBox, QFormLayout, QFrame, QGridLayout,
-    QGroupBox, QHBoxLayout, QHeaderView, QLabel,
-    QLineEdit, QMainWindow, QMenu, QMenuBar,
-    QPushButton, QSizePolicy, QSlider, QSpacerItem,
-    QSpinBox, QStackedWidget, QStatusBar, QTabWidget,
-    QTableView, QTextBrowser, QToolBar, QVBoxLayout,
-    QWidget)
+    QButtonGroup, QCheckBox, QComboBox, QDateEdit,
+    QDockWidget, QDoubleSpinBox, QFormLayout, QFrame,
+    QGridLayout, QGroupBox, QHBoxLayout, QHeaderView,
+    QLabel, QLineEdit, QMainWindow, QMenu,
+    QMenuBar, QPushButton, QSizePolicy, QSlider,
+    QSpacerItem, QSpinBox, QStackedWidget, QStatusBar,
+    QTabWidget, QTableView, QTextBrowser, QToolBar,
+    QVBoxLayout, QWidget)
 
 from pyqtgraph import (ComboBox, FeedbackButton)
 from . import icons_rc
@@ -33,7 +33,7 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(2404, 1224)
+        MainWindow.resize(2404, 1200)
         sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -176,6 +176,8 @@ class Ui_MainWindow(object):
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self._2 = QHBoxLayout(self.centralwidget)
+        self._2.setSpacing(4)
+        self._2.setContentsMargins(7, 7, 7, 7)
         self._2.setObjectName(u"_2")
         self.tabs_main = QTabWidget(self.centralwidget)
         self.tabs_main.setObjectName(u"tabs_main")
@@ -188,6 +190,8 @@ class Ui_MainWindow(object):
         self.tab_data = QWidget()
         self.tab_data.setObjectName(u"tab_data")
         self.gridLayout_4 = QGridLayout(self.tab_data)
+        self.gridLayout_4.setSpacing(4)
+        self.gridLayout_4.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_4.setObjectName(u"gridLayout_4")
         self.table_data_info = QTableView(self.tab_data)
         self.table_data_info.setObjectName(u"table_data_info")
@@ -203,6 +207,11 @@ class Ui_MainWindow(object):
 
         self.table_data_preview = QTableView(self.tab_data)
         self.table_data_preview.setObjectName(u"table_data_preview")
+        sizePolicy2 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        sizePolicy2.setHorizontalStretch(0)
+        sizePolicy2.setVerticalStretch(0)
+        sizePolicy2.setHeightForWidth(self.table_data_preview.sizePolicy().hasHeightForWidth())
+        self.table_data_preview.setSizePolicy(sizePolicy2)
         self.table_data_preview.setFrameShape(QFrame.StyledPanel)
         self.table_data_preview.setFrameShadow(QFrame.Plain)
         self.table_data_preview.setMidLineWidth(1)
@@ -224,6 +233,8 @@ class Ui_MainWindow(object):
         self.container_text_info = QFrame(self.tab_data)
         self.container_text_info.setObjectName(u"container_text_info")
         self.verticalLayout_8 = QVBoxLayout(self.container_text_info)
+        self.verticalLayout_8.setSpacing(4)
+        self.verticalLayout_8.setContentsMargins(7, 7, 7, 7)
         self.verticalLayout_8.setObjectName(u"verticalLayout_8")
         self.label_19 = QLabel(self.container_text_info)
         self.label_19.setObjectName(u"label_19")
@@ -246,6 +257,8 @@ class Ui_MainWindow(object):
         self.tab_plots = QWidget()
         self.tab_plots.setObjectName(u"tab_plots")
         self.verticalLayout_4 = QVBoxLayout(self.tab_plots)
+        self.verticalLayout_4.setSpacing(4)
+        self.verticalLayout_4.setContentsMargins(7, 7, 7, 7)
         self.verticalLayout_4.setObjectName(u"verticalLayout_4")
         self.stacked_hbr_vent = QStackedWidget(self.tab_plots)
         self.stacked_hbr_vent.setObjectName(u"stacked_hbr_vent")
@@ -254,6 +267,8 @@ class Ui_MainWindow(object):
         self.stacked_page_hbr = QWidget()
         self.stacked_page_hbr.setObjectName(u"stacked_page_hbr")
         self.verticalLayout = QVBoxLayout(self.stacked_page_hbr)
+        self.verticalLayout.setSpacing(4)
+        self.verticalLayout.setContentsMargins(7, 7, 7, 7)
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.plot_widget_hbr = QWidget(self.stacked_page_hbr)
@@ -265,6 +280,8 @@ class Ui_MainWindow(object):
         self.stacked_page_vent = QWidget()
         self.stacked_page_vent.setObjectName(u"stacked_page_vent")
         self.verticalLayout_3 = QVBoxLayout(self.stacked_page_vent)
+        self.verticalLayout_3.setSpacing(4)
+        self.verticalLayout_3.setContentsMargins(7, 7, 7, 7)
         self.verticalLayout_3.setObjectName(u"verticalLayout_3")
         self.verticalLayout_3.setContentsMargins(0, 0, 0, 0)
         self.plot_widget_vent = QWidget(self.stacked_page_vent)
@@ -281,29 +298,24 @@ class Ui_MainWindow(object):
         self.tabs_main.addTab(self.tab_plots, icon21, "")
         self.tab_results = QWidget()
         self.tab_results.setObjectName(u"tab_results")
-        sizePolicy2 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        sizePolicy2.setHorizontalStretch(0)
-        sizePolicy2.setVerticalStretch(0)
         sizePolicy2.setHeightForWidth(self.tab_results.sizePolicy().hasHeightForWidth())
         self.tab_results.setSizePolicy(sizePolicy2)
         self.gridLayout_12 = QGridLayout(self.tab_results)
+        self.gridLayout_12.setSpacing(4)
+        self.gridLayout_12.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_12.setObjectName(u"gridLayout_12")
         self.container_results = QWidget(self.tab_results)
         self.container_results.setObjectName(u"container_results")
         self.gridLayout_8 = QGridLayout(self.container_results)
+        self.gridLayout_8.setSpacing(4)
+        self.gridLayout_8.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_8.setObjectName(u"gridLayout_8")
         self.gridLayout_8.setContentsMargins(0, 0, 0, 0)
-        self.container_results_plot = QWidget(self.container_results)
-        self.container_results_plot.setObjectName(u"container_results_plot")
-        self.gridLayout_13 = QGridLayout(self.container_results_plot)
-        self.gridLayout_13.setObjectName(u"gridLayout_13")
-        self.gridLayout_13.setContentsMargins(0, 0, 0, 0)
-
-        self.gridLayout_8.addWidget(self.container_results_plot, 0, 0, 2, 1)
-
         self.container_results_table = QWidget(self.container_results)
         self.container_results_table.setObjectName(u"container_results_table")
         self.gridLayout_11 = QGridLayout(self.container_results_table)
+        self.gridLayout_11.setSpacing(4)
+        self.gridLayout_11.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_11.setObjectName(u"gridLayout_11")
         self.gridLayout_11.setContentsMargins(0, 0, 0, 0)
         self.tabs_result = QTabWidget(self.container_results_table)
@@ -312,6 +324,8 @@ class Ui_MainWindow(object):
         self.tab_results_hbr = QWidget()
         self.tab_results_hbr.setObjectName(u"tab_results_hbr")
         self.verticalLayout_6 = QVBoxLayout(self.tab_results_hbr)
+        self.verticalLayout_6.setSpacing(4)
+        self.verticalLayout_6.setContentsMargins(7, 7, 7, 7)
         self.verticalLayout_6.setObjectName(u"verticalLayout_6")
         self.table_view_results_hbr = QTableView(self.tab_results_hbr)
         self.table_view_results_hbr.setObjectName(u"table_view_results_hbr")
@@ -333,6 +347,8 @@ class Ui_MainWindow(object):
         self.tab_results_ventilation = QWidget()
         self.tab_results_ventilation.setObjectName(u"tab_results_ventilation")
         self.verticalLayout_7 = QVBoxLayout(self.tab_results_ventilation)
+        self.verticalLayout_7.setSpacing(4)
+        self.verticalLayout_7.setContentsMargins(7, 7, 7, 7)
         self.verticalLayout_7.setObjectName(u"verticalLayout_7")
         self.table_view_results_ventilation = QTableView(self.tab_results_ventilation)
         self.table_view_results_ventilation.setObjectName(u"table_view_results_ventilation")
@@ -358,6 +374,8 @@ class Ui_MainWindow(object):
         self.container_results_output_dir = QWidget(self.container_results_table)
         self.container_results_output_dir.setObjectName(u"container_results_output_dir")
         self.horizontalLayout_6 = QHBoxLayout(self.container_results_output_dir)
+        self.horizontalLayout_6.setSpacing(4)
+        self.horizontalLayout_6.setContentsMargins(7, 7, 7, 7)
         self.horizontalLayout_6.setObjectName(u"horizontalLayout_6")
         self.horizontalLayout_6.setContentsMargins(0, 0, 0, 0)
         self.btn_browse_output_dir = QPushButton(self.container_results_output_dir)
@@ -416,11 +434,9 @@ class Ui_MainWindow(object):
         self.gridLayout_11.addWidget(self.textBrowser, 2, 1, 1, 3)
 
 
-        self.gridLayout_8.addWidget(self.container_results_table, 0, 1, 2, 2)
+        self.gridLayout_8.addWidget(self.container_results_table, 0, 0, 2, 2)
 
         self.gridLayout_8.setColumnStretch(0, 2)
-        self.gridLayout_8.setColumnStretch(1, 1)
-        self.gridLayout_8.setColumnStretch(2, 1)
 
         self.gridLayout_12.addWidget(self.container_results, 4, 0, 2, 2)
 
@@ -431,7 +447,7 @@ class Ui_MainWindow(object):
         icon23.addFile(u":/material-symbols/output_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
         self.btn_save_to_hdf5.setIcon(icon23)
 
-        self.gridLayout_12.addWidget(self.btn_save_to_hdf5, 6, 1, 1, 1)
+        self.gridLayout_12.addWidget(self.btn_save_to_hdf5, 6, 0, 1, 2)
 
         icon24 = QIcon()
         icon24.addFile(u":/material-symbols/table_chart_view_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
@@ -443,6 +459,7 @@ class Ui_MainWindow(object):
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
         self.menubar.setGeometry(QRect(0, 0, 2404, 22))
+        self.menubar.setNativeMenuBar(True)
         self.menu_editing_tools = QMenu(self.menubar)
         self.menu_editing_tools.setObjectName(u"menu_editing_tools")
         self.menu_editing_tools.setToolTipsVisible(True)
@@ -466,12 +483,14 @@ class Ui_MainWindow(object):
         MainWindow.setStatusBar(self.statusbar)
         self.dock_widget_sidebar = QDockWidget(MainWindow)
         self.dock_widget_sidebar.setObjectName(u"dock_widget_sidebar")
-        self.dock_widget_sidebar.setMinimumSize(QSize(475, 876))
+        self.dock_widget_sidebar.setMinimumSize(QSize(475, 1111))
         self.dock_widget_sidebar.setFeatures(QDockWidget.DockWidgetFloatable|QDockWidget.DockWidgetMovable)
         self.dock_widget_sidebar.setAllowedAreas(Qt.LeftDockWidgetArea|Qt.RightDockWidgetArea)
         self.sidebar_dock_contents = QWidget()
         self.sidebar_dock_contents.setObjectName(u"sidebar_dock_contents")
         self.verticalLayout_2 = QVBoxLayout(self.sidebar_dock_contents)
+        self.verticalLayout_2.setSpacing(4)
+        self.verticalLayout_2.setContentsMargins(7, 7, 7, 7)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.sidebar = QStackedWidget(self.sidebar_dock_contents)
         self.sidebar.setObjectName(u"sidebar")
@@ -483,6 +502,8 @@ class Ui_MainWindow(object):
         self.sidebar_page_data = QWidget()
         self.sidebar_page_data.setObjectName(u"sidebar_page_data")
         self.gridLayout = QGridLayout(self.sidebar_page_data)
+        self.gridLayout.setSpacing(4)
+        self.gridLayout.setContentsMargins(7, 7, 7, 7)
         self.gridLayout.setObjectName(u"gridLayout")
         self.label_4 = QLabel(self.sidebar_page_data)
         self.label_4.setObjectName(u"label_4")
@@ -507,6 +528,8 @@ class Ui_MainWindow(object):
         self.container_file_info.setSizePolicy(sizePolicy5)
         self.container_file_info.setFrameShape(QFrame.StyledPanel)
         self.formLayout_4 = QFormLayout(self.container_file_info)
+        self.formLayout_4.setSpacing(4)
+        self.formLayout_4.setContentsMargins(7, 7, 7, 7)
         self.formLayout_4.setObjectName(u"formLayout_4")
         self.formLayout_4.setRowWrapPolicy(QFormLayout.WrapAllRows)
         self.label_13 = QLabel(self.container_file_info)
@@ -565,6 +588,8 @@ class Ui_MainWindow(object):
         self.container_data_selection.setFont(font)
         self.container_data_selection.setFrameShape(QFrame.StyledPanel)
         self.gridLayout_15 = QGridLayout(self.container_data_selection)
+        self.gridLayout_15.setSpacing(4)
+        self.gridLayout_15.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_15.setObjectName(u"gridLayout_15")
         self.gridLayout_15.setContentsMargins(-1, 9, -1, -1)
         self.btn_select_file = QPushButton(self.container_data_selection)
@@ -591,6 +616,8 @@ class Ui_MainWindow(object):
         self.container_fs.setSizePolicy(sizePolicy)
         self.container_fs.setMinimumSize(QSize(0, 0))
         self.formLayout_2 = QFormLayout(self.container_fs)
+        self.formLayout_2.setSpacing(4)
+        self.formLayout_2.setContentsMargins(7, 7, 7, 7)
         self.formLayout_2.setObjectName(u"formLayout_2")
         self.label_17 = QLabel(self.container_fs)
         self.label_17.setObjectName(u"label_17")
@@ -643,6 +670,8 @@ class Ui_MainWindow(object):
         self.group_box_subset_params.setCheckable(True)
         self.group_box_subset_params.setChecked(False)
         self.formLayout = QFormLayout(self.group_box_subset_params)
+        self.formLayout.setSpacing(4)
+        self.formLayout.setContentsMargins(7, 7, 7, 7)
         self.formLayout.setObjectName(u"formLayout")
         self.label_filter_column = QLabel(self.group_box_subset_params)
         self.label_filter_column.setObjectName(u"label_filter_column")
@@ -700,36 +729,74 @@ class Ui_MainWindow(object):
         self.sidebar_page_plots = QWidget()
         self.sidebar_page_plots.setObjectName(u"sidebar_page_plots")
         self.gridLayout_6 = QGridLayout(self.sidebar_page_plots)
+        self.gridLayout_6.setSpacing(4)
+        self.gridLayout_6.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_6.setObjectName(u"gridLayout_6")
+        self.btn_detect_peaks = FeedbackButton(self.sidebar_page_plots)
+        self.btn_detect_peaks.setObjectName(u"btn_detect_peaks")
+        self.btn_detect_peaks.setEnabled(True)
+        sizePolicy6.setHeightForWidth(self.btn_detect_peaks.sizePolicy().hasHeightForWidth())
+        self.btn_detect_peaks.setSizePolicy(sizePolicy6)
+        self.btn_detect_peaks.setMinimumSize(QSize(0, 35))
+        font2 = QFont()
+        font2.setPointSize(11)
+        font2.setBold(True)
+        self.btn_detect_peaks.setFont(font2)
+        self.btn_detect_peaks.setLocale(QLocale(QLocale.English, QLocale.Germany))
+
+        self.gridLayout_6.addWidget(self.btn_detect_peaks, 6, 0, 1, 1)
+
+        self.label_18 = QLabel(self.sidebar_page_plots)
+        self.label_18.setObjectName(u"label_18")
+        sizePolicy6.setHeightForWidth(self.label_18.sizePolicy().hasHeightForWidth())
+        self.label_18.setSizePolicy(sizePolicy6)
+        font3 = QFont()
+        font3.setPointSize(10)
+        font3.setBold(True)
+        self.label_18.setFont(font3)
+
+        self.gridLayout_6.addWidget(self.label_18, 4, 0, 1, 2)
+
+        self.btn_apply_filter = FeedbackButton(self.sidebar_page_plots)
+        self.btn_apply_filter.setObjectName(u"btn_apply_filter")
+        sizePolicy6.setHeightForWidth(self.btn_apply_filter.sizePolicy().hasHeightForWidth())
+        self.btn_apply_filter.setSizePolicy(sizePolicy6)
+        self.btn_apply_filter.setMinimumSize(QSize(0, 35))
+        self.btn_apply_filter.setFont(font2)
+        self.btn_apply_filter.setLocale(QLocale(QLocale.English, QLocale.Germany))
+
+        self.gridLayout_6.addWidget(self.btn_apply_filter, 3, 0, 1, 2)
+
         self.btn_compute_results = FeedbackButton(self.sidebar_page_plots)
         self.btn_compute_results.setObjectName(u"btn_compute_results")
         self.btn_compute_results.setEnabled(False)
         sizePolicy6.setHeightForWidth(self.btn_compute_results.sizePolicy().hasHeightForWidth())
         self.btn_compute_results.setSizePolicy(sizePolicy6)
         self.btn_compute_results.setMinimumSize(QSize(0, 35))
-        font2 = QFont()
-        font2.setPointSize(11)
-        font2.setBold(True)
         self.btn_compute_results.setFont(font2)
 
-        self.gridLayout_6.addWidget(self.btn_compute_results, 7, 1, 1, 1)
+        self.gridLayout_6.addWidget(self.btn_compute_results, 6, 1, 1, 1)
 
         self.container_signal_filtering_sidebar = QWidget(self.sidebar_page_plots)
         self.container_signal_filtering_sidebar.setObjectName(u"container_signal_filtering_sidebar")
         sizePolicy6.setHeightForWidth(self.container_signal_filtering_sidebar.sizePolicy().hasHeightForWidth())
         self.container_signal_filtering_sidebar.setSizePolicy(sizePolicy6)
         self.gridLayout_2 = QGridLayout(self.container_signal_filtering_sidebar)
+        self.gridLayout_2.setSpacing(4)
+        self.gridLayout_2.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_2.setObjectName(u"gridLayout_2")
         self.gridLayout_2.setContentsMargins(1, 1, 1, 1)
         self.container_standardize = QFrame(self.container_signal_filtering_sidebar)
         self.container_standardize.setObjectName(u"container_standardize")
         sizePolicy6.setHeightForWidth(self.container_standardize.sizePolicy().hasHeightForWidth())
         self.container_standardize.setSizePolicy(sizePolicy6)
-        font3 = QFont()
-        font3.setBold(False)
-        self.container_standardize.setFont(font3)
+        font4 = QFont()
+        font4.setBold(False)
+        self.container_standardize.setFont(font4)
         self.container_standardize.setFrameShape(QFrame.StyledPanel)
         self.gridLayout_9 = QGridLayout(self.container_standardize)
+        self.gridLayout_9.setSpacing(4)
+        self.gridLayout_9.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_9.setObjectName(u"gridLayout_9")
         self.combo_box_scale_method = ComboBox(self.container_standardize)
         self.combo_box_scale_method.setObjectName(u"combo_box_scale_method")
@@ -743,6 +810,8 @@ class Ui_MainWindow(object):
         self.container_scale_window_inputs.setCheckable(True)
         self.container_scale_window_inputs.setChecked(True)
         self.horizontalLayout_2 = QHBoxLayout(self.container_scale_window_inputs)
+        self.horizontalLayout_2.setSpacing(4)
+        self.horizontalLayout_2.setContentsMargins(7, 7, 7, 7)
         self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
         self.label_2 = QLabel(self.container_scale_window_inputs)
         self.label_2.setObjectName(u"label_2")
@@ -796,10 +865,7 @@ class Ui_MainWindow(object):
         self.label_16.setObjectName(u"label_16")
         sizePolicy6.setHeightForWidth(self.label_16.sizePolicy().hasHeightForWidth())
         self.label_16.setSizePolicy(sizePolicy6)
-        font4 = QFont()
-        font4.setPointSize(10)
-        font4.setBold(False)
-        self.label_16.setFont(font4)
+        self.label_16.setFont(font3)
 
         self.gridLayout_2.addWidget(self.label_16, 3, 0, 1, 1)
 
@@ -808,6 +874,8 @@ class Ui_MainWindow(object):
         sizePolicy6.setHeightForWidth(self.container_custom_filter_inputs.sizePolicy().hasHeightForWidth())
         self.container_custom_filter_inputs.setSizePolicy(sizePolicy6)
         self.gridLayout_10 = QGridLayout(self.container_custom_filter_inputs)
+        self.gridLayout_10.setSpacing(4)
+        self.gridLayout_10.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_10.setObjectName(u"gridLayout_10")
         self.container_order_inputs = QWidget(self.container_custom_filter_inputs)
         self.container_order_inputs.setObjectName(u"container_order_inputs")
@@ -815,6 +883,8 @@ class Ui_MainWindow(object):
         self.container_order_inputs.setSizePolicy(sizePolicy)
         self.container_order_inputs.setFont(font1)
         self.horizontalLayout_5 = QHBoxLayout(self.container_order_inputs)
+        self.horizontalLayout_5.setSpacing(4)
+        self.horizontalLayout_5.setContentsMargins(7, 7, 7, 7)
         self.horizontalLayout_5.setObjectName(u"horizontalLayout_5")
         self.horizontalLayout_5.setContentsMargins(1, -1, 1, -1)
         self.label_10 = QLabel(self.container_order_inputs)
@@ -874,6 +944,8 @@ class Ui_MainWindow(object):
         self.container_highcut = QWidget(self.container_custom_filter_inputs)
         self.container_highcut.setObjectName(u"container_highcut")
         self.gridLayout_3 = QGridLayout(self.container_highcut)
+        self.gridLayout_3.setSpacing(4)
+        self.gridLayout_3.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_3.setObjectName(u"gridLayout_3")
         self.gridLayout_3.setContentsMargins(1, 1, 1, 1)
         self.dbl_spin_box_highcut = QDoubleSpinBox(self.container_highcut)
@@ -908,6 +980,8 @@ class Ui_MainWindow(object):
         self.container_lowcut = QWidget(self.container_custom_filter_inputs)
         self.container_lowcut.setObjectName(u"container_lowcut")
         self.gridLayout_5 = QGridLayout(self.container_lowcut)
+        self.gridLayout_5.setSpacing(4)
+        self.gridLayout_5.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_5.setObjectName(u"gridLayout_5")
         self.gridLayout_5.setContentsMargins(1, 1, 1, 1)
         self.label_8 = QLabel(self.container_lowcut)
@@ -941,6 +1015,8 @@ class Ui_MainWindow(object):
         self.container_window_size.setObjectName(u"container_window_size")
         self.container_window_size.setFont(font1)
         self.horizontalLayout_3 = QHBoxLayout(self.container_window_size)
+        self.horizontalLayout_3.setSpacing(4)
+        self.horizontalLayout_3.setContentsMargins(7, 7, 7, 7)
         self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
         self.horizontalLayout_3.setContentsMargins(1, -1, 1, -1)
         self.label_11 = QLabel(self.container_window_size)
@@ -987,6 +1063,8 @@ class Ui_MainWindow(object):
         self.container_powerline = QWidget(self.container_custom_filter_inputs)
         self.container_powerline.setObjectName(u"container_powerline")
         self.gridLayout_14 = QGridLayout(self.container_powerline)
+        self.gridLayout_14.setSpacing(4)
+        self.gridLayout_14.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_14.setObjectName(u"gridLayout_14")
         self.gridLayout_14.setContentsMargins(1, 1, 1, 1)
         self.label_20 = QLabel(self.container_powerline)
@@ -1028,53 +1106,70 @@ class Ui_MainWindow(object):
         self.label_5.setObjectName(u"label_5")
         sizePolicy6.setHeightForWidth(self.label_5.sizePolicy().hasHeightForWidth())
         self.label_5.setSizePolicy(sizePolicy6)
-        font5 = QFont()
-        font5.setPointSize(10)
-        self.label_5.setFont(font5)
+        self.label_5.setFont(font3)
 
         self.gridLayout_2.addWidget(self.label_5, 0, 0, 1, 1)
 
 
         self.gridLayout_6.addWidget(self.container_signal_filtering_sidebar, 1, 0, 1, 2)
 
-        self.label_18 = QLabel(self.sidebar_page_plots)
-        self.label_18.setObjectName(u"label_18")
-        sizePolicy6.setHeightForWidth(self.label_18.sizePolicy().hasHeightForWidth())
-        self.label_18.setSizePolicy(sizePolicy6)
-        self.label_18.setFont(font4)
+        self.container_active_signal = QWidget(self.sidebar_page_plots)
+        self.container_active_signal.setObjectName(u"container_active_signal")
+        sizePolicy6.setHeightForWidth(self.container_active_signal.sizePolicy().hasHeightForWidth())
+        self.container_active_signal.setSizePolicy(sizePolicy6)
+        self.container_active_signal.setCursor(QCursor(Qt.ArrowCursor))
+        self.gridLayout_17 = QGridLayout(self.container_active_signal)
+        self.gridLayout_17.setSpacing(4)
+        self.gridLayout_17.setContentsMargins(7, 7, 7, 7)
+        self.gridLayout_17.setObjectName(u"gridLayout_17")
+        self.gridLayout_17.setContentsMargins(1, 1, 1, 1)
+        self.btn_view_vent = QPushButton(self.container_active_signal)
+        self.btn_group_plot_view = QButtonGroup(MainWindow)
+        self.btn_group_plot_view.setObjectName(u"btn_group_plot_view")
+        self.btn_group_plot_view.addButton(self.btn_view_vent)
+        self.btn_view_vent.setObjectName(u"btn_view_vent")
+        sizePolicy.setHeightForWidth(self.btn_view_vent.sizePolicy().hasHeightForWidth())
+        self.btn_view_vent.setSizePolicy(sizePolicy)
+        font5 = QFont()
+        font5.setPointSize(13)
+        font5.setBold(True)
+        self.btn_view_vent.setFont(font5)
+        self.btn_view_vent.setAutoFillBackground(False)
+        self.btn_view_vent.setStyleSheet(u"")
+        self.btn_view_vent.setCheckable(True)
+        self.btn_view_vent.setAutoExclusive(True)
+        self.btn_view_vent.setAutoDefault(False)
 
-        self.gridLayout_6.addWidget(self.label_18, 4, 0, 1, 2)
+        self.gridLayout_17.addWidget(self.btn_view_vent, 0, 1, 1, 1)
 
-        self.btn_detect_peaks = FeedbackButton(self.sidebar_page_plots)
-        self.btn_detect_peaks.setObjectName(u"btn_detect_peaks")
-        self.btn_detect_peaks.setEnabled(True)
-        sizePolicy6.setHeightForWidth(self.btn_detect_peaks.sizePolicy().hasHeightForWidth())
-        self.btn_detect_peaks.setSizePolicy(sizePolicy6)
-        self.btn_detect_peaks.setMinimumSize(QSize(0, 35))
-        self.btn_detect_peaks.setFont(font2)
-        self.btn_detect_peaks.setLocale(QLocale(QLocale.English, QLocale.Germany))
+        self.btn_view_hbr = QPushButton(self.container_active_signal)
+        self.btn_group_plot_view.addButton(self.btn_view_hbr)
+        self.btn_view_hbr.setObjectName(u"btn_view_hbr")
+        sizePolicy.setHeightForWidth(self.btn_view_hbr.sizePolicy().hasHeightForWidth())
+        self.btn_view_hbr.setSizePolicy(sizePolicy)
+        font6 = QFont()
+        font6.setPointSize(13)
+        font6.setBold(True)
+        font6.setUnderline(False)
+        self.btn_view_hbr.setFont(font6)
+        self.btn_view_hbr.setCheckable(True)
+        self.btn_view_hbr.setChecked(True)
+        self.btn_view_hbr.setAutoExclusive(True)
+        self.btn_view_hbr.setAutoDefault(False)
 
-        self.gridLayout_6.addWidget(self.btn_detect_peaks, 7, 0, 1, 1)
+        self.gridLayout_17.addWidget(self.btn_view_hbr, 0, 0, 1, 1)
 
-        self.btn_apply_filter = FeedbackButton(self.sidebar_page_plots)
-        self.btn_apply_filter.setObjectName(u"btn_apply_filter")
-        sizePolicy6.setHeightForWidth(self.btn_apply_filter.sizePolicy().hasHeightForWidth())
-        self.btn_apply_filter.setSizePolicy(sizePolicy6)
-        self.btn_apply_filter.setMinimumSize(QSize(0, 35))
-        self.btn_apply_filter.setFont(font2)
-        self.btn_apply_filter.setLocale(QLocale(QLocale.English, QLocale.Germany))
 
-        self.gridLayout_6.addWidget(self.btn_apply_filter, 3, 0, 1, 2)
+        self.gridLayout_6.addWidget(self.container_active_signal, 0, 0, 1, 2)
 
         self.container_peak_detection_sidebar = QFrame(self.sidebar_page_plots)
         self.container_peak_detection_sidebar.setObjectName(u"container_peak_detection_sidebar")
-        sizePolicy11 = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        sizePolicy11.setHorizontalStretch(0)
-        sizePolicy11.setVerticalStretch(0)
-        sizePolicy11.setHeightForWidth(self.container_peak_detection_sidebar.sizePolicy().hasHeightForWidth())
-        self.container_peak_detection_sidebar.setSizePolicy(sizePolicy11)
+        sizePolicy.setHeightForWidth(self.container_peak_detection_sidebar.sizePolicy().hasHeightForWidth())
+        self.container_peak_detection_sidebar.setSizePolicy(sizePolicy)
         self.container_peak_detection_sidebar.setFrameShape(QFrame.StyledPanel)
         self.layout_container_peak_detection_sidebar = QGridLayout(self.container_peak_detection_sidebar)
+        self.layout_container_peak_detection_sidebar.setSpacing(4)
+        self.layout_container_peak_detection_sidebar.setContentsMargins(7, 7, 7, 7)
         self.layout_container_peak_detection_sidebar.setObjectName(u"layout_container_peak_detection_sidebar")
         self.container_peak_detection_method = QWidget(self.container_peak_detection_sidebar)
         self.container_peak_detection_method.setObjectName(u"container_peak_detection_method")
@@ -1082,6 +1177,8 @@ class Ui_MainWindow(object):
         self.container_peak_detection_method.setSizePolicy(sizePolicy6)
         self.container_peak_detection_method.setFont(font1)
         self.layout_container_peak_detection_method = QFormLayout(self.container_peak_detection_method)
+        self.layout_container_peak_detection_method.setSpacing(4)
+        self.layout_container_peak_detection_method.setContentsMargins(7, 7, 7, 7)
         self.layout_container_peak_detection_method.setObjectName(u"layout_container_peak_detection_method")
         self.layout_container_peak_detection_method.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         self.layout_container_peak_detection_method.setLabelAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignVCenter)
@@ -1090,7 +1187,10 @@ class Ui_MainWindow(object):
         self.label_method.setObjectName(u"label_method")
         sizePolicy.setHeightForWidth(self.label_method.sizePolicy().hasHeightForWidth())
         self.label_method.setSizePolicy(sizePolicy)
-        self.label_method.setFont(font1)
+        font7 = QFont()
+        font7.setPointSize(9)
+        font7.setBold(True)
+        self.label_method.setFont(font7)
 
         self.layout_container_peak_detection_method.setWidget(0, QFormLayout.LabelRole, self.label_method)
 
@@ -1108,60 +1208,436 @@ class Ui_MainWindow(object):
 
         self.layout_container_peak_detection_sidebar.addWidget(self.container_peak_detection_method, 0, 0, 1, 1)
 
+        self.stacked_peak_parameters = QStackedWidget(self.container_peak_detection_sidebar)
+        self.stacked_peak_parameters.setObjectName(u"stacked_peak_parameters")
+        self.page_peak_elgendi_ppg = QWidget()
+        self.page_peak_elgendi_ppg.setObjectName(u"page_peak_elgendi_ppg")
+        self.formLayout_3 = QFormLayout(self.page_peak_elgendi_ppg)
+        self.formLayout_3.setSpacing(4)
+        self.formLayout_3.setContentsMargins(7, 7, 7, 7)
+        self.formLayout_3.setObjectName(u"formLayout_3")
+        self.formLayout_3.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        self.label_6 = QLabel(self.page_peak_elgendi_ppg)
+        self.label_6.setObjectName(u"label_6")
+        font8 = QFont()
+        font8.setBold(True)
+        font8.setItalic(False)
+        self.label_6.setFont(font8)
+
+        self.formLayout_3.setWidget(0, QFormLayout.LabelRole, self.label_6)
+
+        self.label_peak_window = QLabel(self.page_peak_elgendi_ppg)
+        self.label_peak_window.setObjectName(u"label_peak_window")
+        self.label_peak_window.setFont(font8)
+
+        self.formLayout_3.setWidget(1, QFormLayout.LabelRole, self.label_peak_window)
+
+        self.peak_elgendi_ppg_peakwindow = QDoubleSpinBox(self.page_peak_elgendi_ppg)
+        self.peak_elgendi_ppg_peakwindow.setObjectName(u"peak_elgendi_ppg_peakwindow")
+        self.peak_elgendi_ppg_peakwindow.setAccelerated(True)
+        self.peak_elgendi_ppg_peakwindow.setDecimals(3)
+        self.peak_elgendi_ppg_peakwindow.setMinimum(0.050000000000000)
+        self.peak_elgendi_ppg_peakwindow.setMaximum(5.000000000000000)
+        self.peak_elgendi_ppg_peakwindow.setSingleStep(0.001000000000000)
+        self.peak_elgendi_ppg_peakwindow.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+        self.peak_elgendi_ppg_peakwindow.setValue(0.111000000000000)
+
+        self.formLayout_3.setWidget(1, QFormLayout.FieldRole, self.peak_elgendi_ppg_peakwindow)
+
+        self.beatWindowLabel = QLabel(self.page_peak_elgendi_ppg)
+        self.beatWindowLabel.setObjectName(u"beatWindowLabel")
+        self.beatWindowLabel.setFont(font8)
+
+        self.formLayout_3.setWidget(2, QFormLayout.LabelRole, self.beatWindowLabel)
+
+        self.peak_elgendi_ppg_beatwindow = QDoubleSpinBox(self.page_peak_elgendi_ppg)
+        self.peak_elgendi_ppg_beatwindow.setObjectName(u"peak_elgendi_ppg_beatwindow")
+        self.peak_elgendi_ppg_beatwindow.setDecimals(3)
+        self.peak_elgendi_ppg_beatwindow.setMinimum(0.100000000000000)
+        self.peak_elgendi_ppg_beatwindow.setMaximum(5.000000000000000)
+        self.peak_elgendi_ppg_beatwindow.setSingleStep(0.001000000000000)
+        self.peak_elgendi_ppg_beatwindow.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+        self.peak_elgendi_ppg_beatwindow.setValue(0.667000000000000)
+
+        self.formLayout_3.setWidget(2, QFormLayout.FieldRole, self.peak_elgendi_ppg_beatwindow)
+
+        self.beatOffsetLabel = QLabel(self.page_peak_elgendi_ppg)
+        self.beatOffsetLabel.setObjectName(u"beatOffsetLabel")
+        self.beatOffsetLabel.setFont(font8)
+
+        self.formLayout_3.setWidget(3, QFormLayout.LabelRole, self.beatOffsetLabel)
+
+        self.peak_elgendi_ppg_beatoffset = QDoubleSpinBox(self.page_peak_elgendi_ppg)
+        self.peak_elgendi_ppg_beatoffset.setObjectName(u"peak_elgendi_ppg_beatoffset")
+        self.peak_elgendi_ppg_beatoffset.setDecimals(2)
+        self.peak_elgendi_ppg_beatoffset.setMaximum(1.000000000000000)
+        self.peak_elgendi_ppg_beatoffset.setSingleStep(0.010000000000000)
+        self.peak_elgendi_ppg_beatoffset.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+        self.peak_elgendi_ppg_beatoffset.setValue(0.020000000000000)
+
+        self.formLayout_3.setWidget(3, QFormLayout.FieldRole, self.peak_elgendi_ppg_beatoffset)
+
+        self.minimumDelayLabel = QLabel(self.page_peak_elgendi_ppg)
+        self.minimumDelayLabel.setObjectName(u"minimumDelayLabel")
+        self.minimumDelayLabel.setFont(font8)
+
+        self.formLayout_3.setWidget(4, QFormLayout.LabelRole, self.minimumDelayLabel)
+
+        self.peak_elgendi_ppg_min_delay = QDoubleSpinBox(self.page_peak_elgendi_ppg)
+        self.peak_elgendi_ppg_min_delay.setObjectName(u"peak_elgendi_ppg_min_delay")
+        self.peak_elgendi_ppg_min_delay.setDecimals(2)
+        self.peak_elgendi_ppg_min_delay.setMaximum(10.000000000000000)
+        self.peak_elgendi_ppg_min_delay.setSingleStep(0.010000000000000)
+        self.peak_elgendi_ppg_min_delay.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+        self.peak_elgendi_ppg_min_delay.setValue(0.300000000000000)
+
+        self.formLayout_3.setWidget(4, QFormLayout.FieldRole, self.peak_elgendi_ppg_min_delay)
+
+        self.textBrowser_2 = QTextBrowser(self.page_peak_elgendi_ppg)
+        self.textBrowser_2.setObjectName(u"textBrowser_2")
+        sizePolicy11 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        sizePolicy11.setHorizontalStretch(0)
+        sizePolicy11.setVerticalStretch(0)
+        sizePolicy11.setHeightForWidth(self.textBrowser_2.sizePolicy().hasHeightForWidth())
+        self.textBrowser_2.setSizePolicy(sizePolicy11)
+        self.textBrowser_2.setMaximumSize(QSize(16777215, 100))
+        self.textBrowser_2.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContentsOnFirstShow)
+
+        self.formLayout_3.setWidget(0, QFormLayout.FieldRole, self.textBrowser_2)
+
+        self.stacked_peak_parameters.addWidget(self.page_peak_elgendi_ppg)
+        self.page_peak_local_max = QWidget()
+        self.page_peak_local_max.setObjectName(u"page_peak_local_max")
+        self.formLayout_5 = QFormLayout(self.page_peak_local_max)
+        self.formLayout_5.setSpacing(4)
+        self.formLayout_5.setContentsMargins(7, 7, 7, 7)
+        self.formLayout_5.setObjectName(u"formLayout_5")
+        self.formLayout_5.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        self.label_21 = QLabel(self.page_peak_local_max)
+        self.label_21.setObjectName(u"label_21")
+        font9 = QFont()
+        font9.setBold(True)
+        self.label_21.setFont(font9)
+
+        self.formLayout_5.setWidget(0, QFormLayout.LabelRole, self.label_21)
+
+        self.textBrowser_3 = QTextBrowser(self.page_peak_local_max)
+        self.textBrowser_3.setObjectName(u"textBrowser_3")
+        sizePolicy2.setHeightForWidth(self.textBrowser_3.sizePolicy().hasHeightForWidth())
+        self.textBrowser_3.setSizePolicy(sizePolicy2)
+        self.textBrowser_3.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.textBrowser_3.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContentsOnFirstShow)
+
+        self.formLayout_5.setWidget(0, QFormLayout.FieldRole, self.textBrowser_3)
+
+        self.label_22 = QLabel(self.page_peak_local_max)
+        self.label_22.setObjectName(u"label_22")
+        self.label_22.setFont(font9)
+
+        self.formLayout_5.setWidget(1, QFormLayout.LabelRole, self.label_22)
+
+        self.peak_local_max_radius = QSpinBox(self.page_peak_local_max)
+        self.peak_local_max_radius.setObjectName(u"peak_local_max_radius")
+        self.peak_local_max_radius.setAccelerated(True)
+        self.peak_local_max_radius.setMinimum(5)
+        self.peak_local_max_radius.setMaximum(9999)
+        self.peak_local_max_radius.setStepType(QAbstractSpinBox.AdaptiveDecimalStepType)
+        self.peak_local_max_radius.setValue(111)
+
+        self.formLayout_5.setWidget(1, QFormLayout.FieldRole, self.peak_local_max_radius)
+
+        self.stacked_peak_parameters.addWidget(self.page_peak_local_max)
+        self.page_peak_neurokit2 = QWidget()
+        self.page_peak_neurokit2.setObjectName(u"page_peak_neurokit2")
+        self.formLayout_6 = QFormLayout(self.page_peak_neurokit2)
+        self.formLayout_6.setSpacing(4)
+        self.formLayout_6.setContentsMargins(7, 7, 7, 7)
+        self.formLayout_6.setObjectName(u"formLayout_6")
+        self.formLayout_6.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        self.label_23 = QLabel(self.page_peak_neurokit2)
+        self.label_23.setObjectName(u"label_23")
+        self.label_23.setFont(font9)
+
+        self.formLayout_6.setWidget(0, QFormLayout.LabelRole, self.label_23)
+
+        self.textBrowser_4 = QTextBrowser(self.page_peak_neurokit2)
+        self.textBrowser_4.setObjectName(u"textBrowser_4")
+        sizePolicy2.setHeightForWidth(self.textBrowser_4.sizePolicy().hasHeightForWidth())
+        self.textBrowser_4.setSizePolicy(sizePolicy2)
+        self.textBrowser_4.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContentsOnFirstShow)
+
+        self.formLayout_6.setWidget(0, QFormLayout.FieldRole, self.textBrowser_4)
+
+        self.smoothingWindowLabel = QLabel(self.page_peak_neurokit2)
+        self.smoothingWindowLabel.setObjectName(u"smoothingWindowLabel")
+        self.smoothingWindowLabel.setFont(font9)
+
+        self.formLayout_6.setWidget(1, QFormLayout.LabelRole, self.smoothingWindowLabel)
+
+        self.peak_neurokit2_smoothwindow = QDoubleSpinBox(self.page_peak_neurokit2)
+        self.peak_neurokit2_smoothwindow.setObjectName(u"peak_neurokit2_smoothwindow")
+        self.peak_neurokit2_smoothwindow.setMinimum(0.010000000000000)
+        self.peak_neurokit2_smoothwindow.setMaximum(10.000000000000000)
+        self.peak_neurokit2_smoothwindow.setSingleStep(0.010000000000000)
+
+        self.formLayout_6.setWidget(1, QFormLayout.FieldRole, self.peak_neurokit2_smoothwindow)
+
+        self.label_27 = QLabel(self.page_peak_neurokit2)
+        self.label_27.setObjectName(u"label_27")
+        self.label_27.setFont(font9)
+
+        self.formLayout_6.setWidget(2, QFormLayout.LabelRole, self.label_27)
+
+        self.label_28 = QLabel(self.page_peak_neurokit2)
+        self.label_28.setObjectName(u"label_28")
+        self.label_28.setFont(font9)
+
+        self.formLayout_6.setWidget(3, QFormLayout.LabelRole, self.label_28)
+
+        self.label_29 = QLabel(self.page_peak_neurokit2)
+        self.label_29.setObjectName(u"label_29")
+        self.label_29.setFont(font9)
+
+        self.formLayout_6.setWidget(4, QFormLayout.LabelRole, self.label_29)
+
+        self.label_30 = QLabel(self.page_peak_neurokit2)
+        self.label_30.setObjectName(u"label_30")
+        self.label_30.setFont(font9)
+
+        self.formLayout_6.setWidget(5, QFormLayout.LabelRole, self.label_30)
+
+        self.label_31 = QLabel(self.page_peak_neurokit2)
+        self.label_31.setObjectName(u"label_31")
+        self.label_31.setFont(font9)
+
+        self.formLayout_6.setWidget(6, QFormLayout.LabelRole, self.label_31)
+
+        self.peak_neurokit2_avgwindow = QDoubleSpinBox(self.page_peak_neurokit2)
+        self.peak_neurokit2_avgwindow.setObjectName(u"peak_neurokit2_avgwindow")
+        self.peak_neurokit2_avgwindow.setDecimals(2)
+        self.peak_neurokit2_avgwindow.setMinimum(0.010000000000000)
+        self.peak_neurokit2_avgwindow.setMaximum(10.000000000000000)
+        self.peak_neurokit2_avgwindow.setSingleStep(0.010000000000000)
+        self.peak_neurokit2_avgwindow.setValue(0.750000000000000)
+
+        self.formLayout_6.setWidget(2, QFormLayout.FieldRole, self.peak_neurokit2_avgwindow)
+
+        self.peak_neurokit2_gradthreshweight = QDoubleSpinBox(self.page_peak_neurokit2)
+        self.peak_neurokit2_gradthreshweight.setObjectName(u"peak_neurokit2_gradthreshweight")
+        self.peak_neurokit2_gradthreshweight.setDecimals(1)
+        self.peak_neurokit2_gradthreshweight.setMinimum(0.100000000000000)
+        self.peak_neurokit2_gradthreshweight.setMaximum(10.000000000000000)
+        self.peak_neurokit2_gradthreshweight.setSingleStep(0.100000000000000)
+        self.peak_neurokit2_gradthreshweight.setValue(1.500000000000000)
+
+        self.formLayout_6.setWidget(3, QFormLayout.FieldRole, self.peak_neurokit2_gradthreshweight)
+
+        self.peak_neurokit2_minlenweight = QDoubleSpinBox(self.page_peak_neurokit2)
+        self.peak_neurokit2_minlenweight.setObjectName(u"peak_neurokit2_minlenweight")
+        self.peak_neurokit2_minlenweight.setDecimals(1)
+        self.peak_neurokit2_minlenweight.setMinimum(0.100000000000000)
+        self.peak_neurokit2_minlenweight.setMaximum(10.000000000000000)
+        self.peak_neurokit2_minlenweight.setSingleStep(0.100000000000000)
+        self.peak_neurokit2_minlenweight.setValue(0.400000000000000)
+
+        self.formLayout_6.setWidget(4, QFormLayout.FieldRole, self.peak_neurokit2_minlenweight)
+
+        self.peak_neurokit2_mindelay = QDoubleSpinBox(self.page_peak_neurokit2)
+        self.peak_neurokit2_mindelay.setObjectName(u"peak_neurokit2_mindelay")
+        self.peak_neurokit2_mindelay.setMinimum(0.010000000000000)
+        self.peak_neurokit2_mindelay.setMaximum(10.000000000000000)
+        self.peak_neurokit2_mindelay.setSingleStep(0.010000000000000)
+        self.peak_neurokit2_mindelay.setValue(0.300000000000000)
+
+        self.formLayout_6.setWidget(5, QFormLayout.FieldRole, self.peak_neurokit2_mindelay)
+
+        self.peak_neurokit2_correct_artifacts = QCheckBox(self.page_peak_neurokit2)
+        self.peak_neurokit2_correct_artifacts.setObjectName(u"peak_neurokit2_correct_artifacts")
+
+        self.formLayout_6.setWidget(6, QFormLayout.FieldRole, self.peak_neurokit2_correct_artifacts)
+
+        self.stacked_peak_parameters.addWidget(self.page_peak_neurokit2)
+        self.page_peak_promac = QWidget()
+        self.page_peak_promac.setObjectName(u"page_peak_promac")
+        self.formLayout_7 = QFormLayout(self.page_peak_promac)
+        self.formLayout_7.setSpacing(4)
+        self.formLayout_7.setContentsMargins(7, 7, 7, 7)
+        self.formLayout_7.setObjectName(u"formLayout_7")
+        self.formLayout_7.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        self.label_24 = QLabel(self.page_peak_promac)
+        self.label_24.setObjectName(u"label_24")
+        self.label_24.setFont(font9)
+
+        self.formLayout_7.setWidget(0, QFormLayout.LabelRole, self.label_24)
+
+        self.textBrowser_5 = QTextBrowser(self.page_peak_promac)
+        self.textBrowser_5.setObjectName(u"textBrowser_5")
+        sizePolicy2.setHeightForWidth(self.textBrowser_5.sizePolicy().hasHeightForWidth())
+        self.textBrowser_5.setSizePolicy(sizePolicy2)
+        self.textBrowser_5.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContentsOnFirstShow)
+
+        self.formLayout_7.setWidget(0, QFormLayout.FieldRole, self.textBrowser_5)
+
+        self.thresholdLabel = QLabel(self.page_peak_promac)
+        self.thresholdLabel.setObjectName(u"thresholdLabel")
+        self.thresholdLabel.setFont(font9)
+
+        self.formLayout_7.setWidget(1, QFormLayout.LabelRole, self.thresholdLabel)
+
+        self.peak_promac_threshold = QDoubleSpinBox(self.page_peak_promac)
+        self.peak_promac_threshold.setObjectName(u"peak_promac_threshold")
+        self.peak_promac_threshold.setMaximum(1.000000000000000)
+        self.peak_promac_threshold.setSingleStep(0.010000000000000)
+        self.peak_promac_threshold.setValue(0.330000000000000)
+
+        self.formLayout_7.setWidget(1, QFormLayout.FieldRole, self.peak_promac_threshold)
+
+        self.qRSComplexSizeLabel = QLabel(self.page_peak_promac)
+        self.qRSComplexSizeLabel.setObjectName(u"qRSComplexSizeLabel")
+        self.qRSComplexSizeLabel.setFont(font9)
+
+        self.formLayout_7.setWidget(2, QFormLayout.LabelRole, self.qRSComplexSizeLabel)
+
+        self.correctArtifactsLabel_2 = QLabel(self.page_peak_promac)
+        self.correctArtifactsLabel_2.setObjectName(u"correctArtifactsLabel_2")
+        self.correctArtifactsLabel_2.setFont(font9)
+
+        self.formLayout_7.setWidget(3, QFormLayout.LabelRole, self.correctArtifactsLabel_2)
+
+        self.peak_promac_correct_artifacts = QCheckBox(self.page_peak_promac)
+        self.peak_promac_correct_artifacts.setObjectName(u"peak_promac_correct_artifacts")
+
+        self.formLayout_7.setWidget(3, QFormLayout.FieldRole, self.peak_promac_correct_artifacts)
+
+        self.peak_promac_gaussian_sd = QSpinBox(self.page_peak_promac)
+        self.peak_promac_gaussian_sd.setObjectName(u"peak_promac_gaussian_sd")
+        self.peak_promac_gaussian_sd.setMaximum(100000)
+        self.peak_promac_gaussian_sd.setValue(100)
+
+        self.formLayout_7.setWidget(2, QFormLayout.FieldRole, self.peak_promac_gaussian_sd)
+
+        self.stacked_peak_parameters.addWidget(self.page_peak_promac)
+        self.page_peak_pantompkins = QWidget()
+        self.page_peak_pantompkins.setObjectName(u"page_peak_pantompkins")
+        self.formLayout_8 = QFormLayout(self.page_peak_pantompkins)
+        self.formLayout_8.setSpacing(4)
+        self.formLayout_8.setContentsMargins(7, 7, 7, 7)
+        self.formLayout_8.setObjectName(u"formLayout_8")
+        self.formLayout_8.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        self.label_25 = QLabel(self.page_peak_pantompkins)
+        self.label_25.setObjectName(u"label_25")
+        self.label_25.setFont(font9)
+
+        self.formLayout_8.setWidget(0, QFormLayout.LabelRole, self.label_25)
+
+        self.textBrowser_6 = QTextBrowser(self.page_peak_pantompkins)
+        self.textBrowser_6.setObjectName(u"textBrowser_6")
+        sizePolicy2.setHeightForWidth(self.textBrowser_6.sizePolicy().hasHeightForWidth())
+        self.textBrowser_6.setSizePolicy(sizePolicy2)
+        self.textBrowser_6.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContentsOnFirstShow)
+
+        self.formLayout_8.setWidget(0, QFormLayout.FieldRole, self.textBrowser_6)
+
+        self.correctArtifactsLabel = QLabel(self.page_peak_pantompkins)
+        self.correctArtifactsLabel.setObjectName(u"correctArtifactsLabel")
+        self.correctArtifactsLabel.setFont(font9)
+
+        self.formLayout_8.setWidget(1, QFormLayout.LabelRole, self.correctArtifactsLabel)
+
+        self.peak_pantompkins_correct_artifacts = QCheckBox(self.page_peak_pantompkins)
+        self.peak_pantompkins_correct_artifacts.setObjectName(u"peak_pantompkins_correct_artifacts")
+
+        self.formLayout_8.setWidget(1, QFormLayout.FieldRole, self.peak_pantompkins_correct_artifacts)
+
+        self.stacked_peak_parameters.addWidget(self.page_peak_pantompkins)
+        self.page_peak_xqrs = QWidget()
+        self.page_peak_xqrs.setObjectName(u"page_peak_xqrs")
+        self.formLayout_9 = QFormLayout(self.page_peak_xqrs)
+        self.formLayout_9.setSpacing(4)
+        self.formLayout_9.setContentsMargins(7, 7, 7, 7)
+        self.formLayout_9.setObjectName(u"formLayout_9")
+        self.formLayout_9.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        self.label_26 = QLabel(self.page_peak_xqrs)
+        self.label_26.setObjectName(u"label_26")
+        self.label_26.setFont(font9)
+
+        self.formLayout_9.setWidget(0, QFormLayout.LabelRole, self.label_26)
+
+        self.textBrowser_7 = QTextBrowser(self.page_peak_xqrs)
+        self.textBrowser_7.setObjectName(u"textBrowser_7")
+        sizePolicy2.setHeightForWidth(self.textBrowser_7.sizePolicy().hasHeightForWidth())
+        self.textBrowser_7.setSizePolicy(sizePolicy2)
+        self.textBrowser_7.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContentsOnFirstShow)
+
+        self.formLayout_9.setWidget(0, QFormLayout.FieldRole, self.textBrowser_7)
+
+        self.startIndexLabel = QLabel(self.page_peak_xqrs)
+        self.startIndexLabel.setObjectName(u"startIndexLabel")
+        self.startIndexLabel.setFont(font9)
+
+        self.formLayout_9.setWidget(1, QFormLayout.LabelRole, self.startIndexLabel)
+
+        self.peak_xqrs_sampfrom = QSpinBox(self.page_peak_xqrs)
+        self.peak_xqrs_sampfrom.setObjectName(u"peak_xqrs_sampfrom")
+        self.peak_xqrs_sampfrom.setAccelerated(True)
+        self.peak_xqrs_sampfrom.setCorrectionMode(QAbstractSpinBox.CorrectToNearestValue)
+        self.peak_xqrs_sampfrom.setMaximum(50000000)
+
+        self.formLayout_9.setWidget(1, QFormLayout.FieldRole, self.peak_xqrs_sampfrom)
+
+        self.sampleToLabel = QLabel(self.page_peak_xqrs)
+        self.sampleToLabel.setObjectName(u"sampleToLabel")
+        self.sampleToLabel.setFont(font9)
+
+        self.formLayout_9.setWidget(2, QFormLayout.LabelRole, self.sampleToLabel)
+
+        self.peak_xqrs_sampto = QSpinBox(self.page_peak_xqrs)
+        self.peak_xqrs_sampto.setObjectName(u"peak_xqrs_sampto")
+        self.peak_xqrs_sampto.setAccelerated(True)
+        self.peak_xqrs_sampto.setMaximum(50000000)
+
+        self.formLayout_9.setWidget(2, QFormLayout.FieldRole, self.peak_xqrs_sampto)
+
+        self.searchRadiusLabel = QLabel(self.page_peak_xqrs)
+        self.searchRadiusLabel.setObjectName(u"searchRadiusLabel")
+        self.searchRadiusLabel.setFont(font9)
+
+        self.formLayout_9.setWidget(3, QFormLayout.LabelRole, self.searchRadiusLabel)
+
+        self.peak_xqrs_search_radius = QSpinBox(self.page_peak_xqrs)
+        self.peak_xqrs_search_radius.setObjectName(u"peak_xqrs_search_radius")
+        self.peak_xqrs_search_radius.setAccelerated(True)
+        self.peak_xqrs_search_radius.setCorrectionMode(QAbstractSpinBox.CorrectToNearestValue)
+        self.peak_xqrs_search_radius.setMinimum(5)
+        self.peak_xqrs_search_radius.setMaximum(99999)
+        self.peak_xqrs_search_radius.setValue(90)
+
+        self.formLayout_9.setWidget(3, QFormLayout.FieldRole, self.peak_xqrs_search_radius)
+
+        self.adjustPeaksLabel = QLabel(self.page_peak_xqrs)
+        self.adjustPeaksLabel.setObjectName(u"adjustPeaksLabel")
+        self.adjustPeaksLabel.setFont(font9)
+
+        self.formLayout_9.setWidget(4, QFormLayout.LabelRole, self.adjustPeaksLabel)
+
+        self.peak_xqrs_peak_dir = ComboBox(self.page_peak_xqrs)
+        self.peak_xqrs_peak_dir.setObjectName(u"peak_xqrs_peak_dir")
+
+        self.formLayout_9.setWidget(4, QFormLayout.FieldRole, self.peak_xqrs_peak_dir)
+
+        self.stacked_peak_parameters.addWidget(self.page_peak_xqrs)
+
+        self.layout_container_peak_detection_sidebar.addWidget(self.stacked_peak_parameters, 1, 0, 1, 1)
+
 
         self.gridLayout_6.addWidget(self.container_peak_detection_sidebar, 5, 0, 1, 2)
-
-        self.container_active_signal = QWidget(self.sidebar_page_plots)
-        self.container_active_signal.setObjectName(u"container_active_signal")
-        sizePolicy6.setHeightForWidth(self.container_active_signal.sizePolicy().hasHeightForWidth())
-        self.container_active_signal.setSizePolicy(sizePolicy6)
-        self.container_active_signal.setCursor(QCursor(Qt.ArrowCursor))
-        self.gridLayout_17 = QGridLayout(self.container_active_signal)
-        self.gridLayout_17.setObjectName(u"gridLayout_17")
-        self.gridLayout_17.setContentsMargins(1, 1, 1, 1)
-        self.btn_view_vent = QPushButton(self.container_active_signal)
-        self.btn_group_plot_view = QButtonGroup(MainWindow)
-        self.btn_group_plot_view.setObjectName(u"btn_group_plot_view")
-        self.btn_group_plot_view.addButton(self.btn_view_vent)
-        self.btn_view_vent.setObjectName(u"btn_view_vent")
-        sizePolicy.setHeightForWidth(self.btn_view_vent.sizePolicy().hasHeightForWidth())
-        self.btn_view_vent.setSizePolicy(sizePolicy)
-        font6 = QFont()
-        font6.setPointSize(13)
-        font6.setBold(True)
-        self.btn_view_vent.setFont(font6)
-        self.btn_view_vent.setAutoFillBackground(False)
-        self.btn_view_vent.setStyleSheet(u"")
-        self.btn_view_vent.setCheckable(True)
-        self.btn_view_vent.setAutoExclusive(True)
-        self.btn_view_vent.setAutoDefault(False)
-
-        self.gridLayout_17.addWidget(self.btn_view_vent, 0, 1, 1, 1)
-
-        self.btn_view_hbr = QPushButton(self.container_active_signal)
-        self.btn_group_plot_view.addButton(self.btn_view_hbr)
-        self.btn_view_hbr.setObjectName(u"btn_view_hbr")
-        sizePolicy.setHeightForWidth(self.btn_view_hbr.sizePolicy().hasHeightForWidth())
-        self.btn_view_hbr.setSizePolicy(sizePolicy)
-        font7 = QFont()
-        font7.setPointSize(13)
-        font7.setBold(True)
-        font7.setUnderline(False)
-        self.btn_view_hbr.setFont(font7)
-        self.btn_view_hbr.setCheckable(True)
-        self.btn_view_hbr.setChecked(True)
-        self.btn_view_hbr.setAutoExclusive(True)
-        self.btn_view_hbr.setAutoDefault(False)
-
-        self.gridLayout_17.addWidget(self.btn_view_hbr, 0, 0, 1, 1)
-
-
-        self.gridLayout_6.addWidget(self.container_active_signal, 0, 0, 1, 2)
 
         self.sidebar.addWidget(self.sidebar_page_plots)
         self.sidebar_page_results = QWidget()
         self.sidebar_page_results.setObjectName(u"sidebar_page_results")
         self.gridLayout_7 = QGridLayout(self.sidebar_page_results)
+        self.gridLayout_7.setSpacing(4)
+        self.gridLayout_7.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_7.setObjectName(u"gridLayout_7")
         self.sidebar.addWidget(self.sidebar_page_results)
 
@@ -1203,7 +1679,6 @@ class Ui_MainWindow(object):
         self.menubar.addAction(self.menu_info.menuAction())
         self.menubar.addAction(self.menu_editing_tools.menuAction())
         self.menubar.addAction(self.menuDebug.menuAction())
-        self.menu_editing_tools.addSeparator()
         self.menu_editing_tools.addAction(self.action_remove_peak_rect)
         self.menu_editing_tools.addAction(self.action_remove_selected_peaks)
         self.menu_editing_tools.addSeparator()
@@ -1241,6 +1716,7 @@ class Ui_MainWindow(object):
         self.stacked_hbr_vent.setCurrentIndex(0)
         self.tabs_result.setCurrentIndex(0)
         self.sidebar.setCurrentIndex(0)
+        self.stacked_peak_parameters.setCurrentIndex(0)
 
 
         QMetaObject.connectSlotsByName(MainWindow)
@@ -1434,6 +1910,15 @@ class Ui_MainWindow(object):
         self.label_subset_max.setText(QCoreApplication.translate("MainWindow", u"Upper limit:", None))
         self.label_3.setText(QCoreApplication.translate("MainWindow", u"Metadata", None))
 #if QT_CONFIG(whatsthis)
+        self.btn_detect_peaks.setWhatsThis(QCoreApplication.translate("MainWindow", u"Runs the currently selected peak detection method using the shown parameters (editable in the \"Peak Detection\" section above).", None))
+#endif // QT_CONFIG(whatsthis)
+        self.btn_detect_peaks.setText(QCoreApplication.translate("MainWindow", u"Run peak detection", None))
+        self.label_18.setText(QCoreApplication.translate("MainWindow", u"Peak Detection", None))
+#if QT_CONFIG(whatsthis)
+        self.btn_apply_filter.setWhatsThis(QCoreApplication.translate("MainWindow", u"Applies the currently selected pipeline or custom filter to the active signal. Repeated filtering will overwrite the previous values, so its currently not possible to apply a filter to an already filtered signal.", None))
+#endif // QT_CONFIG(whatsthis)
+        self.btn_apply_filter.setText(QCoreApplication.translate("MainWindow", u"Run pre-processing", None))
+#if QT_CONFIG(whatsthis)
         self.btn_compute_results.setWhatsThis(QCoreApplication.translate("MainWindow", u"Takes the current state of the app, signal, detected peaks, etc. and produces a results table shown in the \"Results\" tab. From there, the results can be exported to various file formats.", None))
 #endif // QT_CONFIG(whatsthis)
         self.btn_compute_results.setText(QCoreApplication.translate("MainWindow", u"Get Results", None))
@@ -1464,18 +1949,62 @@ class Ui_MainWindow(object):
 #endif // QT_CONFIG(tooltip)
         self.label_12.setText(QCoreApplication.translate("MainWindow", u"Pipeline", None))
         self.label_5.setText(QCoreApplication.translate("MainWindow", u"Pre-process", None))
-        self.label_18.setText(QCoreApplication.translate("MainWindow", u"Peak Detection", None))
-#if QT_CONFIG(whatsthis)
-        self.btn_detect_peaks.setWhatsThis(QCoreApplication.translate("MainWindow", u"Runs the currently selected peak detection method using the shown parameters (editable in the \"Peak Detection\" section above).", None))
-#endif // QT_CONFIG(whatsthis)
-        self.btn_detect_peaks.setText(QCoreApplication.translate("MainWindow", u"Run peak detection", None))
-#if QT_CONFIG(whatsthis)
-        self.btn_apply_filter.setWhatsThis(QCoreApplication.translate("MainWindow", u"Applies the currently selected pipeline or custom filter to the active signal. Repeated filtering will overwrite the previous values, so its currently not possible to apply a filter to an already filtered signal.", None))
-#endif // QT_CONFIG(whatsthis)
-        self.btn_apply_filter.setText(QCoreApplication.translate("MainWindow", u"Run pre-processing", None))
-        self.label_method.setText(QCoreApplication.translate("MainWindow", u"Method:", None))
         self.btn_view_vent.setText(QCoreApplication.translate("MainWindow", u"Ventilation", None))
         self.btn_view_hbr.setText(QCoreApplication.translate("MainWindow", u"Heart", None))
+        self.label_method.setText(QCoreApplication.translate("MainWindow", u"Method:", None))
+        self.label_6.setText(QCoreApplication.translate("MainWindow", u"Description", None))
+        self.label_peak_window.setText(QCoreApplication.translate("MainWindow", u"Peak Window", None))
+        self.peak_elgendi_ppg_peakwindow.setSuffix(QCoreApplication.translate("MainWindow", u" s", None))
+        self.beatWindowLabel.setText(QCoreApplication.translate("MainWindow", u"Beat Window", None))
+        self.peak_elgendi_ppg_beatwindow.setSuffix(QCoreApplication.translate("MainWindow", u" s", None))
+        self.beatOffsetLabel.setText(QCoreApplication.translate("MainWindow", u"Beat Offset", None))
+        self.peak_elgendi_ppg_beatoffset.setSuffix("")
+        self.minimumDelayLabel.setText(QCoreApplication.translate("MainWindow", u"Minimum Delay", None))
+        self.peak_elgendi_ppg_min_delay.setSuffix(QCoreApplication.translate("MainWindow", u" s", None))
+        self.textBrowser_2.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
+"p, li { white-space: pre-wrap; }\n"
+"hr { height: 1px; border-width: 0; }\n"
+"li.unchecked::marker { content: \"\\2610\"; }\n"
+"li.checked::marker { content: \"\\2612\"; }\n"
+"</style></head><body style=\" font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Algorithm for detecting peaks in a PPG signal, described here: <a href=\"https://doi.org/10.1371/journal.pone.0076585\"><span style=\" text-decoration: underline; color:#038387;\">Paper</span></a></p>\n"
+"<p style=\"-qt-paragraph-type:empty; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; text-decoration: underline; color:#038387;\"><br /></p>"
+                        "\n"
+"<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Implemented using <span style=\" font-style:italic;\">neurokit2.</span></p></body></html>", None))
+        self.label_21.setText(QCoreApplication.translate("MainWindow", u"Description", None))
+        self.label_22.setText(QCoreApplication.translate("MainWindow", u"Search Radius", None))
+        self.label_23.setText(QCoreApplication.translate("MainWindow", u"Description", None))
+        self.smoothingWindowLabel.setText(QCoreApplication.translate("MainWindow", u"Smoothing Window", None))
+        self.peak_neurokit2_smoothwindow.setSuffix(QCoreApplication.translate("MainWindow", u" s", None))
+        self.label_27.setText(QCoreApplication.translate("MainWindow", u"Average Window", None))
+        self.label_28.setText(QCoreApplication.translate("MainWindow", u"Grad. Thresh. Weight", None))
+        self.label_29.setText(QCoreApplication.translate("MainWindow", u"Min. Length Weight", None))
+        self.label_30.setText(QCoreApplication.translate("MainWindow", u"Minimum Delay", None))
+        self.label_31.setText(QCoreApplication.translate("MainWindow", u"Correct Artifacts", None))
+        self.peak_neurokit2_avgwindow.setSuffix(QCoreApplication.translate("MainWindow", u" s", None))
+        self.peak_neurokit2_mindelay.setSuffix(QCoreApplication.translate("MainWindow", u" s", None))
+        self.label_24.setText(QCoreApplication.translate("MainWindow", u"Description", None))
+        self.textBrowser_5.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+"<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
+"p, li { white-space: pre-wrap; }\n"
+"hr { height: 1px; border-width: 0; }\n"
+"li.unchecked::marker { content: \"\\2610\"; }\n"
+"li.checked::marker { content: \"\\2612\"; }\n"
+"</style></head><body style=\" font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
+"<p style=\"-qt-paragraph-type:empty; margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><br /></p></body></html>", None))
+        self.thresholdLabel.setText(QCoreApplication.translate("MainWindow", u"Threshold", None))
+        self.qRSComplexSizeLabel.setText(QCoreApplication.translate("MainWindow", u"QRS Complex Size", None))
+        self.correctArtifactsLabel_2.setText(QCoreApplication.translate("MainWindow", u"Correct Artifacts", None))
+        self.peak_promac_gaussian_sd.setSuffix(QCoreApplication.translate("MainWindow", u" ms", None))
+        self.label_25.setText(QCoreApplication.translate("MainWindow", u"Description", None))
+        self.correctArtifactsLabel.setText(QCoreApplication.translate("MainWindow", u"Correct Artifacts", None))
+        self.label_26.setText(QCoreApplication.translate("MainWindow", u"Description", None))
+        self.startIndexLabel.setText(QCoreApplication.translate("MainWindow", u"Start Index", None))
+        self.sampleToLabel.setText(QCoreApplication.translate("MainWindow", u"Stop Index", None))
+        self.peak_xqrs_sampto.setSpecialValueText(QCoreApplication.translate("MainWindow", u"end", None))
+        self.searchRadiusLabel.setText(QCoreApplication.translate("MainWindow", u"Search Radius", None))
+        self.adjustPeaksLabel.setText(QCoreApplication.translate("MainWindow", u"Adjust Peaks", None))
         self.toolbar_plots.setWindowTitle(QCoreApplication.translate("MainWindow", u"toolbar_plots", None))
     # retranslateUi
 
