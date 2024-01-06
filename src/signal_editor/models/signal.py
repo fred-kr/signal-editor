@@ -439,35 +439,16 @@ class SignalData:
         self.signal_rate.update(rate=rate, rate_interpolated=rate_interp)
 
 
-class SignalStorage(Mapping[SignalName | str, SignalData]):
+class SignalStorage(dict[SignalName | str, SignalData]):
     """
     A container for SignalData objects.
     """
 
-    def __init__(self, signal_items: Iterable[SignalData] = ()) -> None:
-        """
-        Initialize the SignalStore.
-
-        Parameters
-        ----------
-        signal_items : Iterable[SignalData], optional
-            SignalData objects to store, by default `()`.
-        """
-        self._store: dict[SignalName | str, SignalData] = {}
-        for sig in signal_items:
-            self._store[sig.name] = sig
+    def __init__(self, *args: Iterable[tuple[str, SignalData]], **kwargs: SignalData) -> None:
+        super().__init__(*args, **kwargs)
 
     def __setitem__(self, key: SignalName | str, value: SignalData) -> None:
-        self._store[key] = value
-
-    def __getitem__(self, item: SignalName | str) -> SignalData:
-        return self._store[item]
+        super().__setitem__(key, value)
 
     def deepcopy(self) -> "SignalStorage":
         return copy.deepcopy(self)
-
-    def update(self, *args: SignalData, **kwargs: SignalData) -> None:
-        """
-        Update the SignalStore with new SignalData objects.
-        """
-        self._store.update({sig.name: sig for sig in args}, **kwargs)

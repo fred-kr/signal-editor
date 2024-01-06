@@ -1,12 +1,14 @@
 import types
 from pathlib import Path
 from typing import TYPE_CHECKING, cast, override
-import rich as r
 
 import numpy as np
 import polars as pl
 import pyqtgraph as pg
+import rich as r
+from pyqtgraph.console import ConsoleWidget
 from PySide6.QtCore import (
+    QAbstractItemModel,
     QDate,
     QModelIndex,
     QObject,
@@ -15,26 +17,17 @@ from PySide6.QtCore import (
     Qt,
     Signal,
     Slot,
-    QAbstractItemModel,
 )
-from PySide6.QtGui import QStandardItemModel, QStandardItem
+from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
-    QComboBox,
     QDockWidget,
     QVBoxLayout,
-    QWidget,
 )
-from pyqtgraph.console import ConsoleWidget
-from pyqtgraph.parametertree import ParameterTree
 
 from ..handlers.plot_handler import PlotHandler
 from ..models.io import parse_file_name
-from ..models.peaks import UIPeakDetection
 from ..type_aliases import (
-    FilterMethod,
-    Pipeline,
     SignalName,
-    PeakDetectionMethod,
 )
 
 if TYPE_CHECKING:
@@ -85,27 +78,42 @@ COMBO_BOX_ITEMS = {
         "Neurokit (ECG)": "ecg_neurokit2",
     },
 }
+
+
 class ComboBoxMappingModel(QAbstractItemModel):
-    def __init__(self, items: dict[str, str], parent: QObject | None=None) -> None:
+    def __init__(self, items: dict[str, str], parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._items = items
 
     @override
-    def index(self, row: int, column: int, parent: QModelIndex | QPersistentModelIndex=QModelIndex()) -> QModelIndex:
+    def index(
+        self,
+        row: int,
+        column: int,
+        parent: QModelIndex | QPersistentModelIndex = QModelIndex(),
+    ) -> QModelIndex:
         if not self.hasIndex(row, column, parent):
             return QModelIndex()
         return self.createIndex(row, column)
 
     @override
-    def rowCount(self, parent: QModelIndex | QPersistentModelIndex=QModelIndex()) -> int:
+    def rowCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         return len(self._items)
 
     @override
-    def columnCount(self, parent: QModelIndex | QPersistentModelIndex=QModelIndex()) -> int:
+    def columnCount(
+        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
+    ) -> int:
         return 1
 
     @override
-    def data(self, index: QModelIndex | QPersistentModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> str | None:
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> str | None:
         if not index.isValid():
             return None
         if role == Qt.ItemDataRole.DisplayRole:
@@ -301,10 +309,15 @@ class UIHandler(QObject):
         self._set_elgendi_cleaning_params()
 
         # Peak Detection
-        # peak_method_model = ComboBoxMappingModel(items=COMBO_BOX_ITEMS["combo_box_peak_detection_method"])
-        # self.window.combo_box_peak_detection_method.setModel(peak_method_model)
-        self.window.combo_box_peak_detection_method.setCurrentIndex(0)
-        self.window.stacked_peak_parameters.setCurrentIndex(0)
+        peak_combo_box = self.window.combo_box_peak_detection_method
+        stacked_peak_widget = self.window.stacked_peak_parameters
+        if len(peak_combo_box.items()) > 0:
+            peak_combo_box.clear()
+            peak_combo_box.currentIndexChanged.disconnect()
+        peak_combo_box.setItems(COMBO_BOX_ITEMS["combo_box_peak_detection_method"])
+        peak_combo_box.setCurrentIndex(0)
+        stacked_peak_widget.setCurrentIndex(0)
+        peak_combo_box.currentIndexChanged.connect(stacked_peak_widget.setCurrentIndex)
 
     def _setup_active_plot_btn_grp(self) -> None:
         self.window.stacked_hbr_vent.setCurrentIndex(0)
@@ -319,9 +332,9 @@ class UIHandler(QObject):
         self.window.combo_box_preprocess_pipeline.currentTextChanged.connect(
             self.handle_preprocess_pipeline_changed
         )
-        self.window.combo_box_peak_detection_method.currentTextChanged.connect(
-            self.on_peak_detection_method_changed
-        )
+        # self.window.combo_box_peak_detection_method.currentTextChanged.connect(
+        #     self.on_peak_detection_method_changed
+        # )
 
         self.window.btn_apply_filter.clicked.connect(
             lambda: self.window.btn_detect_peaks.setEnabled(True)
@@ -354,7 +367,7 @@ class UIHandler(QObject):
         column_box.setCurrentIndex(0)
         column_box.currentTextChanged.connect(self.update_subset_param_widgets)
         self.update_subset_param_widgets(viable_filter_columns[0])
-        self.window.combo_box_filter_column.blockSignals(False)
+        column_box.blockSignals(False)
         try:
             parsed_date, parsed_id, parsed_oxy = parse_file_name(Path(path).name)
             self.window.date_edit_file_info.setDate(
@@ -407,22 +420,24 @@ class UIHandler(QObject):
         self.temperature_label_ventilation.setText("Temperature: -")
         mw.statusbar.showMessage("Ready")
 
-    def create_peak_detection_trees(self) -> None:
-        method: PeakDetectionMethod = "elgendi_ppg"
+    # def create_peak_detection_trees(self) -> None:
+    #     method: PeakDetectionMethod = "elgendi_ppg"
 
-        self.peak_tree = ParameterTree()
-        self.peak_params = UIPeakDetection(name="Adjustable Parameters")
-        self.peak_params.set_method(method)
-        self.peak_tree.setParameters(self.peak_params, showTop=True)
+    #     self.peak_tree = ParameterTree()
+    #     self.peak_params = UIPeakDetection(name="Adjustable Parameters")
+    #     self.peak_params.set_method(method)
+    #     self.peak_tree.setParameters(self.peak_params, showTop=True)
 
-        self.window.container_peak_detection_sidebar.layout().addWidget(self.peak_tree)
+    #     self.window.container_peak_detection_sidebar.layout().addWidget(self.peak_tree)
 
-    @Slot()
-    def on_peak_detection_method_changed(self) -> None:
-        try:
-            self.peak_params.set_method(self.window.peak_detection_method)
-        except NotImplementedError as e:
-            self.window.sig_show_message.emit(str(e), "info")
+    # @Slot()
+    # def on_peak_detection_method_changed(self) -> None:
+    #     method = self.window.peak_detection_method
+    #     try:
+    #         self.window.stacked_peak_parameters.setCurrentIndex()
+    #         self.peak_params.set_method(self.window.peak_detection_method)
+    #     except NotImplementedError as e:
+    #         self.window.sig_show_message.emit(str(e), "info")
 
     @Slot(int)
     def on_main_tab_changed(self, index: int) -> None:
@@ -479,9 +494,16 @@ class UIHandler(QObject):
         view_box = self.plot.plot_widgets.get_view_box(signal_name)
         mapped_pos: QPointF = view_box.mapSceneToView(pos)
         data_pos = int(mapped_pos.x())
-        temperature_column = self.window.data.sigs[signal_name].get_data().get_column("temperature").to_numpy(zero_copy_only=True)
+        temperature_column = (
+            self.window.data.sigs[signal_name]
+            .get_data()
+            .get_column("temperature")
+            .to_numpy(zero_copy_only=True)
+        )
         try:
-            temp_value = temperature_column[np.clip(data_pos, 0, temperature_column.size - 1)]
+            temp_value = temperature_column[
+                np.clip(data_pos, 0, temperature_column.size - 1)
+            ]
         except Exception:
             if data_pos < 0:
                 default_index = 0
@@ -589,4 +611,3 @@ def make_combo_box_model(items: dict[str, str]) -> QStandardItemModel:
         item.setData(internal_value, Qt.ItemDataRole.UserRole)
         model.appendRow(item)
     return model
-

@@ -1,6 +1,6 @@
 import datetime
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Iterable
 
 import numpy as np
 import numpy.typing as npt
@@ -18,7 +18,7 @@ from .signal import SignalData
 
 @dataclass(slots=True, frozen=True)
 class DescriptiveStatistics:
-    _described_array_name: str
+    _data_description: str
     mean: np.floating[Any]
     median: np.floating[Any]
     std: np.floating[Any]
@@ -68,9 +68,15 @@ class ManualPeakEdits:
     added: list[int] = field(default_factory=list)
     removed: list[int] = field(default_factory=list)
 
-    def __post_init__(self) -> None:
-        self.added.sort()
-        self.removed.sort()
+    def add_peak(self, index: int) -> None:
+        self.added.append(index)
+
+    def remove_peak(self, index: int) -> None:
+        self.removed.append(index)
+
+    def sort_and_deduplicate(self) -> None:
+        self.added = sorted(set(self.added))
+        self.removed = sorted(set(self.removed))
 
 
 @dataclass(slots=True, frozen=True)
@@ -131,3 +137,11 @@ class Result:
     manual_peak_edits: ManualPeakEdits
     source_data: SignalData
     other: dict[str, Any] = field(default_factory=dict)
+
+
+class ResultContainer(dict[str, Result]):
+    def __init__(self, *args: Iterable[tuple[str, Result]], **kwargs: Result) -> None:
+        super().__init__(*args, **kwargs)
+
+    def __setitem__(self, key: str, value: Result) -> None:
+        super().__setitem__(key, value)
