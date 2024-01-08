@@ -105,8 +105,8 @@ class PeakDetectionPantompkins(TypedDict):
 
 class CorrectXQRS(TypedDict):
     search_radius: int
-    smooth_window_size: NotRequired[int]
-    peak_dir: WFDBPeakDirection
+    # smooth_window_size: NotRequired[int]
+    peak_dir: Literal["up", "down", "both", "compare"]
 
 
 class PeakDetectionXQRS(TypedDict):

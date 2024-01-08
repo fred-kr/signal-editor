@@ -431,33 +431,7 @@ class UIHandler(QObject):
         # view_box = self.plot.plot_widgets.get_view_box(signal_name)
         data_pos = self.plot.plot_widgets[signal_name].plotItem.vb.mapSceneToView(pos).x()
         data_pos = np.clip(data_pos, 0, self.window.data.sigs[signal_name].data.height - 1, dtype=np.int32, casting="unsafe")
-        # if data_pos < 0:
-        #     data_pos = 0
-        # elif data_pos > self.window.data.sigs[signal_name].data.height:
-        #     data_pos = self.window.data.sigs[signal_name].data.height - 1
-            
-        # data_pos = mapped_pos.x()
         temp_value = self.window.data.sigs[signal_name].data.get_column("temperature").gather(data_pos).to_numpy(zero_copy_only=True)[0]
-        # temperature_column = (
-        #     self.window.data.sigs[signal_name]
-        #     .data
-        #     .get_column("temperature")
-        #     .gather(data_pos)
-        #     .to_numpy(zero_copy_only=True)
-        # )
-        
-        # try:
-        #     temp_value = temperature_column[
-        #         np.clip(data_pos, 0, temperature_column.size - 1)
-        #     ]
-        # except Exception:
-        #     if data_pos < 0:
-        #         default_index = 0
-        #     elif data_pos > temperature_column.size:
-        #         default_index = -1
-        #     else:
-        #         default_index = data_pos
-        #     temp_value = temperature_column[default_index]
         # TODO: give temperature labels same treatment as all the other things with two versions
         if signal_name == "hbr":
             self.temperature_label_hbr.setText(
@@ -528,8 +502,6 @@ class UIHandler(QObject):
         self.window.dbl_spin_box_highcut.setValue(8.0)
         self.window.spin_box_order.setValue(3)
         self.window.slider_order.setValue(3)
-        self.window.spin_box_window_size.setValue(250)
-        self.window.slider_window_size.setValue(250)
         self.sig_filter_inputs_ready.emit()
 
     @Slot()
@@ -537,17 +509,16 @@ class UIHandler(QObject):
         pipeline_value = self.window.pipeline
         if pipeline_value == "custom":
             self.window.container_custom_filter_inputs.setEnabled(True)
-            selected_filter = cast(str, self.window.combo_box_filter_method.value())
+            selected_filter = self.window.filter_method
             self.handle_filter_method_changed(selected_filter)
 
         elif pipeline_value == "ppg_elgendi":
             self.window.container_custom_filter_inputs.setEnabled(False)
-            self.window.combo_box_filter_method.setValue("None")
+            self.window.combo_box_filter_method.setValue("butterworth")
             self._set_elgendi_cleaning_params()
         else:
             # TODO: add UI and logic for other signal cleaning pipelines
             self.window.container_custom_filter_inputs.setEnabled(False)
-            self.window.combo_box_filter_method.setValue("None")
             msg = f"Selected pipeline {pipeline_value} not yet implemented, use either 'custom' or 'ppg_elgendi'."
             self.window.sig_show_message.emit(msg, "info")
             return

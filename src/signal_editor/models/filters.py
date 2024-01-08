@@ -51,6 +51,7 @@ def scale_signal(
     sig: pl.Series | NDArray[np.float32 | np.float64],
     robust: bool = False,
     window_size: int | None = None,
+    name: str | None = None,
     # rolling_window: bool = True,
 ) -> pl.Series:
     """
@@ -68,6 +69,8 @@ def scale_signal(
     window_size : int | None, optional
         The size of the rolling window over which to compute the
         scaling. If None, scale the entire series. Defaults to None.
+    name : str | None, optional
+        The name of the output series. If None, use the name of the input series.
 
     Returns
     -------
@@ -81,14 +84,14 @@ def scale_signal(
     function.
     """
     if isinstance(sig, np.ndarray):
-        sig = pl.Series("", sig)
+        sig = pl.Series(name or "", sig)
     sig = sig.cast(pl.Float64)
 
     if window_size:
-        return rolling_mad(sig, window_size) if robust else rolling_z(sig, window_size)
+        out = rolling_mad(sig, window_size) if robust else rolling_z(sig, window_size)
     else:
-        return scale_mad(sig) if robust else scale_z(sig)
-
+        out = scale_mad(sig) if robust else scale_z(sig)
+    return out.rename(name or sig.name)
 
 def filter_elgendi(sig: NDArray[np.float64], sampling_rate: int) -> NDArray[np.float64]:
     return np.asarray(

@@ -1,3 +1,4 @@
+import contextlib
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Iterable, Literal, Sequence, override
 
@@ -18,66 +19,6 @@ from ..type_aliases import (
 if TYPE_CHECKING:
     from ..app import MainWindow
 
-
-def _pinv_fallback(tr: QtGui.QTransform) -> QtGui.QTransform:
-    """
-    Calculate the pseudo-inverse of a QTransform object.
-
-    Parameters
-    ----------
-    tr : QtGui.QTransform
-        The QTransform object to calculate the pseudo-inverse of.
-
-    Returns
-    -------
-    QtGui.QTransform
-        The pseudo-inverse of the QTransform object.
-    """
-    arr = np.array(
-        [
-            tr.m11(),
-            tr.m12(),
-            tr.m13(),
-            tr.m21(),
-            tr.m22(),
-            tr.m23(),
-            tr.m31(),
-            tr.m32(),
-            tr.m33(),
-        ]
-    )
-    arr.shape = (3, 3)
-    pinv = np.linalg.pinv(arr)
-    return QtGui.QTransform(*pinv.ravel().tolist())
-
-
-def invertQTransform(tr: QtGui.QTransform) -> QtGui.QTransform:
-    """
-    Return a QTransform that is the inverse of `tr`.
-    A pseudo-inverse is returned if tr is not invertible.
-
-    Note that this function is preferred over `QTransform.inverted()` due to
-    bugs in that method. (specifically, Qt has floating-point precision issues
-    when determining whether a matrix is invertible)
-
-    Parameters
-    ----------
-    tr : QtGui.QTransform
-        The QTransform to get the inverse of.
-
-    Returns
-    -------
-    QtGui.QTransform
-        The (pseudo-)inverse of the QTransform object.
-    """
-    try:
-        det = tr.determinant()
-        detr = 1.0 / det  # let singular matrices raise ZeroDivisionError
-        inv = tr.adjoint()
-        inv *= detr
-        return inv
-    except ZeroDivisionError:
-        return _pinv_fallback(tr)
 
 
 class ScatterPlotItemError(Exception):
@@ -208,7 +149,7 @@ class CustomViewBox(pg.ViewBox):
                 else:
                     self.updateScaleBox(ev.buttonDownPos(), ev.pos())
             else:
-                tr = invertQTransform(self.childGroup.transform())
+                tr = pg.invertQTransform(self.childGroup.transform())
                 tr = tr.map(dif * mask) - tr.map(pg.Point(0, 0))
 
                 x = tr.x() if mask[0] == 1 else None
@@ -231,7 +172,7 @@ class CustomViewBox(pg.ViewBox):
             )
             s = ((mask * 0.02) + 1) ** dif
 
-            tr = invertQTransform(self.childGroup.transform())
+            tr = pg.invertQTransform(self.childGroup.transform())
 
             x = s[0] if mouseEnabled[0] == 1 else None
             y = s[1] if mouseEnabled[1] == 1 else None
@@ -389,47 +330,27 @@ type PlotItemAttr = Literal["signal", "peaks", "rate", "rate_mean"]
 type PlotItemVal = pg.PlotDataItem | pg.ScatterPlotItem | pg.InfiniteLine
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(slots=True)
 class PlotItems:
     name: SignalName | str
-    signal: pg.PlotDataItem | None = None
-    peaks: pg.ScatterPlotItem | None = None
-    rate: pg.PlotDataItem | None = None
-    rate_mean: pg.InfiniteLine | None = None
+    signal: pg.PlotDataItem = pg.PlotDataItem()
+    peaks: CustomScatterPlotItem = CustomScatterPlotItem()
+    rate: pg.PlotDataItem = pg.PlotDataItem()
+    rate_mean: pg.InfiniteLine = pg.InfiniteLine()
     # excluded_regions: list[pg.LinearRegionItem] | None = None
 
-    def __getitem__(self, key: PlotItemAttr) -> PlotItemVal | None:
-        return getattr(self, key)
-
-    def __setitem__(self, key: PlotItemAttr, value: PlotItemVal) -> None:
-        setattr(self, key, value)
-
-    def as_dict(self) -> dict[str, PlotItemVal | None]:
+    def as_dict(self) -> dict[str, PlotItemVal]:
         return {
-            "signal": self["signal"],
-            "peaks": self["peaks"],
-            "rate": self["rate"],
-            "rate_mean": self["rate_mean"],
+            "signal": self.signal,
+            "peaks": self.peaks,
+            "rate": self.rate,
+            "rate_mean": self.rate_mean,
         }
-
+        
 
 class PlotItemsContainer(dict[SignalName | str, PlotItems]):
-    def __init__(self, plots: Iterable[PlotItems] = ()) -> None:
-        super().__init__((plot.name, plot) for plot in plots)
-
-    def get_plot_item(
-        self, plot_name: SignalName | str, item_name: PlotItemAttr
-    ) -> PlotItemVal:
-        return self[plot_name][item_name]
-
-    def set_plot_item(
-        self,
-        plot_name: SignalName | str,
-        item_name: PlotItemAttr,
-        item_value: PlotItemVal,
-    ) -> None:
-        self[plot_name][item_name] = item_value
-
+    def __init__(self, *args: Iterable[tuple[SignalName | str, PlotItems]], **kwargs: PlotItems) -> None:
+        super().__init__(*args, **kwargs)
 
 def make_plot_widget(
     background_color: str, view_box: pg.ViewBox | CustomViewBox | None = None
@@ -476,7 +397,6 @@ class PlotHandler(QObject):
     Class that manages showing and updating plots.
     """
 
-    # sig_rate_updated = Signal(str)
     sig_peaks_edited = Signal(str)
     sig_excluded_range = Signal(int, int)
 
@@ -487,7 +407,7 @@ class PlotHandler(QObject):
         super().__init__(parent=parent)
         self._parent = parent
         self.click_tolerance = 80
-        self.plot_items = PlotItemsContainer()
+        self.plot_items: dict[str, PlotItems] = {"hbr": PlotItems(name="hbr"), "ventilation": PlotItems(name="ventilation")}
         self.plot_widgets = PlotWidgetContainer()
         self.peak_edits: dict[SignalName | str, ManualPeakEdits] = {name: ManualPeakEdits() for name in ("hbr", "ventilation")}
         self._last_edit_index: int = 0
@@ -507,11 +427,9 @@ class PlotHandler(QObject):
     def last_edit_index(self, value: int | float) -> None:
         self._last_edit_index = int(value)
 
-    def _init_plot_items(self) -> None:
-        self.plot_items["hbr"] = PlotItems(name="hbr")
-        self.plot_items["ventilation"] = PlotItems(name="ventilation")
-        self.plot_items["hbr_rate"] = PlotItems(name="hbr_rate")
-        self.plot_items["ventilation_rate"] = PlotItems(name="ventilation_rate")
+    # def _init_plot_items(self) -> None:
+    #     self.plot_items["hbr"] = PlotItems(name="hbr")
+    #     self.plot_items["ventilation"] = PlotItems(name="ventilation")
 
     @staticmethod
     def set_plot_titles_and_labels(
@@ -550,7 +468,7 @@ class PlotHandler(QObject):
                 legend.setLabelTextColor("black")
 
     def _prepare_plot_items(self) -> None:
-        self._init_plot_items()
+        # self._init_plot_items()
 
         style = self._parent.active_style
         pen_col = "lightgray" if style == "dark" else "black"
@@ -580,12 +498,6 @@ class PlotHandler(QObject):
 
         self.plot_widgets.get_view_box("hbr").setXLink("hbr_rate")
         self.plot_widgets.get_view_box("ventilation").setXLink("ventilation_rate")
-        # self.plot_widgets.get_signal_widget("hbr").getPlotItem().getViewBox().setXLink(
-        #     "rate_hbr"
-        # )
-        # self.plot_widgets.get_signal_widget(
-        #     "ventilation"
-        # ).getPlotItem().getViewBox().setXLink("rate_ventilation")
         self.plot_widgets.get_view_box("hbr_rate").setMouseMode(pg.ViewBox.RectMode)
         self.plot_widgets.get_view_box("ventilation_rate").setMouseMode(
             pg.ViewBox.RectMode
@@ -621,11 +533,11 @@ class PlotHandler(QObject):
 
     @Slot()
     def reset_plots(self) -> None:
-        for name, pw in self.plot_widgets.items():
+        for pw in self.plot_widgets.values():
             pw.getPlotItem().clear()
-            pw.getPlotItem().addLegend().clear()
-            self.plot_items[name]["signal"] = pg.PlotDataItem()
+            pw.getPlotItem().legend.clear()
 
+        self.plot_items = {"hbr": PlotItems(name="hbr"), "ventilation": PlotItems(name="ventilation")}
         self._prepare_plot_items()
 
     @Slot(int)
@@ -665,35 +577,23 @@ class PlotHandler(QObject):
 
         rate_name = f"{signal_name}_rate"
         rate_plot_widget = self.plot_widgets[rate_name]
-        # scatter_ref = self.plot_items[signal_name]["peaks"]
-        # rate_line_ref = self.plot_items[signal_name]["rate"]
-        # rate_mean_line_ref = self.plot_items[signal_name]["rate_mean"]
         item_dict = self.plot_items[signal_name].as_dict()
 
-        for name, item in item_dict.items():
-            if item is not None and name != "name":
+        with contextlib.suppress(Exception):
+            for name, item in item_dict.items():
                 if name == "signal":
                     item.sigClicked.disconnect(self.add_clicked_point)
-                if "rate" in name:
+                    plot_widget.removeItem(item)
+                elif name in ["rate", "rate_mean"]:
                     rate_plot_widget.removeItem(item)
                 else:
                     plot_widget.removeItem(item)
-
-        # if line_ref := self.plot_items[signal_name]["signal"]:
-        #     line_ref.sigClicked.disconnect(self.add_clicked_point)
-        #     plot_widget.removeItem(line_ref)
-        # if scatter_ref:
-        #     plot_widget.removeItem(scatter_ref)
-        # if rate_line_ref:
-        #     rate_plot_widget.removeItem(rate_line_ref)
-        # if rate_mean_line_ref:
-        #     rate_plot_widget.removeItem(rate_mean_line_ref)
 
         plot_widget.addItem(signal_line)
 
         signal_line.sigClicked.connect(self.add_clicked_point)
 
-        self.plot_items[signal_name]["signal"] = signal_line
+        self.plot_items[signal_name].signal = signal_line
 
     def draw_peaks(
         self,
@@ -741,26 +641,26 @@ class PlotHandler(QObject):
         )
         peaks_scatter.setZValue(60)
 
-        scatter_ref = self.plot_items[signal_name]["peaks"]
+        item_dict = self.plot_items[signal_name].as_dict()
 
-        if scatter_ref is not None:
-            scatter_ref.sigClicked.disconnect(self.remove_clicked_point)
-            plot_widget.removeItem(scatter_ref)
-
+        with contextlib.suppress(Exception):
+            for name, item in item_dict.items():
+                if name == "peaks":
+                    item.sigClicked.disconnect(self.remove_clicked_point)
+                    plot_widget.removeItem(item)
+            
         plot_widget.addItem(peaks_scatter)
         peaks_scatter.sigClicked.connect(self.remove_clicked_point)
-        self.plot_items[signal_name]["peaks"] = peaks_scatter
+        self.plot_items[signal_name].peaks = peaks_scatter
 
     def draw_rate(
         self,
         rate_data: NDArray[np.float64],
         plot_widget: pg.PlotWidget,
         signal_name: SignalName | str,
-        **kwargs: float,
+        mean_peak_interval: int | float | None = None
     ) -> None:
-        rate_mean = kwargs.get(
-            "mean_peak_interval", np.mean(rate_data, dtype=np.float64)
-        )
+        rate_mean = np.mean(rate_data, dtype=np.float64, axis=0)
         pen_color = "green"
         mean_pen_color = "goldenrod"
 
@@ -769,21 +669,22 @@ class PlotHandler(QObject):
             pen=pen_color,
             autoDownsample=True,
             skipFiniteCheck=True,
-            name=f"rate_{signal_name}",
+            name=f"{signal_name}_rate",
         )
         rate_mean_line = pg.InfiniteLine(
-            pos=rate_mean,
+            rate_mean,
             angle=0,
             pen=dict(color=mean_pen_color, width=2, style=Qt.PenStyle.DashLine),
-            name=f"rate_mean_{signal_name}",
+            name=f"{signal_name}_rate_mean",
         )
 
-        rate_line_ref = self.plot_items[signal_name]["rate"]
-        rate_mean_ref = self.plot_items[signal_name]["rate_mean"]
+        item_dict = self.plot_items[signal_name].as_dict()
 
-        if rate_line_ref is not None:
-            plot_widget.removeItem(rate_line_ref)
-            plot_widget.removeItem(rate_mean_ref)
+        with contextlib.suppress(Exception):
+            for name, item in item_dict.items():
+                if name in ["rate", "rate_mean"]:
+                    plot_widget.removeItem(item)
+                    plot_widget.getPlotItem().legend.clear()
 
         if legend := plot_widget.getPlotItem().legend:
             legend.clear()
@@ -802,8 +703,8 @@ class PlotHandler(QObject):
             f"<span style='color: {mean_pen_color}; font-family: Segoe UI; font-size: 10pt;'>Mean Rate: {int(rate_mean)}</span>",
         )
 
-        self.plot_items[signal_name]["rate"] = rate_line
-        self.plot_items[signal_name]["rate_mean"] = rate_mean_line
+        self.plot_items[signal_name].rate = rate_line
+        self.plot_items[signal_name].rate_mean = rate_mean_line
 
     @Slot(object, object, object)
     def remove_clicked_point(
@@ -833,7 +734,7 @@ class PlotHandler(QObject):
 
         name = "hbr" if "hbr" in f"{sender.name()}" else "ventilation"
 
-        if scatter_plot := self.plot_items[name]["peaks"]:
+        if scatter_plot := self.plot_items[name].peaks:
             new_points_x = np.delete(scatter_plot.data["x"], to_remove_index)  # type: ignore
             new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)  # type: ignore
             scatter_plot.setData(x=new_points_x, y=new_points_y)
@@ -850,7 +751,7 @@ class PlotHandler(QObject):
         vb = self.plot_widgets.get_view_box(name)
         if vb.mapped_peak_selection is None:
             return
-        scatter_ref = self.plot_items[name]["peaks"]
+        scatter_ref = self.plot_items[name].peaks
         if scatter_ref is None:
             return
         rect: tuple[
@@ -866,8 +767,8 @@ class PlotHandler(QObject):
         x_range = (rect_x, rect_x + rect_width)
         y_range = (rect_y, rect_y + rect_height)
 
-        scatter_x: NDArray[np.integer[Any]] | None
-        scatter_y: NDArray[np.floating[Any]] | None
+        # scatter_x: NDArray[np.integer[Any]] | None
+        # scatter_y: NDArray[np.floating[Any]] | None
         scatter_x, scatter_y = scatter_ref.getData()
         if scatter_x is None or scatter_y is None:
             return
@@ -910,8 +811,8 @@ class PlotHandler(QObject):
         ev.accept()
         click_x = int(ev.pos().x())
         name = "hbr" if "hbr" in f"{sender.name()}" else "ventilation"
-        signal_line = self.plot_items[name]["signal"]
-        scatter_ref = self.plot_items[name]["peaks"]
+        signal_line = self.plot_items[name].signal
+        scatter_ref = self.plot_items[name].peaks
 
         if signal_line is None or scatter_ref is None:
             return
@@ -928,15 +829,24 @@ class PlotHandler(QObject):
         )[0]
 
         # Select the subset of y-values within the radius
-        y_values_in_radius = yData[indices]
+        y_values_in_radius: NDArray[np.float64] = yData[indices]
 
-        # Find the index of the max y-value
+        # Find the index of the max y-value and the index of the min y-value
         max_y_index = indices[np.argmax(y_values_in_radius)]
-        if max_y_index in scatter_ref.data["x"]:
+        min_y_index = indices[np.argmin(y_values_in_radius)]
+
+        # Check which index is closer to the click position
+        if abs(xData[max_y_index] - click_x) > abs(xData[min_y_index] - click_x):
+            use_index = min_y_index
+            use_val = y_values_in_radius.min()
+        else:
+            use_index = max_y_index
+            use_val = y_values_in_radius.max()
+        if use_index in scatter_ref.data["x"]:
             return
 
         # Get the new x and y values
-        x_new, y_new = xData[max_y_index], y_values_in_radius.max()
+        x_new, y_new = xData[use_index], use_val
         scatter_ref.addPoints(x=x_new, y=y_new)
         self.peak_edits[name].added.append(int(x_new))
         self.last_edit_index = x_new
@@ -966,12 +876,7 @@ class PlotHandler(QObject):
         vb = self.plot_widgets.get_view_box(name)
         if vb.mapped_deletion_selection is None:
             return
-        signal_data_ref = self.plot_items[name]["signal"]
-        if signal_data_ref is None:
-            return
-        rect: tuple[
-            float, float, float, float
-        ] = vb.mapped_deletion_selection.boundingRect().getRect()
+        rect: tuple[float, float, float, float] = vb.mapped_deletion_selection.boundingRect().getRect()
         rect_x, rect_width = int(rect[0]), int(rect[2])
 
         x_range = (rect_x, rect_x + rect_width)

@@ -48,8 +48,8 @@ class DataState:
 
 class DataHandler(QObject):
     sig_dh_error = Signal(str)
-    sig_dh_peaks_updated = Signal(str)
-    sig_dh_rate_updated = Signal(str)
+    # sig_dh_peaks_updated = Signal(str)
+    # sig_dh_rate_updated = Signal(str)
 
     def __init__(self, parent: "MainWindow") -> None:
         super().__init__(parent)
@@ -58,10 +58,10 @@ class DataHandler(QObject):
         self.sigs: SignalStorage = SignalStorage()
         self.focused_results: dict[SignalName | str, FocusedResult] = {}
         self._sampling_rate: int = parent.spin_box_fs.value()
-        self._connect_signals()
+        # self._connect_signals()
 
-    def _connect_signals(self) -> None:
-        self.sig_dh_peaks_updated.connect(self.run_rate_calculation)
+    # def _connect_signals(self) -> None:
+        # self.sig_dh_peaks_updated.connect(self.run_rate_calculation)
 
     @property
     def fs(self) -> int:
@@ -170,13 +170,16 @@ class DataHandler(QObject):
     def run_peak_detection(
         self, name: SignalName | str, peak_parameters: PeakDetectionParameters
     ) -> None:
-        self.sigs[name].detect_peaks(**peak_parameters)
-        self.sig_dh_peaks_updated.emit(name)
+        sig = self.sigs[name].processed_data
+        self.sigs[name].detect_peaks(sig, **peak_parameters)
+        self.run_rate_calculation(name)
+        # self.sigs[name].calculate_rate()
+        # self.sig_dh_peaks_updated.emit(name)
 
-    @Slot(str)
+    # @Slot(str)
     def run_rate_calculation(self, name: SignalName | str) -> None:
         self.sigs[name].calculate_rate()
-        self.sig_dh_rate_updated.emit(name)
+        # self.sig_dh_rate_updated.emit(name)
 
     def get_descriptive_stats(self, name: SignalName | str) -> SummaryStatistics:
         intervals = self.sigs[name].get_peak_diffs()
@@ -193,6 +196,8 @@ class DataHandler(QObject):
     def compute_result_df(self, name: SignalName | str) -> None:
         sig = self.sigs[name]
         peaks = sig.peaks
+        if peaks is None:
+            return
         diffs = sig.get_peak_diffs()
         rate = sig.signal_rate.rate
 
@@ -208,33 +213,17 @@ class DataHandler(QObject):
             rate_bpm=rate,
         )
         self.focused_results[name] = focused_result
-        # result_df = (
-        #     self.df.lazy()
-        #     .select(
-        #         pl.col("time_s").gather(peaks).round(4),
-        #         pl.col("index").gather(peaks).alias("peak_index"),
-        #         pl.Series("peak_intervals", diffs, pl.Int32),
-        #         pl.col("temperature").gather(peaks).round(1),
-        #         pl.Series("rate_bpm", rate, pl.Float64).round(1),
-        #     )
-        #     .collect()
-        # )
-
-        # self.result_dfs.update(name, result_df)
 
     def get_focused_result_df(
         self, name: SignalName | str, compute: bool = True
     ) -> pl.DataFrame:
         if compute or name not in self.focused_results:
             self.compute_result_df(name)
-        # return self.result_dfs[name]
         return self.focused_results[name].to_polars()
 
     def get_state(self) -> DataState:
         state = DataState(df=self.df.clone(), sigs=self.sigs.deepcopy())
         state.focused_results = self.focused_results
-        # state.peaks = self.sigs[name].peaks
-        # state.rate = self.sigs[name].signal_rate
         return state
 
     def restore_state(self, state: DataState) -> None:

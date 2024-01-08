@@ -20,7 +20,7 @@ from .filters import (
     filter_elgendi,
     scale_signal,
 )
-from .peaks import find_peaks
+from .peaks import find_local_peaks, find_peaks_xqrs, find_ppg_peaks_elgendi
 
 
 class SectionIndices(NamedTuple):
@@ -59,29 +59,6 @@ class RateData:
 
 @dataclass(slots=True)
 class SignalData:
-    """
-    Signal class representing a signal with associated data and operations.
-
-    Parameters
-    ----------
-    name : SignalName | str
-        The name of the signal.
-    data : pl.DataFrame
-        The data associated with the signal.
-    sampling_rate : int
-        The sampling rate of the signal.
-    excluded_sections : list[ExclusionIndices], optional
-        List of excluded sections. Defaults to an empty list.
-    active_section : pl.DataFrame, optional
-        The currently active section of the signal. Defaults to the entire data.
-    _original_data : pl.DataFrame, optional
-        The original data of the signal. Defaults to a clone of the input data.
-    _processed_name : str, optional
-        The name of the processed signal. Defaults to "{name}_processed".
-    is_finished : bool, optional
-        Flag indicating if the signal processing is finished. Defaults to False.
-    """
-
     name: SignalName | str
     data: pl.DataFrame
     sampling_rate: int
@@ -91,9 +68,7 @@ class SignalData:
     _original_data: pl.DataFrame = field(init=False, repr=False)
     processed_name: str = field(init=False, repr=False)
     _processed_data: NDArray[np.float64] = field(init=False, repr=False)
-    peaks: NDArray[np.int32] = field(
-        default_factory=lambda: np.empty(0, dtype=np.int32)
-    )
+    peaks: NDArray[np.int32] | None = None
     is_finished: bool = False
 
     def __post_init__(self) -> None:
@@ -102,9 +77,7 @@ class SignalData:
             self.data = self.data.with_row_count("index")
         self.data = self.data.select(
             pl.col("index", "temperature", self.name),
-            pl.repeat(None, self.data.height, dtype=pl.Float64).alias(
-                self.processed_name
-            ),
+            pl.col(self.name).alias(self.processed_name),
             pl.repeat(False, self.data.height, dtype=pl.Boolean).alias("is_peak"),
             pl.repeat(True, self.data.height, dtype=pl.Boolean).alias("is_included"),
             pl.repeat(False, self.data.height, dtype=pl.Boolean).alias("is_processed"),
@@ -113,7 +86,9 @@ class SignalData:
         self.active_section = self.data.select(
             "index", "temperature", self.name, self.processed_name, "is_peak"
         )
-        self._processed_data = np.empty(self.data.height, dtype=np.float64)
+        self._processed_data = self.active_section.get_column(
+            self.processed_name
+        ).to_numpy()
 
     @property
     def processed_data(self) -> NDArray[np.float64]:
@@ -127,32 +102,13 @@ class SignalData:
     def signal_rate(self) -> RateData:
         return self._signal_rate
 
-    # def make_hdf5_compatible(
-    #     self,
-    # ) -> tuple[
-    #     dict[str, str | int | bool], dict[str, NDArray[np.float64] | NDArray[np.int32]]
-    # ]:
-    #     """
-    #     Returns a tuple of dictionaries containing the attributes and datasets of this
-    #     `Signal` instance in a format that is compatible with HDF5.
-    #     """
-    #     to_attrs = {
-    #         "name": self.name,
-    #         "sampling_rate": self.sampling_rate,
-    #         "is_finished": self.is_finished,
-    #     }
-    #     to_dset = {
-    #         "data": self.data.to_numpy(structured=True),
-    #         "excluded_sections": np.array(self.excluded_sections, dtype=np.int32),
-    #         "original_data": self._original_data.to_numpy(structured=True),
-    #         "rate": self.signal_rate.rate,
-    #         "rate_interpolated": self.signal_rate.rate_interpolated,
-    #         "peaks": self.peaks,
-    #     }
+    @signal_rate.setter
+    def signal_rate(self, value: RateData) -> None:
+        self._signal_rate = value
 
-    #     return to_attrs, to_dset
-
-    def as_dict(self) -> dict[str, str | int | bool | NDArray[np.float64] | NDArray[np.int32]]:
+    def as_dict(
+        self,
+    ) -> dict[str, str | int | bool | NDArray[np.float64] | NDArray[np.int32] | None]:
         """
         Returns a dictionary containing the attributes and datasets of this `Signal`
         instance.
@@ -222,6 +178,10 @@ class SignalData:
             "index", "temperature", self.name, self.processed_name, "is_peak"
         )
         self.excluded_sections = []
+        self.is_finished = False
+        self.peaks = None
+        self._signal_rate.clear()
+        self._processed_data = self.data.get_column(self.processed_name).to_numpy()
 
     def mark_excluded(self, start: int, stop: int) -> None:
         """
@@ -332,6 +292,9 @@ class SignalData:
         else:
             raise NotImplementedError(f"Pipeline `{pipeline}` not implemented.")
 
+        # if self.processed_name in self.active_section.columns:
+        #     self.active_section = self.active_section.drop(self.processed_name)
+        # self.active_section.hstack([filtered], in_place=True)
         self.active_section = self.active_section.with_columns(
             pl.Series(self.processed_name, filtered, pl.Float64).alias(
                 self.processed_name
@@ -363,11 +326,16 @@ class SignalData:
             self.active_section.get_column(use_col), robust, window_size
         )
 
+        # if self.processed_name in self.active_section.columns:
+        #     self.active_section = self.active_section.drop(self.processed_name)
+        # self.active_section.hstack([scaled], in_place=True)
         self.active_section = self.active_section.with_columns(
-            (scaled).alias(self.processed_name)
+            pl.Series(self.processed_name, scaled, pl.Float64).alias(
+                self.processed_name
+            )
         )
 
-        self.processed_data = scaled.to_numpy()
+        self.processed_data = scaled.to_numpy(writable=True)
 
     def save_active(self) -> None:
         """
@@ -406,27 +374,61 @@ class SignalData:
         return self.data.filter(pl.col("is_processed").not_())
 
     def detect_peaks(
-        self, method: PeakDetectionMethod, input_values: PeakDetectionInputValues
+        self,
+        sig: NDArray[np.float64],
+        method: PeakDetectionMethod,
+        input_values: PeakDetectionInputValues,
     ) -> None:
-        sig = self.active_section.get_column(self.processed_name).to_numpy()
+        if method == "wfdb_xqrs":
+            peaks = find_peaks_xqrs(
+                sig,
+                self.processed_data,
+                self.sampling_rate,
+                radius=input_values["corrections"]["search_radius"],
+                peak_dir=input_values["corrections"]["peak_dir"],
+                sampfrom=input_values["sampfrom"],
+                sampto=input_values["sampto"],
+            )
+        elif method in ["neurokit2", "pantompkins", "promac"]:
+            peaks = nk.ecg_peaks(
+                sig,
+                sampling_rate=self.sampling_rate,
+                method=method,
+                correct_artifacts=input_values.get("correct_artifacts", False),
+            )[1]["ECG_R_Peaks"]
+        elif method == "local":
+            peaks = find_local_peaks(
+                sig, radius=input_values.get("radius", self.sampling_rate // 2)
+            )
+        elif method == "elgendi_ppg":
+            peaks = find_ppg_peaks_elgendi(sig, self.sampling_rate, **input_values)
+        else:
+            raise NotImplementedError(
+                f"Peak detection method `{method}` not implemented."
+            )
 
-        self.peaks = find_peaks(
-            sig, self.sampling_rate, method=method, input_values=input_values
-        )
-
+        pl_peaks = pl.Series("peaks", peaks, dtype=pl.Int32)
         self.active_section = self.active_section.with_columns(
-            pl.when(pl.col("index").is_in(self.peaks))
-            .then(True)
-            .otherwise(pl.col("is_peak"))
-            .alias("is_peak")
+            (
+                pl.when(pl.col("index").is_in(pl_peaks))
+                .then(pl.lit(True))
+                .otherwise(pl.col("is_peak"))
+            ).alias("is_peak")
         )
 
-    def get_peak_indices(self) -> NDArray[np.int32]:
-        return (
-            self.active_section.filter(pl.col("is_peak")).get_column("index").to_numpy()
-        )
+        self.peaks = pl_peaks.to_numpy(writable=True)
+        self.calculate_rate()
 
-    def get_peak_diffs(self, nan_to_zero: bool = True) -> NDArray[np.int32]:
+    def get_peak_indices(self, _return_value: bool = True) -> NDArray[np.int32]:
+        self.peaks = (
+            self.active_section.filter(pl.col("is_peak"))
+            .get_column("index")
+            .cast(pl.Int32)
+            .to_numpy(writable=True)
+        )
+        return self.peaks
+
+    def get_peak_diffs(self) -> NDArray[np.int32]:
         """
         Calculates the differences between adjacent peaks.
 
@@ -434,17 +436,13 @@ class SignalData:
         -------
         NDArray[np.int32]
             If less than 2 peaks are detected, returns an empty array. Otherwise,
-            returns the differences between adjacent peaks,
+            returns the differences between adjacent peaks.
         """
-        if self.peaks.size < 2:
-            return np.array([], dtype=np.int32)
-        return (
-            np.ediff1d(self.peaks, to_begin=[0])
-            if nan_to_zero
-            else np.ediff1d(self.peaks)
-        )
+        if self.peaks is None or self.peaks.size < 2:
+            return np.empty(0, dtype=np.int32)
+        return np.ediff1d(self.peaks, to_begin=[0])
 
-    def calculate_rate(self) -> None:
+    def calculate_rate(self, peaks: NDArray[np.int32] | None = None) -> None:
         """
         Calculates signal rate using `neurokit2.signal_rate`.
 
@@ -453,9 +451,11 @@ class SignalData:
         ValueError
             If there are less than 3 peaks.
         """
-        peaks = self.peaks
-        if peaks.size < 3:
-            raise ValueError("Too few peaks to calculate rate.")
+
+        if peaks is None:
+            peaks = self.peaks if self.peaks is not None else self.get_peak_indices()
+        # if self.peaks.size < 3:
+        # raise ValueError("Too few peaks to calculate rate.")
         fs = self.sampling_rate
 
         rate = np.asarray(
@@ -478,7 +478,8 @@ class SignalData:
             ),
             dtype=np.float64,
         )
-        self.signal_rate.update(rate=rate, rate_interpolated=rate_interp)
+        self.signal_rate.rate = rate
+        self.signal_rate.rate_interpolated = rate_interp
 
 
 class SignalStorage(dict[SignalName | str, SignalData]):

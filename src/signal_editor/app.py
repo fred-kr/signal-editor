@@ -60,6 +60,7 @@ from .type_aliases import (
     PeakDetectionLocalMaxima,
     PeakDetectionMethod,
     PeakDetectionNeurokit2,
+    PeakDetectionPantompkins,
     PeakDetectionParameters,
     PeakDetectionProMAC,
     PeakDetectionXQRS,
@@ -246,7 +247,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.action_remove_deletion_rect.triggered.connect(
             self.plot.show_exclusion_selector
         )
-        self.action_remove_selected_data.triggered.connect(self.plot.mark_excluded)
+        # self.action_remove_selected_data.triggered.connect(self.plot.mark_excluded)
 
         self.spin_box_fs.valueChanged.connect(self.data.update_fs)
 
@@ -260,11 +261,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot(str)
     def _sync_peaks_data_plot(self, name: SignalName) -> None:
-        plot_item = self.plot.plot_items[name]["peaks"]
+        plot_item = self.plot.plot_items[name].peaks
         if plot_item is None:
             return
         plot_peak_indices = plot_item.data["x"].astype(np.int32)  # type: ignore
-        data_peak_indices = self.data.sigs[name].peaks
+        data_peak_indices = self.data.sigs[name].peaks.copy()
         plot_peak_indices.sort()
         data_peak_indices.sort()
 
@@ -434,24 +435,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot()
     def handle_plot_draw(self) -> None:
         with pg.BusyCursor():
-            hbr_line_exists = self.plot.plot_items["hbr"]["signal"] is not None
+            hbr_line_exists = self.plot.plot_items["hbr"].signal.xData is not None
             ventilation_line_exists = (
-                self.plot.plot_items["ventilation"]["signal"] is not None
+                self.plot.plot_items["ventilation"].signal.xData is not None
             )
-            # hbr_line_exists = (
-            #     self.plot.plot_widgets["hbr"]
-            #     .getPlotItem()
-            #     .listDataItems()
-            #     .__len__()
-            #     > 0
-            # )
-            # ventilation_line_exists = (
-            #     self.plot.plot_widgets.get_signal_widget("ventilation")
-            #     .getPlotItem()
-            #     .listDataItems()
-            #     .__len__()
-            #     > 0
-            # )
 
             if not hbr_line_exists and not ventilation_line_exists:
                 self._draw_initial_signals()
@@ -465,14 +452,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 sig.data.get_column(name).to_numpy(), plot_widget, name
             )
         self._set_x_ranges()
-
-        # for name in {"hbr", "ventilation"}:
-        #     name = cast(SignalName, name)
-        #     data = self.data.sigs[name].data.get_column(name).to_numpy()
-        #     self.plot.draw_signal(
-        #         data, self.plot.plot_widgets.get_signal_widget(name), name
-        #     )
-        # self._set_x_ranges()
 
     def _set_x_ranges(self) -> None:
         data_length = self.data.df.height
@@ -488,21 +467,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._update_plot_view("hbr")
         self._update_plot_view("ventilation")
 
-        # data_length = self.data.sigs[self.signal_name].active_section.height
-        # plot_widgets = self.plot.plot_widgets.get_all_widgets()
-        # for widget in plot_widgets:
-        #     widget.getPlotItem().getViewBox().setLimits(
-        #         xMin=-0.25 * data_length,
-        #         xMax=1.25 * data_length,
-        #         maxYRange=1e5,
-        #         minYRange=0.5,
-        #     )
-        #     widget.getPlotItem().getViewBox().setXRange(0, data_length)
-        # self._update_plot_view("hbr")
-        # self._update_plot_view("ventilation")
-
     def _update_signal(self, name: SignalName | str) -> None:
-        signal_data = self.data.sigs[name].get_data().get_column(name).to_numpy()
+        signal_data = self.data.sigs[name].processed_data
         plot_widget = self.plot.plot_widgets[name]
         self.plot.draw_signal(signal_data, plot_widget, name)
         self._set_x_ranges()
@@ -647,6 +613,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             rate_interp,
             plot_widget=rate_plot_widget,
             signal_name=name,
+            mean_peak_interval=self.data.sigs[name].signal_rate.rate.mean(
+                dtype=np.int32
+            ),
         )
 
     @Slot(str)
@@ -816,6 +785,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     peak_dir=cast(WFDBPeakDirection, self.peak_xqrs_peak_dir.value()),
                 ),
             )
+        elif method == "pantompkins":
+            vals = PeakDetectionPantompkins(
+                correct_artifacts=self.peak_pantompkins_correct_artifacts.isChecked(),
+            )
         else:
             raise ValueError(f"Unknown peak detection method: {method}")
 
@@ -837,12 +810,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     def make_results(self, result_name: SignalName | str) -> None:
-        self.btn_compute_results.processing("Getting results...")
+        btn = self.btn_compute_results
+        btn.processing("Working...")
 
         identifier = self.get_identifier(result_name)
         data_info = self.get_data_selection_info()
         processing_info = self.get_processing_info()
-        
+
         focused_result_df = self.data.get_focused_result_df(result_name)
         focused_result = self.data.focused_results[result_name]
         statistics = self.data.get_descriptive_stats(result_name)
@@ -860,9 +834,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         result_table: QTableView = getattr(self, f"table_view_results_{result_name}")
         self._set_table_model(result_table, PolarsModel(focused_result_df))
         self._results[result_name] = results
-        # setattr(self, f"{result_name}_results", results)
-        self.btn_compute_results.feedback(True)
+        btn.feedback(True, limitedTime=False)
         self.tabs_main.setCurrentIndex(2)
+        btn.reset()
 
     @Slot()
     def save_state(self) -> None:
@@ -1044,7 +1018,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 continue
             processed_signal = self.data.sigs[s_name].processed_data
             rate = self.data.sigs[s_name].signal_rate.rate_interpolated
-            peaks = self.data.sigs[s_name].peaks
+            peaks = self.data.sigs[s_name].get_peak_indices()
             peaks_y = processed_signal[peaks]
             rate_widget = self.plot.plot_widgets[f"{s_name}_rate"]
             self.plot.draw_signal(processed_signal, signal_widget, s_name)

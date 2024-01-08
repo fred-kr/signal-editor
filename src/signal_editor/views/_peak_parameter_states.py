@@ -19,7 +19,7 @@ INITIAL_PEAK_STATES = {
         "minimum": 0.050000000000000,
         "maximum": 5.000000000000000,
         "singleStep": 0.001000000000000,
-        "stepType": QAbstractSpinBox.StepType.AdaptiveDecimalStepType,
+        "stepType": QAbstractSpinBox.StepType.DefaultStepType,
         "value": 0.111000000000000,
     },
     "peak_elgendi_ppg_beatwindow": {
@@ -27,28 +27,28 @@ INITIAL_PEAK_STATES = {
         "minimum": 0.100000000000000,
         "maximum": 5.000000000000000,
         "singleStep": 0.001000000000000,
-        "stepType": QAbstractSpinBox.StepType.AdaptiveDecimalStepType,
+        "stepType": QAbstractSpinBox.StepType.DefaultStepType,
         "value": 0.667000000000000,
     },
     "peak_elgendi_ppg_beatoffset": {
         "decimals": 2,
         "maximum": 1.000000000000000,
         "singleStep": 0.010000000000000,
-        "stepType": QAbstractSpinBox.StepType.AdaptiveDecimalStepType,
+        "stepType": QAbstractSpinBox.StepType.DefaultStepType,
         "value": 0.020000000000000,
     },
     "peak_elgendi_ppg_min_delay": {
         "decimals": 2,
         "maximum": 10.000000000000000,
         "singleStep": 0.010000000000000,
-        "stepType": QAbstractSpinBox.StepType.AdaptiveDecimalStepType,
+        "stepType": QAbstractSpinBox.StepType.DefaultStepType,
         "value": 0.300000000000000,
     },
     "peak_local_max_radius": {
         "accelerated": True,
         "minimum": 5,
         "maximum": 9999,
-        "stepType": QAbstractSpinBox.StepType.AdaptiveDecimalStepType,
+        "stepType": QAbstractSpinBox.StepType.DefaultStepType,
         "value": 111,
     },
     "peak_neurokit2_smoothwindow": {
@@ -117,7 +117,7 @@ INITIAL_PEAK_STATES = {
         "minimum": 5,
         "maximum": 99_999,
         "value": 90,
-        "stepType": QAbstractSpinBox.StepType.AdaptiveDecimalStepType,
+        "stepType": QAbstractSpinBox.StepType.DefaultStepType,
     },
     "peak_xqrs_peak_dir": {
         "items": {
