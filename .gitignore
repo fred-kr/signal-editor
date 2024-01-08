@@ -156,3 +156,4 @@ comment-files
 build/
 **/_internal
 pickles/
+external-typings/

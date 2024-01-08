@@ -3,18 +3,13 @@ import os
 import pickle
 import sys
 import time
-from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, TypedDict, cast
+from typing import Literal, TypedDict, cast
 
-from .models.point import Point
 import h5py
 import numpy as np
-import polars as pl
 import pyqtgraph as pg
-pg.Point = Point
-
 import qdarkstyle
 from loguru import logger
 from PySide6.QtCore import (
@@ -39,8 +34,6 @@ from PySide6.QtWidgets import (
     QTableView,
 )
 
-from .models.io import write_hdf5
-
 from .handlers.data_handler import DataHandler, DataState
 from .handlers.plot_handler import PlotHandler
 from .handlers.ui_handler import UIHandler
@@ -49,6 +42,7 @@ from .models.data import (
     DescriptiveStatsModel,
     PolarsModel,
 )
+from .models.io import write_hdf5
 from .models.result import (
     ManualPeakEdits,
     ProcessingParameters,
@@ -58,20 +52,27 @@ from .models.result import (
     SelectionParameters,
 )
 from .type_aliases import (
+    CorrectXQRS,
     FileMetadata,
     FilterMethod,
     OxygenCondition,
+    PeakDetectionElgendiPPG,
+    PeakDetectionLocalMaxima,
     PeakDetectionMethod,
+    PeakDetectionNeurokit2,
     PeakDetectionParameters,
-    PeakEdits,
+    PeakDetectionProMAC,
+    PeakDetectionXQRS,
     Pipeline,
     ScaleMethod,
     SignalFilterParameters,
     SignalName,
     StandardizeParameters,
     StateDict,
+    WFDBPeakDirection,
 )
 from .views.main_window import Ui_MainWindow
+
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     sig_data_filtered = Signal(str)
@@ -160,9 +161,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def peak_detection_method(self) -> PeakDetectionMethod:
         return cast(PeakDetectionMethod, self.combo_box_peak_detection_method.value())
 
-    @property
-    def results(self) -> ResultContainer:
-        return self._results
     # endregion
 
     # region Theme Switcher
@@ -210,7 +208,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.sig_data_loaded.connect(self.handle_plot_draw)
         self.sig_data_loaded.connect(self.handle_table_view_data)
         self.sig_peaks_updated.connect(self.handle_draw_results)
-        self.sig_peaks_updated.connect(self.handle_table_view_data)
+        # self.sig_peaks_updated.connect(self.handle_table_view_data)
         self.sig_plot_data_changed.connect(self._update_plot_view)
         self.sig_show_message.connect(self.show_message)
         self.sig_data_restored.connect(self.refresh_app_state)
@@ -294,15 +292,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot()
     def save_to_hdf5(self) -> None:
         default_out = f"{self.output_dir.as_posix()}/{self.file_info.completeBaseName()}_results.hdf5"
-        if (
-            file_path := QFileDialog.getSaveFileName(
-                self,
-                "Save to HDF5",
-                default_out,
-                "HDF5 Files (*.hdf5 *.h5)",
-            )[0]
-        ):
-            write_hdf5(file_path, getattr(self, f"{self.result_name}_results"))
+        if file_path := QFileDialog.getSaveFileName(
+            self,
+            "Save to HDF5",
+            default_out,
+            "HDF5 Files (*.hdf5 *.h5)",
+        )[0]:
+            write_hdf5(file_path, self._results[self.result_name])
 
     @Slot()
     def update_results(self) -> None:
@@ -314,13 +310,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot(str)
     def export_results(self, file_type: Literal["csv", "excel", "txt"]) -> None:
-        if not self.results[self.result_name]:
+        if not self._results[self.result_name]:
             msg = f"No results for `{self.result_name}`. Results can be created using the `Compute Results` button in the `Plots` tab."
             self.sig_show_message.emit(msg, "warning")
             return
 
-        result_location = Path(self.output_dir).joinpath(f"results_{self.result_name}_{self.file_info.baseName()}").as_posix()
-        focused_result_df = self.results[self.result_name].focused_result.to_polars()
+        result_location = (
+            Path(self.output_dir)
+            .joinpath(f"results_{self.result_name}_{self.file_info.baseName()}")
+            .as_posix()
+        )
+        focused_result_df = self._results[self.result_name].focused_result.to_polars()
         btn = None
         try:
             if file_type == "csv":
@@ -341,7 +341,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 btn.feedback(False)
             msg = f"Failed to export results: {e}"
             self.sig_show_message.emit(msg, "error")
-            
 
     @Slot(str, str)
     def show_message(
@@ -431,13 +430,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         for w_name, widget in self.plot.plot_widgets.items():
             if w_name in name:
                 update(widget)
-            
 
     @Slot()
     def handle_plot_draw(self) -> None:
         with pg.BusyCursor():
             hbr_line_exists = self.plot.plot_items["hbr"]["signal"] is not None
-            ventilation_line_exists = self.plot.plot_items["ventilation"]["signal"] is not None
+            ventilation_line_exists = (
+                self.plot.plot_items["ventilation"]["signal"] is not None
+            )
             # hbr_line_exists = (
             #     self.plot.plot_widgets["hbr"]
             #     .getPlotItem()
@@ -461,9 +461,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _draw_initial_signals(self) -> None:
         for name, sig in self.data.sigs.items():
             plot_widget = self.plot.plot_widgets[name]
-            self.plot.draw_signal(sig.data.get_column(name).to_numpy(), plot_widget, name)
+            self.plot.draw_signal(
+                sig.data.get_column(name).to_numpy(), plot_widget, name
+            )
         self._set_x_ranges()
-            
+
         # for name in {"hbr", "ventilation"}:
         #     name = cast(SignalName, name)
         #     data = self.data.sigs[name].data.get_column(name).to_numpy()
@@ -485,7 +487,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             vb.setXRange(0, data_length)
         self._update_plot_view("hbr")
         self._update_plot_view("ventilation")
-        
+
         # data_length = self.data.sigs[self.signal_name].active_section.height
         # plot_widgets = self.plot.plot_widgets.get_all_widgets()
         # for widget in plot_widgets:
@@ -500,18 +502,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # self._update_plot_view("ventilation")
 
     def _update_signal(self, name: SignalName | str) -> None:
-        signal_data = (
-            self.data.sigs[name]
-            .active_section.get_column(name)
-            .to_numpy()
-        )
+        signal_data = self.data.sigs[name].get_data().get_column(name).to_numpy()
         plot_widget = self.plot.plot_widgets[name]
         self.plot.draw_signal(signal_data, plot_widget, name)
         self._set_x_ranges()
         self.sig_plot_data_changed.emit(name)
 
     @Slot()
-    def handle_table_view_data(self, n_rows: int = 10) -> None:
+    def handle_table_view_data(self) -> None:
         """
         Update the data preview table and the data info table with the current data.
 
@@ -522,6 +520,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         """
         # Get top and bottom parts of the data and its description
         data = self.data.df
+        n_rows = 10
         df_head = data.head(n_rows)
         df_tail = data.tail(n_rows)
         df_description = data.describe(percentiles=None)
@@ -553,7 +552,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         table_view: QTableView,
         n_columns: int,
         header_alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft,
-        resize_mode: QHeaderView.ResizeMode = QHeaderView.ResizeMode.Stretch
+        resize_mode: QHeaderView.ResizeMode = QHeaderView.ResizeMode.Stretch,
     ) -> None:
         """
         Customize header alignment and resize the columns to fill the available
@@ -651,7 +650,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     @Slot(str)
-    def handle_scatter_clicked(self, name: SignalName) -> None:
+    def handle_scatter_clicked(self, name: SignalName | str) -> None:
         self._sync_peaks_data_plot(name)
         self.data.sigs[name].calculate_rate()
         self.sig_peaks_updated.emit(name)
@@ -705,7 +704,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             f"./logs/profiler_{int(datetime.timestamp(datetime.now()))}.pstats"
         )
 
-    def get_identifier(self, result_name: SignalName) -> ResultIdentifier:
+    def get_result(self, result_name: SignalName | str) -> Result:
+        return self._results[result_name]
+
+    def get_identifier(self, result_name: SignalName | str) -> ResultIdentifier:
         metadata = self.get_file_metadata()
         result_file_name = f"results_{result_name}_{self.file_info.fileName()}"
         return ResultIdentifier(
@@ -722,7 +724,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         subset_col = self.combo_box_filter_column.currentText()
         lower_bound = self.dbl_spin_box_subset_min.value()
         upper_bound = self.dbl_spin_box_subset_max.value()
-        length_overall = self.data.df.height
+        length_overall = self.data.sigs[self.result_name].get_data().height
         return SelectionParameters(
             filter_column=subset_col,
             lower_bound=lower_bound,
@@ -743,10 +745,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     def get_filter_values(self) -> SignalFilterParameters:
-        if self.combo_box_preprocess_pipeline.value() != "custom":
-            self.combo_box_filter_method.setValue("None")
+        # if self.combo_box_preprocess_pipeline.value() != "custom":
+        # self.combo_box_filter_method.setValue("None")
 
-        method = cast(FilterMethod, self.combo_box_filter_method.value())
+        method = self.filter_method
 
         filter_params = SignalFilterParameters(
             lowcut=None,
@@ -771,25 +773,56 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return filter_params
 
     def get_standardization_values(self) -> StandardizeParameters:
-        method = cast(ScaleMethod, self.combo_box_scale_method.value())
+        method = self.scale_method
         robust = method.lower() == "mad"
         if self.container_scale_window_inputs.isChecked():
             window_size = self.spin_box_scale_window_size.value()
         else:
             window_size = None
-        # rolling_window = self.container_scale_window_inputs.isChecked()
         return StandardizeParameters(robust=robust, window_size=window_size)
 
     def get_peak_detection_values(self) -> PeakDetectionParameters:
-        if hasattr(self.ui, "peak_params"):
-            method = cast(
-                PeakDetectionMethod, self.combo_box_peak_detection_method.value()
+        method = self.peak_detection_method
+        if method == "elgendi_ppg":
+            vals = PeakDetectionElgendiPPG(
+                peakwindow=self.peak_elgendi_ppg_peakwindow.value(),
+                beatwindow=self.peak_elgendi_ppg_beatwindow.value(),
+                beatoffset=self.peak_elgendi_ppg_beatoffset.value(),
+                mindelay=self.peak_elgendi_ppg_min_delay.value(),
             )
-            return self.ui.peak_params.get_values(method)
+        elif method == "local":
+            vals = PeakDetectionLocalMaxima(radius=self.peak_local_max_radius.value())
+        elif method == "neurokit2":
+            vals = PeakDetectionNeurokit2(
+                smoothwindow=self.peak_neurokit2_smoothwindow.value(),
+                avgwindow=self.peak_neurokit2_avgwindow.value(),
+                gradthreshweight=self.peak_neurokit2_gradthreshweight.value(),
+                minlenweight=self.peak_neurokit2_minlenweight.value(),
+                mindelay=self.peak_neurokit2_mindelay.value(),
+                correct_artifacts=self.peak_neurokit2_correct_artifacts.isChecked(),
+            )
+        elif method == "promac":
+            vals = PeakDetectionProMAC(
+                threshold=self.peak_promac_threshold.value(),
+                gaussian_sd=self.peak_promac_gaussian_sd.value(),
+                correct_artifacts=self.peak_promac_correct_artifacts.isChecked(),
+            )
+        elif method == "wfdb_xqrs":
+            vals = PeakDetectionXQRS(
+                sampfrom=self.peak_xqrs_sampfrom.value(),
+                sampto=self.peak_xqrs_sampto.value(),
+                corrections=CorrectXQRS(
+                    search_radius=self.peak_xqrs_search_radius.value(),
+                    peak_dir=cast(WFDBPeakDirection, self.peak_xqrs_peak_dir.value()),
+                ),
+            )
         else:
-            raise ValueError(
-                "Could not get peak detection values, make sure the UIHandler is properly configured."
-            )
+            raise ValueError(f"Unknown peak detection method: {method}")
+
+        return PeakDetectionParameters(
+            method=method,
+            input_values=vals,
+        )
 
     def get_processing_info(self) -> ProcessingParameters:
         filter_params = self.get_filter_values()
@@ -797,20 +830,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         peak_detection_params = self.get_peak_detection_values()
         return ProcessingParameters(
             sampling_rate=self.data.fs,
-            pipeline=cast(Pipeline, self.combo_box_preprocess_pipeline.value()),
+            pipeline=self.pipeline,
             filter_parameters=filter_params,
             scaling_parameters=standardization_params,
             peak_detection_parameters=peak_detection_params,
         )
 
-    def make_results(self, result_name: SignalName) -> None:
+    def make_results(self, result_name: SignalName | str) -> None:
         self.btn_compute_results.processing("Getting results...")
 
         identifier = self.get_identifier(result_name)
         data_info = self.get_data_selection_info()
         processing_info = self.get_processing_info()
-        focused_result = self.data.focused_results[result_name]
+        
         focused_result_df = self.data.get_focused_result_df(result_name)
+        focused_result = self.data.focused_results[result_name]
         statistics = self.data.get_descriptive_stats(result_name)
         manual_edits = self.plot.peak_edits[result_name]
         source_data = self.data.sigs[result_name]
@@ -825,8 +859,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         result_table: QTableView = getattr(self, f"table_view_results_{result_name}")
         self._set_table_model(result_table, PolarsModel(focused_result_df))
-        setattr(self, f"{result_name}_results", results)
-        self.btn_compute_results.success()
+        self._results[result_name] = results
+        # setattr(self, f"{result_name}_results", results)
+        self.btn_compute_results.feedback(True)
         self.tabs_main.setCurrentIndex(2)
 
     @Slot()
@@ -842,14 +877,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         if not ok:
             return
-        if (
-            file_path := QFileDialog.getSaveFileName(
-                self,
-                "Save State",
-                f"{self.output_dir.as_posix()}/snapshot_at_{stopped_at_index}_{self.file_info.completeBaseName()}",
-                "Pickle Files (*.pkl)",
-            )[0]
-        ):
+        if file_path := QFileDialog.getSaveFileName(
+            self,
+            "Save State",
+            f"{self.output_dir.as_posix()}/snapshot_at_{stopped_at_index}_{self.file_info.completeBaseName()}",
+            "Pickle Files (*.pkl)",
+        )[0]:
             state_dict = StateDict(
                 active_signal=self.signal_name,
                 source_file_path=self.file_info.filePath(),
@@ -918,9 +951,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.dbl_spin_box_highcut.setValue(
             processing_params.filter_parameters["highcut"] or 8.0
         )
-        self.spin_box_order.setValue(
-            processing_params.filter_parameters["order"]
-        )
+        self.spin_box_order.setValue(processing_params.filter_parameters["order"])
         if processing_params.filter_parameters["window_size"] == "default":
             filter_window = int(np.round(processing_params.sampling_rate / 3))
             if filter_window % 2 == 0:
@@ -948,7 +979,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
         # FIXME: update restoration of peak detection parameters to work with new UI
-        
+
         # self.stacked_peak_parameters.setCurrentIndex(self.combo_box_peak_detection_method.currentIndex())
         # for name, value in processing_params.peak_detection_parameters.get(
         #     "input_values", {}
@@ -1001,13 +1032,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot()
     def refresh_app_state(self) -> None:
         self.handle_table_view_data()
-        for s_name in {"hbr", "ventilation"}:
-            s_name = cast(SignalName, s_name)
-            signal_widget = self.plot.plot_widgets.get_signal_widget(s_name)
+        for s_name in self.data.sigs:
+            signal_widget = self.plot.plot_widgets[s_name]
             processed_name = self.data.sigs[s_name].processed_name
-            if processed_name not in self.data.df.columns:
+            if processed_name not in self.data.sigs[s_name].data.columns:
                 self.plot.draw_signal(
-                    self.data.sigs[s_name].active_section.get_column(s_name).to_numpy(),
+                    self.data.sigs[s_name].get_data().get_column(s_name).to_numpy(),
                     signal_widget,
                     s_name,
                 )
@@ -1016,7 +1046,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             rate = self.data.sigs[s_name].signal_rate.rate_interpolated
             peaks = self.data.sigs[s_name].peaks
             peaks_y = processed_signal[peaks]
-            rate_widget = self.plot.plot_widgets.get_rate_widget(s_name)
+            rate_widget = self.plot.plot_widgets[f"{s_name}_rate"]
             self.plot.draw_signal(processed_signal, signal_widget, s_name)
             self.plot.draw_peaks(peaks, peaks_y, signal_widget, s_name)
             self.plot.draw_rate(rate, rate_widget, s_name)

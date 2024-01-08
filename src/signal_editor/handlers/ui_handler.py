@@ -1,6 +1,6 @@
 import types
 from pathlib import Path
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import polars as pl
@@ -8,17 +8,14 @@ import pyqtgraph as pg
 import rich as r
 from pyqtgraph.console import ConsoleWidget
 from PySide6.QtCore import (
-    QAbstractItemModel,
     QDate,
-    QModelIndex,
     QObject,
-    QPersistentModelIndex,
     QPointF,
     Qt,
     Signal,
     Slot,
 )
-from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QDockWidget,
     QVBoxLayout,
@@ -29,6 +26,7 @@ from ..models.io import parse_file_name
 from ..type_aliases import (
     SignalName,
 )
+from ..views._peak_parameter_states import INITIAL_PEAK_STATES
 
 if TYPE_CHECKING:
     from ..app import MainWindow
@@ -78,49 +76,6 @@ COMBO_BOX_ITEMS = {
         "Neurokit (ECG)": "ecg_neurokit2",
     },
 }
-
-
-class ComboBoxMappingModel(QAbstractItemModel):
-    def __init__(self, items: dict[str, str], parent: QObject | None = None) -> None:
-        super().__init__(parent)
-        self._items = items
-
-    @override
-    def index(
-        self,
-        row: int,
-        column: int,
-        parent: QModelIndex | QPersistentModelIndex = QModelIndex(),
-    ) -> QModelIndex:
-        if not self.hasIndex(row, column, parent):
-            return QModelIndex()
-        return self.createIndex(row, column)
-
-    @override
-    def rowCount(
-        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
-    ) -> int:
-        return len(self._items)
-
-    @override
-    def columnCount(
-        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
-    ) -> int:
-        return 1
-
-    @override
-    def data(
-        self,
-        index: QModelIndex | QPersistentModelIndex,
-        role: int = Qt.ItemDataRole.DisplayRole,
-    ) -> str | None:
-        if not index.isValid():
-            return None
-        if role == Qt.ItemDataRole.DisplayRole:
-            return list(self._items.keys())[index.row()]
-        elif role == Qt.ItemDataRole.UserRole:
-            return list(self._items.values())[index.row()]
-        return None
 
 
 INITIAL_STATE_MAP = {
@@ -210,7 +165,7 @@ INITIAL_STATE_MAP = {
     "tabs_result": {
         "currentIndex": 0,
     },
-}
+} | INITIAL_PEAK_STATES
 
 INITIAL_STATE_METHODS_MAP = {
     "enabled": "setEnabled",
@@ -221,6 +176,15 @@ INITIAL_STATE_METHODS_MAP = {
     "currentText": "setCurrentText",
     "currentIndex": "setCurrentIndex",
     "date": "setDate",
+    "decimals": "setDecimals",
+    "minimum": "setMinimum",
+    "maximum": "setMaximum",
+    "singleStep": "setSingleStep",
+    "stepType": "setStepType",
+    "accelerated": "setAccelerated",
+    "correctionMode": "setCorrectionMode",
+    "isChecked": "setChecked",
+    "items": "setItems",
 }
 
 FILTER_INPUT_STATES = {
@@ -311,12 +275,15 @@ class UIHandler(QObject):
         # Peak Detection
         peak_combo_box = self.window.combo_box_peak_detection_method
         stacked_peak_widget = self.window.stacked_peak_parameters
-        if len(peak_combo_box.items()) > 0:
-            peak_combo_box.clear()
-            peak_combo_box.currentIndexChanged.disconnect()
+        # if peak_combo_box.value() not in COMBO_BOX_ITEMS["combo_box_peak_detection_method"]:
+            # peak_combo_box.clear()
+            # peak_combo_box.currentIndexChanged.disconnect()
+        peak_combo_box.blockSignals(True)
+        peak_combo_box.clear()
         peak_combo_box.setItems(COMBO_BOX_ITEMS["combo_box_peak_detection_method"])
         peak_combo_box.setCurrentIndex(0)
         stacked_peak_widget.setCurrentIndex(0)
+        peak_combo_box.blockSignals(False)
         peak_combo_box.currentIndexChanged.connect(stacked_peak_widget.setCurrentIndex)
 
     def _setup_active_plot_btn_grp(self) -> None:
@@ -332,15 +299,12 @@ class UIHandler(QObject):
         self.window.combo_box_preprocess_pipeline.currentTextChanged.connect(
             self.handle_preprocess_pipeline_changed
         )
-        # self.window.combo_box_peak_detection_method.currentTextChanged.connect(
-        #     self.on_peak_detection_method_changed
-        # )
 
         self.window.btn_apply_filter.clicked.connect(
-            lambda: self.window.btn_detect_peaks.setEnabled(True)
+            lambda: self.window.btn_detect_peaks.setEnabled(True)  # type: ignore
         )
         self.window.btn_detect_peaks.clicked.connect(
-            lambda: self.window.btn_compute_results.setEnabled(True)
+            lambda: self.window.btn_compute_results.setEnabled(True)  # type: ignore
         )
 
         self.window.action_open_console.triggered.connect(self.show_console_widget)
@@ -420,25 +384,6 @@ class UIHandler(QObject):
         self.temperature_label_ventilation.setText("Temperature: -")
         mw.statusbar.showMessage("Ready")
 
-    # def create_peak_detection_trees(self) -> None:
-    #     method: PeakDetectionMethod = "elgendi_ppg"
-
-    #     self.peak_tree = ParameterTree()
-    #     self.peak_params = UIPeakDetection(name="Adjustable Parameters")
-    #     self.peak_params.set_method(method)
-    #     self.peak_tree.setParameters(self.peak_params, showTop=True)
-
-    #     self.window.container_peak_detection_sidebar.layout().addWidget(self.peak_tree)
-
-    # @Slot()
-    # def on_peak_detection_method_changed(self) -> None:
-    #     method = self.window.peak_detection_method
-    #     try:
-    #         self.window.stacked_peak_parameters.setCurrentIndex()
-    #         self.peak_params.set_method(self.window.peak_detection_method)
-    #     except NotImplementedError as e:
-    #         self.window.sig_show_message.emit(str(e), "info")
-
     @Slot(int)
     def on_main_tab_changed(self, index: int) -> None:
         is_index_one = index == 1
@@ -449,40 +394,32 @@ class UIHandler(QObject):
     def create_plot_widgets(self) -> None:
         self.window.plot_widget_hbr.setLayout(QVBoxLayout())
         self.window.plot_widget_vent.setLayout(QVBoxLayout())
+        hbr_pw = self.plot.plot_widgets["hbr"]
+        vent_pw = self.plot.plot_widgets["ventilation"]
+        hbr_rate_pw = self.plot.plot_widgets["hbr_rate"]
+        vent_rate_pw = self.plot.plot_widgets["ventilation_rate"]
 
-        self.window.plot_widget_hbr.layout().addWidget(
-            self.plot.plot_widgets.get_signal_widget("hbr")
-        )
-        self.window.plot_widget_vent.layout().addWidget(
-            self.plot.plot_widgets.get_signal_widget("ventilation")
-        )
+        self.window.plot_widget_hbr.layout().addWidget(hbr_pw)
+        self.window.plot_widget_vent.layout().addWidget(vent_pw)
 
-        self.window.plot_widget_hbr.layout().addWidget(
-            self.plot.plot_widgets.get_rate_widget("hbr")
-        )
-        self.window.plot_widget_vent.layout().addWidget(
-            self.plot.plot_widgets.get_rate_widget("ventilation")
-        )
+        self.window.plot_widget_hbr.layout().addWidget(hbr_rate_pw)
+        self.window.plot_widget_vent.layout().addWidget(vent_rate_pw)
 
         self.temperature_label_hbr = pg.LabelItem(
             text="<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: -</span>",
-            parent=self.plot.plot_widgets.get_signal_widget("hbr").plotItem,
+            parent=hbr_pw.getPlotItem(),
             angle=0,
         )
         self.temperature_label_ventilation = pg.LabelItem(
             text="<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: -</span>",
-            parent=self.plot.plot_widgets.get_signal_widget("ventilation").plotItem,
+            parent=vent_pw.getPlotItem(),
             angle=0,
         )
-        self.plot.plot_widgets.get_signal_widget(
-            "hbr"
-        ).plotItem.scene().sigMouseMoved.connect(
-            lambda pos: self.update_temperature_label("hbr", pos)
+        hbr_pw.getPlotItem().scene().sigMouseMoved.connect(
+            lambda pos: self.update_temperature_label("hbr", pos)  # type: ignore
         )
-        self.plot.plot_widgets.get_signal_widget(
-            "ventilation"
-        ).plotItem.scene().sigMouseMoved.connect(
-            lambda pos: self.update_temperature_label("ventilation", pos)
+        vent_pw.getPlotItem().scene().sigMouseMoved.connect(
+            lambda pos: self.update_temperature_label("ventilation", pos)  # type: ignore
         )
 
     @Slot(QPointF)
@@ -491,27 +428,37 @@ class UIHandler(QObject):
             return
         if self.window.data.df.is_empty():
             return
-        view_box = self.plot.plot_widgets.get_view_box(signal_name)
-        mapped_pos: QPointF = view_box.mapSceneToView(pos)
-        data_pos = int(mapped_pos.x())
-        temperature_column = (
-            self.window.data.sigs[signal_name]
-            .get_data()
-            .get_column("temperature")
-            .to_numpy(zero_copy_only=True)
-        )
-        try:
-            temp_value = temperature_column[
-                np.clip(data_pos, 0, temperature_column.size - 1)
-            ]
-        except Exception:
-            if data_pos < 0:
-                default_index = 0
-            elif data_pos > temperature_column.size:
-                default_index = -1
-            else:
-                default_index = data_pos
-            temp_value = temperature_column[default_index]
+        # view_box = self.plot.plot_widgets.get_view_box(signal_name)
+        data_pos = self.plot.plot_widgets[signal_name].plotItem.vb.mapSceneToView(pos).x()
+        data_pos = np.clip(data_pos, 0, self.window.data.sigs[signal_name].data.height - 1, dtype=np.int32, casting="unsafe")
+        # if data_pos < 0:
+        #     data_pos = 0
+        # elif data_pos > self.window.data.sigs[signal_name].data.height:
+        #     data_pos = self.window.data.sigs[signal_name].data.height - 1
+            
+        # data_pos = mapped_pos.x()
+        temp_value = self.window.data.sigs[signal_name].data.get_column("temperature").gather(data_pos).to_numpy(zero_copy_only=True)[0]
+        # temperature_column = (
+        #     self.window.data.sigs[signal_name]
+        #     .data
+        #     .get_column("temperature")
+        #     .gather(data_pos)
+        #     .to_numpy(zero_copy_only=True)
+        # )
+        
+        # try:
+        #     temp_value = temperature_column[
+        #         np.clip(data_pos, 0, temperature_column.size - 1)
+        #     ]
+        # except Exception:
+        #     if data_pos < 0:
+        #         default_index = 0
+        #     elif data_pos > temperature_column.size:
+        #         default_index = -1
+        #     else:
+        #         default_index = data_pos
+        #     temp_value = temperature_column[default_index]
+        # TODO: give temperature labels same treatment as all the other things with two versions
         if signal_name == "hbr":
             self.temperature_label_hbr.setText(
                 f"<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: {temp_value:.1f} °C, cursor position: {data_pos}</span>"
@@ -595,19 +542,12 @@ class UIHandler(QObject):
 
         elif pipeline_value == "ppg_elgendi":
             self.window.container_custom_filter_inputs.setEnabled(False)
+            self.window.combo_box_filter_method.setValue("None")
             self._set_elgendi_cleaning_params()
         else:
             # TODO: add UI and logic for other signal cleaning pipelines
             self.window.container_custom_filter_inputs.setEnabled(False)
+            self.window.combo_box_filter_method.setValue("None")
             msg = f"Selected pipeline {pipeline_value} not yet implemented, use either 'custom' or 'ppg_elgendi'."
             self.window.sig_show_message.emit(msg, "info")
             return
-
-
-def make_combo_box_model(items: dict[str, str]) -> QStandardItemModel:
-    model = QStandardItemModel()
-    for display_text, internal_value in items.items():
-        item = QStandardItem(display_text)
-        item.setData(internal_value, Qt.ItemDataRole.UserRole)
-        model.appendRow(item)
-    return model

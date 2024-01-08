@@ -38,6 +38,7 @@ hdf5view = "^0.0.7"
 black = "^23.12.1"
 pygments = "^2.17.2"
 rich = "^13.7.0"
+devtools = "^0.12.2"
 
 [tool.mypy]
 python_version = "3.12"

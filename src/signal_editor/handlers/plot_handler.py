@@ -1,9 +1,9 @@
-from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Iterable, Literal, Sequence, cast, override
+from dataclasses import asdict, dataclass
+from typing import TYPE_CHECKING, Any, Iterable, Literal, Sequence, override
 
 import numpy as np
 import pyqtgraph as pg
-from numpy.typing import NDArray, ArrayLike
+from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QObject, QRectF, Qt, Signal, Slot
@@ -404,8 +404,13 @@ class PlotItems:
     def __setitem__(self, key: PlotItemAttr, value: PlotItemVal) -> None:
         setattr(self, key, value)
 
-    def as_dict(self) -> dict[str | PlotItemAttr, PlotItemVal | None]:
-        return asdict(self)
+    def as_dict(self) -> dict[str, PlotItemVal | None]:
+        return {
+            "signal": self["signal"],
+            "peaks": self["peaks"],
+            "rate": self["rate"],
+            "rate_mean": self["rate_mean"],
+        }
 
 
 class PlotItemsContainer(dict[SignalName | str, PlotItems]):
@@ -437,12 +442,14 @@ def make_plot_widget(
 
 
 class PlotWidgetContainer(dict[str, pg.PlotWidget]):
-    def __init__(self, *args: Iterable[tuple[str, pg.PlotWidget]], **kwargs: pg.PlotWidget) -> None:
+    def __init__(
+        self, *args: Iterable[tuple[str, pg.PlotWidget]], **kwargs: pg.PlotWidget
+    ) -> None:
         super().__init__(*args, **kwargs)
 
     def __setitem__(self, key: str, value: pg.PlotWidget) -> None:
         super().__setitem__(key, value)
-        
+
     def make_plot_widget(
         self,
         name: str,
@@ -453,7 +460,6 @@ class PlotWidgetContainer(dict[str, pg.PlotWidget]):
             viewBox=view_box, background=background_color, useOpenGL=True
         )
         self[name] = widget
-        
 
     def get_all_widgets(self) -> list[pg.PlotWidget]:
         return list(self.values())
@@ -481,13 +487,9 @@ class PlotHandler(QObject):
         super().__init__(parent=parent)
         self._parent = parent
         self.click_tolerance = 80
-        # self.peak_edits: PeakEdits = PeakEdits(
-        #     added_peaks=AddedPoints(hbr=[], ventilation=[]),
-        #     removed_peaks=RemovedPoints(hbr=[], ventilation=[]),
-        # )
-        self.peak_edits: dict[SignalName | str, ManualPeakEdits] = {}
         self.plot_items = PlotItemsContainer()
         self.plot_widgets = PlotWidgetContainer()
+        self.peak_edits: dict[SignalName | str, ManualPeakEdits] = {name: ManualPeakEdits() for name in ("hbr", "ventilation")}
         self._last_edit_index: int = 0
 
         self.plot_widgets.make_plot_widget(name="hbr", view_box=CustomViewBox())
@@ -508,6 +510,8 @@ class PlotHandler(QObject):
     def _init_plot_items(self) -> None:
         self.plot_items["hbr"] = PlotItems(name="hbr")
         self.plot_items["ventilation"] = PlotItems(name="ventilation")
+        self.plot_items["hbr_rate"] = PlotItems(name="hbr_rate")
+        self.plot_items["ventilation_rate"] = PlotItems(name="ventilation_rate")
 
     @staticmethod
     def set_plot_titles_and_labels(
@@ -619,22 +623,22 @@ class PlotHandler(QObject):
     def reset_plots(self) -> None:
         for name, pw in self.plot_widgets.items():
             pw.getPlotItem().clear()
-            pw.getPlotItem().legend.clear()
+            pw.getPlotItem().addLegend().clear()
             self.plot_items[name]["signal"] = pg.PlotDataItem()
 
         self._prepare_plot_items()
 
     @Slot(int)
     def reset_views(self, upper_range: int) -> None:
-        for name in self.plot_widgets:
-            self.plot_widgets.get_view_box(name).setXRange(0, upper_range)
+        for vb in self.plot_widgets.get_all_view_boxes():
+            vb.setXRange(0, upper_range)
 
     def draw_signal(
         self,
         sig: NDArray[np.float64],
         plot_widget: pg.PlotWidget,
         signal_name: SignalName | str,
-        **kwargs: NDArray[np.float_ | np.int_],
+        # **kwargs: NDArray[np.float_ | np.int_],
     ) -> None:
         color = "crimson" if signal_name == "hbr" else "royalblue"
         signal_line = pg.PlotDataItem(
@@ -658,7 +662,6 @@ class PlotHandler(QObject):
         #         name="temperature",
         #     )
         #     plot_widget.addItem(temperature_line)
-            
 
         rate_name = f"{signal_name}_rate"
         rate_plot_widget = self.plot_widgets[rate_name]
@@ -716,7 +719,7 @@ class PlotHandler(QObject):
             The plot widget to draw the peaks on.
         signal_name : SignalName | str
             The name of the signal to draw the peaks for.
-        """        
+        """
         brush_color = "goldenrod"
         hover_brush_color = "red"
 
@@ -801,7 +804,6 @@ class PlotHandler(QObject):
 
         self.plot_items[signal_name]["rate"] = rate_line
         self.plot_items[signal_name]["rate_mean"] = rate_mean_line
-        # self.sig_rate_updated.emit(signal_name)
 
     @Slot(object, object, object)
     def remove_clicked_point(
@@ -832,8 +834,8 @@ class PlotHandler(QObject):
         name = "hbr" if "hbr" in f"{sender.name()}" else "ventilation"
 
         if scatter_plot := self.plot_items[name]["peaks"]:
-            new_points_x = np.delete(scatter_plot.data["x"], to_remove_index)
-            new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)
+            new_points_x = np.delete(scatter_plot.data["x"], to_remove_index)  # type: ignore
+            new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)  # type: ignore
             scatter_plot.setData(x=new_points_x, y=new_points_y)
             self.peak_edits[name].added.append(int(points[0].pos().x()))
             self.last_edit_index = int(points[0].pos().x())
@@ -851,7 +853,9 @@ class PlotHandler(QObject):
         scatter_ref = self.plot_items[name]["peaks"]
         if scatter_ref is None:
             return
-        rect = vb.mapped_peak_selection.boundingRect().getRect()
+        rect: tuple[
+            float, float, float, float
+        ] = vb.mapped_peak_selection.boundingRect().getRect()
         rect_x, rect_y, rect_width, rect_height = (
             int(rect[0]),
             rect[1],
@@ -862,9 +866,14 @@ class PlotHandler(QObject):
         x_range = (rect_x, rect_x + rect_width)
         y_range = (rect_y, rect_y + rect_height)
 
+        scatter_x: NDArray[np.integer[Any]] | None
+        scatter_y: NDArray[np.floating[Any]] | None
         scatter_x, scatter_y = scatter_ref.getData()
         if scatter_x is None or scatter_y is None:
             return
+        if scatter_x.size == 0 or scatter_y.size == 0:
+            return
+
         to_remove = np.argwhere(
             (scatter_x >= x_range[0])
             & (scatter_x <= x_range[1])
@@ -874,14 +883,14 @@ class PlotHandler(QObject):
 
         if to_remove.size == 0:
             return
-        self.plot_items[name]["peaks"].setData(
+        scatter_ref.setData(
             x=np.delete(scatter_x, to_remove), y=np.delete(scatter_y, to_remove)
         )
 
         self.peak_edits[name].removed.extend(
             scatter_x[to_remove][:, 0].astype(int).tolist()
         )
-        self.last_edit_index = np.max(scatter_x[to_remove])
+        self.last_edit_index = scatter_x[to_remove].max()
         self.sig_peaks_edited.emit(name)
 
     @Slot(object, object)
@@ -960,7 +969,9 @@ class PlotHandler(QObject):
         signal_data_ref = self.plot_items[name]["signal"]
         if signal_data_ref is None:
             return
-        rect = vb.mapped_deletion_selection.boundingRect().getRect()
+        rect: tuple[
+            float, float, float, float
+        ] = vb.mapped_deletion_selection.boundingRect().getRect()
         rect_x, rect_width = int(rect[0]), int(rect[2])
 
         x_range = (rect_x, rect_x + rect_width)

@@ -1,14 +1,15 @@
 import re
-import sys
-from dataclasses import asdict
 from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, cast
 
 import h5py
 import mne.io
+import numpy as np
 import polars as pl
 from loguru import logger
+
+from .result import ResultDict
 
 if TYPE_CHECKING:
     from ..models.result import Result
@@ -176,54 +177,41 @@ def read_edf(
     return lf, date_measured, sampling_rate
 
 
-def create_hdf_attrs(group: h5py.Group, data: dict[str, Any]) -> None:
+def create_hdf5_groups(
+    group: h5py.Group,
+    data: ResultDict,
+) -> None:
     """
-    Creates HDF5 attributes from a dictionary.
+    Creates HDF5 groups from a dictionary.
 
     Parameters
     ----------
     group : h5py.Group
-        The HDF5 group to create the attributes in.
-    data : dict[str, Any]
-        A dictionary containing the attributes to create.
+        The HDF5 group to create the groups in.
+    data : ResultDict
+        A dictionary containing the groups to create.
     """
     for key, value in data.items():
         if value is None:
             value = ()
             group.attrs.create(key, value)
-        elif isinstance(value, datetime):
+        elif isinstance(value, (datetime, date)):
             value = value.isoformat()
             group.attrs.create(key, value)
-        elif isinstance(value, dict):
-            subgroup = group.create_group(key)
-            create_hdf_attrs(subgroup, value)
-        else:
+        elif isinstance(value, (str, int, bool, float)):
             group.attrs.create(key, value)
+        elif isinstance(value, (np.ndarray, list)):
+            group.create_dataset(key, data=value)
+        else:
+            subgroup = group.create_group(key)
+            create_hdf5_groups(subgroup, value)
 
 
 def write_hdf5(file_path: str | Path, result: "Result") -> None:
-    file_path = Path(file_path)
-    try:
-        with h5py.File(file_path, "a") as f:
-            group_result = f.create_group("result")
-            result_dict = asdict(result)
-            group_names = [
-                "identifier",
-                "selection_parameters",
-                "processing_parameters",
-                "summary_statistics",
-                "manual_peak_edits"
-            ]
-            for name, data in result_dict.items():
-                if name in group_names or sys.getsizeof(data) < 64_000:
-                    grp = group_result.create_group(name)
-                    data = asdict(data) if name in group_names else data
-                    if isinstance(data, dict):
-                        create_hdf_attrs(grp, data)
-                    elif name == "manual_peak_edits":
-                        for key, value in data.items():
-                            grp.create_dataset(key, data=value)
-                else:
-                    group_result.create_dataset(name, data=asdict(data) if name in ["focused_result", "source_data"] else data)
-    except Exception as e:
-        logger.error(f"Error writing to HDF5 file: {e}")
+    file_path = Path(file_path).resolve().as_posix()
+
+    with h5py.File(file_path, "a") as f:
+        main_grp = f.create_group(f"{result.identifier.source_file_name}_results")
+        res_dict = result.as_dict()
+
+        create_hdf5_groups(main_grp, res_dict)

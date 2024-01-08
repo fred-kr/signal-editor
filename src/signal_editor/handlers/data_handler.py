@@ -155,7 +155,7 @@ class DataHandler(QObject):
 
     def run_preprocessing(
         self,
-        name: SignalName,
+        name: SignalName | str,
         pipeline: Pipeline,
         filter_params: SignalFilterParameters,
         standardize_params: StandardizeParameters,
@@ -168,7 +168,7 @@ class DataHandler(QObject):
         self.sigs[name].scale_values(**standardize_params)
 
     def run_peak_detection(
-        self, name: SignalName, peak_parameters: PeakDetectionParameters
+        self, name: SignalName | str, peak_parameters: PeakDetectionParameters
     ) -> None:
         self.sigs[name].detect_peaks(**peak_parameters)
         self.sig_dh_peaks_updated.emit(name)
@@ -190,7 +190,7 @@ class DataHandler(QObject):
             signal_rate=rate_stats,
         )
 
-    def compute_result_df(self, name: SignalName) -> None:
+    def compute_result_df(self, name: SignalName | str) -> None:
         sig = self.sigs[name]
         peaks = sig.peaks
         diffs = sig.get_peak_diffs()
@@ -223,9 +223,9 @@ class DataHandler(QObject):
         # self.result_dfs.update(name, result_df)
 
     def get_focused_result_df(
-        self, name: SignalName, compute: bool = True
+        self, name: SignalName | str, compute: bool = True
     ) -> pl.DataFrame:
-        if compute:
+        if compute or name not in self.focused_results:
             self.compute_result_df(name)
         # return self.result_dfs[name]
         return self.focused_results[name].to_polars()

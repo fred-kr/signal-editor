@@ -1,6 +1,6 @@
 import copy
 from dataclasses import dataclass, field
-from typing import Iterable, Mapping, NamedTuple, Unpack
+from typing import Iterable, NamedTuple, Unpack
 
 import neurokit2 as nk
 import numpy as np
@@ -126,6 +126,48 @@ class SignalData:
     @property
     def signal_rate(self) -> RateData:
         return self._signal_rate
+
+    # def make_hdf5_compatible(
+    #     self,
+    # ) -> tuple[
+    #     dict[str, str | int | bool], dict[str, NDArray[np.float64] | NDArray[np.int32]]
+    # ]:
+    #     """
+    #     Returns a tuple of dictionaries containing the attributes and datasets of this
+    #     `Signal` instance in a format that is compatible with HDF5.
+    #     """
+    #     to_attrs = {
+    #         "name": self.name,
+    #         "sampling_rate": self.sampling_rate,
+    #         "is_finished": self.is_finished,
+    #     }
+    #     to_dset = {
+    #         "data": self.data.to_numpy(structured=True),
+    #         "excluded_sections": np.array(self.excluded_sections, dtype=np.int32),
+    #         "original_data": self._original_data.to_numpy(structured=True),
+    #         "rate": self.signal_rate.rate,
+    #         "rate_interpolated": self.signal_rate.rate_interpolated,
+    #         "peaks": self.peaks,
+    #     }
+
+    #     return to_attrs, to_dset
+
+    def as_dict(self) -> dict[str, str | int | bool | NDArray[np.float64] | NDArray[np.int32]]:
+        """
+        Returns a dictionary containing the attributes and datasets of this `Signal`
+        instance.
+        """
+        return {
+            "name": self.name,
+            "sampling_rate": self.sampling_rate,
+            "is_finished": self.is_finished,
+            "data": self.data.to_numpy(structured=True),
+            "excluded_sections": np.array(self.excluded_sections, dtype=np.int32),
+            "original_data": self._original_data.to_numpy(structured=True),
+            "rate": self.signal_rate.rate,
+            "rate_interpolated": self.signal_rate.rate_interpolated,
+            "peaks": self.peaks,
+        }
 
     def _active_is_saved(self) -> bool:
         active_section_indices = self.active_section.get_column("index")
@@ -444,7 +486,9 @@ class SignalStorage(dict[SignalName | str, SignalData]):
     A container for SignalData objects.
     """
 
-    def __init__(self, *args: Iterable[tuple[str, SignalData]], **kwargs: SignalData) -> None:
+    def __init__(
+        self, *args: Iterable[tuple[str, SignalData]], **kwargs: SignalData
+    ) -> None:
         super().__init__(*args, **kwargs)
 
     def __setitem__(self, key: SignalName | str, value: SignalData) -> None:

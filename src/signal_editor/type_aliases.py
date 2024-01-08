@@ -36,7 +36,6 @@ type WFDBPeakDirection = Literal[
     "down",
     "both",
     "compare",
-    "None",
 ]
 type FilterMethod = Literal[
     "butterworth",
@@ -74,21 +73,6 @@ class StandardizeParameters(TypedDict):
     window_size: int | None
 
 
-class AddedPoints(TypedDict):
-    hbr: list[int]
-    ventilation: list[int]
-
-
-class RemovedPoints(TypedDict):
-    hbr: list[int]
-    ventilation: list[int]
-
-
-class PeakEdits(TypedDict):
-    added_peaks: AddedPoints
-    removed_peaks: RemovedPoints
-
-
 class PeakDetectionElgendiPPG(TypedDict):
     peakwindow: float
     beatwindow: float
@@ -121,8 +105,8 @@ class PeakDetectionPantompkins(TypedDict):
 
 class CorrectXQRS(TypedDict):
     search_radius: int
-    smooth_window_size: int
-    peak_dir: NotRequired[WFDBPeakDirection]
+    smooth_window_size: NotRequired[int]
+    peak_dir: WFDBPeakDirection
 
 
 class PeakDetectionXQRS(TypedDict):

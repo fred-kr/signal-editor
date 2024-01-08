@@ -368,7 +368,7 @@ def _handle_close_peaks(
     if not close_inds.size:
         return peak_idx
 
-    to_remove = []
+    to_remove: list[int] = []
     for ind in close_inds:
         if find_peak_fn == np.argmax:
             comparison_fn = np.less_equal
@@ -393,7 +393,7 @@ def remove_outliers(
     n_std: float,
     find_peak_fn: Callable[[npt.NDArray[np.float32 | np.float64]], int],
 ) -> npt.NDArray[np.int32]:
-    outliers = []
+    outliers: list[int] = []
     window_size = 5
     for i, peak in enumerate(peak_idx):
         if i < 3:
