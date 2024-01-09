@@ -20,7 +20,7 @@ from .filters import (
     filter_elgendi,
     scale_signal,
 )
-from .peaks import find_local_peaks, find_peaks_xqrs, find_ppg_peaks_elgendi
+from .peaks import find_peaks
 
 
 class SectionIndices(NamedTuple):
@@ -68,8 +68,9 @@ class SignalData:
     _original_data: pl.DataFrame = field(init=False, repr=False)
     processed_name: str = field(init=False, repr=False)
     _processed_data: NDArray[np.float64] = field(init=False, repr=False)
-    peaks: NDArray[np.int32] | None = None
+    peaks: NDArray[np.int32] = np.zeros(0, dtype=np.int32)
     is_finished: bool = False
+    _peak_index_offset: int = 0
 
     def __post_init__(self) -> None:
         self.processed_name = f"{self.name}_processed"
@@ -179,7 +180,7 @@ class SignalData:
         )
         self.excluded_sections = []
         self.is_finished = False
-        self.peaks = None
+        self.peaks = np.zeros(0, dtype=np.int32)
         self._signal_rate.clear()
         self._processed_data = self.data.get_column(self.processed_name).to_numpy()
 
@@ -292,9 +293,6 @@ class SignalData:
         else:
             raise NotImplementedError(f"Pipeline `{pipeline}` not implemented.")
 
-        # if self.processed_name in self.active_section.columns:
-        #     self.active_section = self.active_section.drop(self.processed_name)
-        # self.active_section.hstack([filtered], in_place=True)
         self.active_section = self.active_section.with_columns(
             pl.Series(self.processed_name, filtered, pl.Float64).alias(
                 self.processed_name
@@ -375,39 +373,31 @@ class SignalData:
 
     def detect_peaks(
         self,
-        sig: NDArray[np.float64],
         method: PeakDetectionMethod,
         input_values: PeakDetectionInputValues,
+        start_index: int = 0,
+        stop_index: int = 0,
     ) -> None:
-        if method == "wfdb_xqrs":
-            peaks = find_peaks_xqrs(
-                sig,
-                self.processed_data,
-                self.sampling_rate,
-                radius=input_values["corrections"]["search_radius"],
-                peak_dir=input_values["corrections"]["peak_dir"],
-                sampfrom=input_values["sampfrom"],
-                sampto=input_values["sampto"],
-            )
-        elif method in ["neurokit2", "pantompkins", "promac"]:
-            peaks = nk.ecg_peaks(
-                sig,
-                sampling_rate=self.sampling_rate,
-                method=method,
-                correct_artifacts=input_values.get("correct_artifacts", False),
-            )[1]["ECG_R_Peaks"]
-        elif method == "local":
-            peaks = find_local_peaks(
-                sig, radius=input_values.get("radius", self.sampling_rate // 2)
-            )
-        elif method == "elgendi_ppg":
-            peaks = find_ppg_peaks_elgendi(sig, self.sampling_rate, **input_values)
-        else:
-            raise NotImplementedError(
-                f"Peak detection method `{method}` not implemented."
-            )
+        if stop_index == 0:
+            stop_index = len(self.processed_data)
 
-        pl_peaks = pl.Series("peaks", peaks, dtype=pl.Int32)
+        self._peak_index_offset = start_index
+        sig = (
+            self.active_section.filter(
+                pl.col("index").is_between(start_index, stop_index)
+            )
+            .get_column(self.processed_name)
+            .to_numpy()
+        )
+
+        peaks = find_peaks(
+            sig=sig,
+            sampling_rate=self.sampling_rate,
+            method=method,
+            input_values=input_values,
+        )
+
+        pl_peaks = pl.Series("peaks", peaks + start_index, pl.Int32)
         self.active_section = self.active_section.with_columns(
             (
                 pl.when(pl.col("index").is_in(pl_peaks))
@@ -419,7 +409,7 @@ class SignalData:
         self.peaks = pl_peaks.to_numpy(writable=True)
         self.calculate_rate()
 
-    def get_peak_indices(self, _return_value: bool = True) -> NDArray[np.int32]:
+    def get_peak_indices(self) -> NDArray[np.int32]:
         self.peaks = (
             self.active_section.filter(pl.col("is_peak"))
             .get_column("index")
@@ -428,39 +418,31 @@ class SignalData:
         )
         return self.peaks
 
-    def get_peak_diffs(self) -> NDArray[np.int32]:
-        """
-        Calculates the differences between adjacent peaks.
-
-        Returns
-        -------
-        NDArray[np.int32]
-            If less than 2 peaks are detected, returns an empty array. Otherwise,
-            returns the differences between adjacent peaks.
-        """
-        if self.peaks is None or self.peaks.size < 2:
+    def get_peak_diffs(
+        self, peaks: NDArray[np.int32] | None = None
+    ) -> NDArray[np.int32]:
+        if peaks is None:
+            peaks = self.peaks
+        if len(peaks) < 2:
             return np.empty(0, dtype=np.int32)
-        return np.ediff1d(self.peaks, to_begin=[0])
+        return np.diff(peaks, prepend=0)
 
-    def calculate_rate(self, peaks: NDArray[np.int32] | None = None) -> None:
+    def calculate_rate(self) -> None:
         """
-        Calculates signal rate using `neurokit2.signal_rate`.
+        Calculates the rate of the signal using the detected peaks.
 
         Raises
         ------
         ValueError
             If there are less than 3 peaks.
         """
-
-        if peaks is None:
-            peaks = self.peaks if self.peaks is not None else self.get_peak_indices()
-        # if self.peaks.size < 3:
-        # raise ValueError("Too few peaks to calculate rate.")
+        if len(self.peaks) < 3:
+            raise ValueError("Too few peaks to calculate rate.")
         fs = self.sampling_rate
 
         rate = np.asarray(
             nk.signal_rate(
-                peaks,
+                self.peaks,
                 fs,
                 desired_length=None,
                 interpolation_method="monotone_cubic",
@@ -470,9 +452,9 @@ class SignalData:
         )
         rate_interp = np.asarray(
             nk.signal_rate(
-                peaks,
+                self.peaks,
                 fs,
-                desired_length=self.data.height,
+                desired_length=len(self.processed_data),
                 interpolation_method="monotone_cubic",
                 show=False,
             ),

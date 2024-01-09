@@ -244,7 +244,7 @@ class ResultDict(TypedDict):
     focused_result: npt.NDArray[np.void]
     manual_peak_edits: dict[str, list[int]]
     source_data: dict[
-        str, str | int | bool | npt.NDArray[np.float64] | npt.NDArray[np.int32]
+        str, str | int | bool | npt.NDArray[np.float64] | npt.NDArray[np.int32] | None
     ]
 
 

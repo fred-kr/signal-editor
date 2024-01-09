@@ -52,7 +52,6 @@ from .models.result import (
     SelectionParameters,
 )
 from .type_aliases import (
-    CorrectXQRS,
     FileMetadata,
     FilterMethod,
     OxygenCondition,
@@ -162,6 +161,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def peak_detection_method(self) -> PeakDetectionMethod:
         return cast(PeakDetectionMethod, self.combo_box_peak_detection_method.value())
 
+    @property
+    def xqrs_peak_direction(self) -> WFDBPeakDirection:
+        return cast(WFDBPeakDirection, self.peak_xqrs_peak_dir.value())
+
     # endregion
 
     # region Theme Switcher
@@ -209,7 +212,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.sig_data_loaded.connect(self.handle_plot_draw)
         self.sig_data_loaded.connect(self.handle_table_view_data)
         self.sig_peaks_updated.connect(self.handle_draw_results)
-        # self.sig_peaks_updated.connect(self.handle_table_view_data)
         self.sig_plot_data_changed.connect(self._update_plot_view)
         self.sig_show_message.connect(self.show_message)
         self.sig_data_restored.connect(self.refresh_app_state)
@@ -573,16 +575,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot()
     def handle_peak_detection(self) -> None:
         btn = self.btn_detect_peaks
-        btn.processing("Detecting peaks...")
-        peak_start = time.perf_counter()
+        btn.processing("Working...")
         peak_params = self.get_peak_detection_values()
         name = self.signal_name
         plot_widget = self.plot.plot_widgets[name]
-        if self.data.sigs[name].processed_data.size == 0:
-            info_msg = (
-                "Signal needs to be filtered before peak detection can be performed."
-            )
-            self.sig_show_message.emit(info_msg, "info")
+        if self.data.sigs[name].processed_data.shape[0] == 0:
+            msg = "Signal needs to be filtered before peak detection can be performed."
+            self.sig_show_message.emit(msg, "info")
             return
 
         self.data.run_peak_detection(
@@ -598,9 +597,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             plot_widget=plot_widget,
             signal_name=name,
         )
-        peak_stop = time.perf_counter()
-        duration_msg = f"Last run took {peak_stop - peak_start:.2f}s"
-        btn.feedback(True, tip=duration_msg)
+        btn.feedback(True)
         self.sig_peaks_updated.emit(name)
 
     @Slot(str)
@@ -714,8 +711,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     def get_filter_values(self) -> SignalFilterParameters:
-        # if self.combo_box_preprocess_pipeline.value() != "custom":
-        # self.combo_box_filter_method.setValue("None")
 
         method = self.filter_method
 
@@ -752,6 +747,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def get_peak_detection_values(self) -> PeakDetectionParameters:
         method = self.peak_detection_method
+        start_index = self.peak_start_index.value()
+        stop_index = self.peak_stop_index.value()
+
         if method == "elgendi_ppg":
             vals = PeakDetectionElgendiPPG(
                 peakwindow=self.peak_elgendi_ppg_peakwindow.value(),
@@ -778,12 +776,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             )
         elif method == "wfdb_xqrs":
             vals = PeakDetectionXQRS(
-                sampfrom=self.peak_xqrs_sampfrom.value(),
-                sampto=self.peak_xqrs_sampto.value(),
-                corrections=CorrectXQRS(
-                    search_radius=self.peak_xqrs_search_radius.value(),
-                    peak_dir=cast(WFDBPeakDirection, self.peak_xqrs_peak_dir.value()),
-                ),
+                search_radius=self.peak_xqrs_search_radius.value(),
+                peak_dir=self.xqrs_peak_direction,
             )
         elif method == "pantompkins":
             vals = PeakDetectionPantompkins(
@@ -793,6 +787,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             raise ValueError(f"Unknown peak detection method: {method}")
 
         return PeakDetectionParameters(
+            start_index=start_index,
+            stop_index=stop_index,
             method=method,
             input_values=vals,
         )

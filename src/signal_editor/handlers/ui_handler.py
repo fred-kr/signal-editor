@@ -31,18 +31,7 @@ from ..views._peak_parameter_states import INITIAL_PEAK_STATES
 if TYPE_CHECKING:
     from ..app import MainWindow
 
-# "Nabian (ECG)": "nabian",
-# "Gamboa (ECG)": "gamboa",
-# "Slope Sum Function (ECG)": "slopesumfunction",
-# "Zong (ECG)": "zong",
-# "Hamilton (ECG)": "hamilton",
-# "Christov (ECG)": "christov",
-# "Engzeemod (ECG)": "engzeemod",
-# "Elgendi (ECG)": "elgendi_ecg",
-# "Kalidas (ECG)": "kalidas",
-# "Martinez (ECG)": "martinez",
-# "Rodrigues (ECG)": "rodrigues",
-# "VGraph (ECG)": "vgraph",
+
 COMBO_BOX_ITEMS = {
     "combo_box_peak_detection_method": {
         "Elgendi (PPG, fast)": "elgendi_ppg",
@@ -52,6 +41,21 @@ COMBO_BOX_ITEMS = {
         "Pan and Tompkins (ECG, medium)": "pantompkins",
         "XQRS (ECG, medium)": "wfdb_xqrs",
     },
+    # "peak_neurokit2_algorithm_used": {
+    #     "Neurokit2 (Default)": "neurokit",
+    #     "Nabian (ECG)": "nabian",
+    #     "Gamboa (ECG)": "gamboa",
+    #     "Slope Sum Function (ECG)": "slopesumfunction",
+    #     "Zong (ECG)": "zong",
+    #     "Hamilton (ECG)": "hamilton",
+    #     "Christov (ECG)": "christov",
+    #     "Engzeemod (ECG)": "engzeemod",
+    #     "Elgendi (ECG)": "elgendi",
+    #     "Kalidas (ECG)": "kalidas",
+    #     "Martinez (ECG)": "martinez",
+    #     "Rodrigues (ECG)": "rodrigues",
+    #     "VGraph (ECG)": "vgraph",
+    # },
     "combo_box_filter_method": {
         "Butterworth (SOS)": "butterworth",
         "Butterworth (BA)": "butterworth_ba",
@@ -100,7 +104,7 @@ INITIAL_STATE_MAP = {
         "text": "",
     },
     "combo_box_oxygen_condition": {
-        "currentText": "normoxic",
+        "value": "normoxic",
     },
     "btn_load_selection": {
         "enabled": False,
@@ -115,11 +119,11 @@ INITIAL_STATE_MAP = {
         "checked": False,
     },
     "combo_box_preprocess_pipeline": {
-        "currentText": "custom",
+        "value": "custom",
     },
     "combo_box_filter_method": {
         "enabled": True,
-        "currentText": "None",
+        "value": "None",
     },
     "combo_box_scale_method": {
         "value": "None",
@@ -150,7 +154,7 @@ INITIAL_STATE_MAP = {
         "value": 250,
     },
     "combo_box_peak_detection_method": {
-        "currentText": "elgendi_ppg",
+        "value": "elgendi_ppg",
     },
     "btn_detect_peaks": {
         "enabled": False,
@@ -185,6 +189,7 @@ INITIAL_STATE_METHODS_MAP = {
     "correctionMode": "setCorrectionMode",
     "isChecked": "setChecked",
     "items": "setItems",
+    "specialValueText": "setSpecialValueText",
 }
 
 FILTER_INPUT_STATES = {
@@ -276,8 +281,8 @@ class UIHandler(QObject):
         peak_combo_box = self.window.combo_box_peak_detection_method
         stacked_peak_widget = self.window.stacked_peak_parameters
         # if peak_combo_box.value() not in COMBO_BOX_ITEMS["combo_box_peak_detection_method"]:
-            # peak_combo_box.clear()
-            # peak_combo_box.currentIndexChanged.disconnect()
+        # peak_combo_box.clear()
+        # peak_combo_box.currentIndexChanged.disconnect()
         peak_combo_box.blockSignals(True)
         peak_combo_box.clear()
         peak_combo_box.setItems(COMBO_BOX_ITEMS["combo_box_peak_detection_method"])
@@ -429,9 +434,22 @@ class UIHandler(QObject):
         if self.window.data.df.is_empty():
             return
         # view_box = self.plot.plot_widgets.get_view_box(signal_name)
-        data_pos = self.plot.plot_widgets[signal_name].plotItem.vb.mapSceneToView(pos).x()
-        data_pos = np.clip(data_pos, 0, self.window.data.sigs[signal_name].data.height - 1, dtype=np.int32, casting="unsafe")
-        temp_value = self.window.data.sigs[signal_name].data.get_column("temperature").gather(data_pos).to_numpy(zero_copy_only=True)[0]
+        data_pos = (
+            self.plot.plot_widgets[signal_name].plotItem.vb.mapSceneToView(pos).x()
+        )
+        data_pos = np.clip(
+            data_pos,
+            0,
+            self.window.data.sigs[signal_name].data.height - 1,
+            dtype=np.int32,
+            casting="unsafe",
+        )
+        temp_value = (
+            self.window.data.sigs[signal_name]
+            .data.get_column("temperature")
+            .gather(data_pos)
+            .to_numpy(zero_copy_only=True)[0]
+        )
         # TODO: give temperature labels same treatment as all the other things with two versions
         if signal_name == "hbr":
             self.temperature_label_hbr.setText(

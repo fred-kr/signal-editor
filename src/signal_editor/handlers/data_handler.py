@@ -61,7 +61,7 @@ class DataHandler(QObject):
         # self._connect_signals()
 
     # def _connect_signals(self) -> None:
-        # self.sig_dh_peaks_updated.connect(self.run_rate_calculation)
+    # self.sig_dh_peaks_updated.connect(self.run_rate_calculation)
 
     @property
     def fs(self) -> int:
@@ -170,8 +170,8 @@ class DataHandler(QObject):
     def run_peak_detection(
         self, name: SignalName | str, peak_parameters: PeakDetectionParameters
     ) -> None:
-        sig = self.sigs[name].processed_data
-        self.sigs[name].detect_peaks(sig, **peak_parameters)
+        # sig = self.sigs[name].processed_data
+        self.sigs[name].detect_peaks(**peak_parameters)
         self.run_rate_calculation(name)
         # self.sigs[name].calculate_rate()
         # self.sig_dh_peaks_updated.emit(name)
@@ -196,9 +196,7 @@ class DataHandler(QObject):
     def compute_result_df(self, name: SignalName | str) -> None:
         sig = self.sigs[name]
         peaks = sig.peaks
-        if peaks is None:
-            return
-        diffs = sig.get_peak_diffs()
+        diffs = sig.get_peak_diffs(peaks)
         rate = sig.signal_rate.rate
 
         data = sig.get_data()
