@@ -30,9 +30,9 @@ class CustomViewBox(pg.ViewBox):
     def __init__(self, *args: Any, **kargs: Any) -> None:
         pg.ViewBox.__init__(self, *args, **kargs)
         self._selection_box: QtWidgets.QGraphicsRectItem | None = None
-        self._deletion_box: QtWidgets.QGraphicsRectItem | None = None
+        # self._deletion_box: QtWidgets.QGraphicsRectItem | None = None
         self.mapped_peak_selection: QtGui.QPolygonF | None = None
-        self.mapped_deletion_selection: QtGui.QPolygonF | None = None
+        # self.mapped_deletion_selection: QtGui.QPolygonF | None = None
 
     @property
     def selection_box(self) -> QtWidgets.QGraphicsRectItem:
@@ -58,29 +58,29 @@ class CustomViewBox(pg.ViewBox):
         self.addItem(selection_box, ignoreBounds=True)
         return
 
-    @property
-    def deletion_box(self) -> QtWidgets.QGraphicsRectItem:
-        if self._deletion_box is None:
-            deletion_box = QtWidgets.QGraphicsRectItem(0, 0, 1, 1)
-            deletion_box.setPen(pg.mkPen((255, 100, 100), width=1))
-            deletion_box.setBrush(pg.mkBrush((255, 100, 100, 100)))
-            deletion_box.setZValue(1e9)
-            deletion_box.hide()
-            self._deletion_box = deletion_box
-            self.addItem(deletion_box, ignoreBounds=True)
-        return self._deletion_box
+    # @property
+    # def deletion_box(self) -> QtWidgets.QGraphicsRectItem:
+    #     if self._deletion_box is None:
+    #         deletion_box = QtWidgets.QGraphicsRectItem(0, 0, 1, 1)
+    #         deletion_box.setPen(pg.mkPen((255, 100, 100), width=1))
+    #         deletion_box.setBrush(pg.mkBrush((255, 100, 100, 100)))
+    #         deletion_box.setZValue(1e9)
+    #         deletion_box.hide()
+    #         self._deletion_box = deletion_box
+    #         self.addItem(deletion_box, ignoreBounds=True)
+    #     return self._deletion_box
 
-    @deletion_box.setter
-    def deletion_box(self, deletion_box: QtWidgets.QGraphicsRectItem | None) -> None:
-        if self._deletion_box is not None:
-            self.removeItem(self._deletion_box)
-        self._deletion_box = deletion_box
-        if deletion_box is None:
-            return
-        deletion_box.setZValue(1e9)
-        deletion_box.hide()
-        self.addItem(deletion_box, ignoreBounds=True)
-        return
+    # @deletion_box.setter
+    # def deletion_box(self, deletion_box: QtWidgets.QGraphicsRectItem | None) -> None:
+    #     if self._deletion_box is not None:
+    #         self.removeItem(self._deletion_box)
+    #     self._deletion_box = deletion_box
+    #     if deletion_box is None:
+    #         return
+    #     deletion_box.setZValue(1e9)
+    #     deletion_box.hide()
+    #     self.addItem(deletion_box, ignoreBounds=True)
+    #     return
 
     @override
     def mouseDragEvent(
@@ -128,12 +128,12 @@ class CustomViewBox(pg.ViewBox):
             else:
                 self.updateSelectionBox(ev.pos(), ev.buttonDownPos())
                 self.mapped_peak_selection = None
-        elif is_left_button_with_alt(ev):
-            if ev.isFinish():
-                self.mapped_deletion_selection = create_selection(ev)
-            else:
-                self.updateDeletionBox(ev.pos(), ev.buttonDownPos())
-                self.mapped_deletion_selection = None
+        # elif is_left_button_with_alt(ev):
+        #     if ev.isFinish():
+        #         self.mapped_deletion_selection = create_selection(ev)
+        #     else:
+        #         self.updateDeletionBox(ev.pos(), ev.buttonDownPos())
+        #         self.mapped_deletion_selection = None
         elif is_left_button(ev):
             if self.state["mouseMode"] == pg.ViewBox.RectMode and axis is None:
                 if ev.isFinish():
@@ -187,13 +187,13 @@ class CustomViewBox(pg.ViewBox):
         self.selection_box.setTransform(tr)
         self.selection_box.show()
 
-    def updateDeletionBox(self, pos1: pg.Point, pos2: pg.Point) -> None:
-        rect = QRectF(pos1, pos2)
-        rect = self.childGroup.mapRectFromParent(rect)
-        self.deletion_box.setPos(rect.topLeft())
-        tr = QtGui.QTransform.fromScale(rect.width(), rect.height())
-        self.deletion_box.setTransform(tr)
-        self.deletion_box.show()
+    # def updateDeletionBox(self, pos1: pg.Point, pos2: pg.Point) -> None:
+    #     rect = QRectF(pos1, pos2)
+    #     rect = self.childGroup.mapRectFromParent(rect)
+    #     self.deletion_box.setPos(rect.topLeft())
+    #     tr = QtGui.QTransform.fromScale(rect.width(), rect.height())
+    #     self.deletion_box.setTransform(tr)
+    #     self.deletion_box.show()
 
 
 class CustomScatterPlotItem(pg.ScatterPlotItem):
@@ -321,7 +321,13 @@ type PlotItemAttr = Literal[
     "name", "signal", "peaks", "rate", "rate_mean", "temperature_label"
 ]
 type PlotItemVal = (
-    str | pg.PlotDataItem | pg.ScatterPlotItem | pg.InfiniteLine | pg.LabelItem | None
+    str
+    | pg.PlotDataItem
+    | pg.ScatterPlotItem
+    | pg.InfiniteLine
+    | pg.LabelItem
+    | pg.LinearRegionItem
+    | None
 )
 
 
@@ -333,6 +339,7 @@ class PlotItems:
     rate: pg.PlotDataItem = pg.PlotDataItem()
     rate_mean: pg.InfiniteLine = pg.InfiniteLine()
     temperature_label: pg.LabelItem | None = None
+    active_section: pg.LinearRegionItem = pg.LinearRegionItem()
 
     def as_dict(self) -> dict[PlotItemAttr, PlotItemVal]:
         return {
@@ -411,18 +418,14 @@ class PlotHandler(QObject):
         self.plot_items = PlotItemsContainer()
         self.plot_widgets = PlotWidgetContainer()
         self.peak_edits: dict[SignalName | str, ManualPeakEdits] = {
-            name: ManualPeakEdits() for name in ("hbr", "ventilation")
+            "hbr": ManualPeakEdits(),
+            "ventilation": ManualPeakEdits(),
         }
         self._last_edit_index: int = 0
 
-        self.plot_widgets.make_plot_widget(name="hbr", view_box=CustomViewBox())
-        self.plot_widgets.make_plot_widget(name="ventilation", view_box=CustomViewBox())
-        self.plot_widgets.make_plot_widget(name="hbr_rate")
-        self.plot_widgets.make_plot_widget(name="ventilation_rate")
+        self._make_plot_widgets()
 
-        self.plot_items["hbr"] = PlotItems(name="hbr")
-        self.plot_items["ventilation"] = PlotItems(name="ventilation")
-
+        self._make_plot_items()
         self._prepare_plot_items()
 
     @property
@@ -432,6 +435,30 @@ class PlotHandler(QObject):
     @last_edit_index.setter
     def last_edit_index(self, value: int | float) -> None:
         self._last_edit_index = int(value)
+
+    def _make_plot_widgets(self) -> None:
+        self.plot_widgets.make_plot_widget(name="hbr", view_box=CustomViewBox())
+        self.plot_widgets.make_plot_widget(name="ventilation", view_box=CustomViewBox())
+        self.plot_widgets.make_plot_widget(name="hbr_rate")
+        self.plot_widgets.make_plot_widget(name="ventilation_rate")
+
+    def _make_plot_items(self) -> None:
+        self.plot_items["hbr"] = PlotItems(
+            name="hbr",
+            temperature_label=pg.LabelItem(
+                "Temperature: -- °C",
+                parent=self.plot_widgets["hbr"].getPlotItem(),
+                angle=0,
+            ),
+        )
+        self.plot_items["ventilation"] = PlotItems(
+            name="ventilation",
+            temperature_label=pg.LabelItem(
+                "Temperature: -- °C",
+                parent=self.plot_widgets["ventilation"].getPlotItem(),
+                angle=0,
+            ),
+        )
 
     def _prepare_plot_items(self) -> None:
         style = self._window.theme_switcher.active_style
@@ -459,18 +486,44 @@ class PlotHandler(QObject):
         self.plot_widgets.get_view_box("ventilation_rate").setMouseMode(
             pg.ViewBox.RectMode
         )
-        for name in {"hbr", "ventilation"}:
-            self.plot_items[name].temperature_label = pg.LabelItem(
-                text=self._generate_styled_label(
-                    color="orange",
-                    content="Temperature: -- °C",
-                ),
-                parent=self.plot_widgets[name].plotItem,
-                angle=0,
-            )
+        for name in ["hbr", "ventilation"]:
             self.plot_widgets[name].getPlotItem().scene().sigMouseMoved.connect(
                 self.on_mouse_moved
             )
+            reg = pg.LinearRegionItem(
+                [0, 1],
+                pen=pg.mkPen(color="gold", width=2, style=Qt.PenStyle.DashLine),
+                hoverPen=pg.mkPen(
+                    color="steelblue", width=3, style=Qt.PenStyle.DashLine
+                ),
+            )
+            self.reg_label_low = pg.InfLineLabel(
+                reg.lines[0],
+                "{value:.0f}",
+                position=0.95,
+                anchor=(1, 1),
+            )
+            self.reg_label_high = pg.InfLineLabel(
+                reg.lines[1],
+                "{value:.0f}",
+                position=0.95,
+                anchor=(1, 1),
+            )
+            reg.setZValue(1e3)
+            reg.sigRegionChangeFinished.connect(self.on_active_region_change_finished)
+            self.plot_widgets[name].getPlotItem().getViewBox().addItem(reg)
+            self.plot_items[name].active_section = reg
+
+    @Slot(str)
+    def toggle_region_selector(self, name: str) -> None:
+        is_visible = self.plot_items[name].active_section.isVisible()
+        is_enabled = self.plot_items[name].active_section.isEnabled()
+        self.plot_items[name].active_section.setVisible(not is_visible)
+        self.plot_items[name].active_section.setEnabled(not is_enabled)
+        sig_data = self._window.data.sigs[name]
+        bounds = sig_data.data_bounds
+        # sig_data.set_active(*bounds)
+        self._window.update_active_region(*bounds)
 
     @staticmethod
     def set_plot_titles_and_labels(
@@ -519,27 +572,27 @@ class PlotHandler(QObject):
                 bottom_label=bottom_label,
             )
 
+    @Slot(pg.LinearRegionItem)
+    def on_active_region_change_finished(self, region: pg.LinearRegionItem) -> None:
+        # logger.debug(f"Signal data: {region}, type: {type(region)}")
+        lower, upper = region.getRegion()
+        lower, upper = int(lower), int(upper)
+        self._window.update_active_region(lower, upper)
+        # self._window.sig_active_region_limits_changed.emit(lower, upper)
+
     @Slot()
     def reset_plots(self) -> None:
-        for pw in self.plot_widgets.values():
+        for pw in self.plot_widgets.get_all_widgets():
             pw.getPlotItem().clear()
             pw.getPlotItem().addLegend().clear()
+            pw.getPlotItem().getViewBox().clear()
 
-        self.plot_items = PlotItemsContainer()
-        self.plot_items["hbr"] = PlotItems(
-            name="hbr",
-            temperature_label=pg.LabelItem(
-                "Temperature: -- °C", parent=self.plot_widgets["hbr"].plotItem, angle=0
-            ),
-        )
-        self.plot_items["ventilation"] = PlotItems(
-            name="ventilation",
-            temperature_label=pg.LabelItem(
-                "Temperature: -- °C",
-                parent=self.plot_widgets["ventilation"].plotItem,
-                angle=0,
-            ),
-        )
+        self.plot_items.clear()
+        self.peak_edits.clear()
+        self._last_edit_index = 0
+        self.peak_edits = {"hbr": ManualPeakEdits(), "ventilation": ManualPeakEdits()}
+        self._make_plot_items()
+        self._prepare_plot_items()
 
     @Slot(QPointF)
     def on_mouse_moved(self, pos: QPointF) -> None:
@@ -879,29 +932,26 @@ class PlotHandler(QObject):
         selection_box.setVisible(not selection_box.isVisible())
         selection_box.setEnabled(not selection_box.isEnabled())
 
-    @Slot()
-    def show_exclusion_selector(self) -> None:
-        # TODO: Get name through widget (QApplication.widgetAt(cursor_pos)) at mouse cursor position (QCursor.pos())
+    def _mark_excluded_region(self, lower: int, upper: int) -> None:
         name = self._window.signal_name
-        view_box = self.plot_widgets.get_view_box(name)
-        deletion_box = view_box.deletion_box
-        deletion_box.setVisible(not deletion_box.isVisible())
-        deletion_box.setEnabled(not deletion_box.isEnabled())
+        static_region = pg.LinearRegionItem(
+            values=(lower, upper),
+            brush=pg.mkBrush(color=(255, 0, 0, 50)),
+            pen=pg.mkPen(color=(255, 0, 0, 200), width=2),
+            movable=False,
+        )
+        self.plot_widgets[name].getPlotItem().getViewBox().addItem(static_region)
 
     @Slot()
-    def mark_excluded(self) -> None:
+    def emit_to_be_excluded_range(self) -> None:
         name = self._window.signal_name
-        vb = self.plot_widgets.get_view_box(name)
-        if vb.mapped_deletion_selection is None:
+        active_section = self.plot_items[name].active_section
+        if not active_section.isVisible():
             return
-        rect: tuple[
-            float, float, float, float
-        ] = vb.mapped_deletion_selection.boundingRect().getRect()
-        rect_x, rect_width = int(rect[0]), int(rect[2])
-
-        x_range = (rect_x, rect_x + rect_width)
-        lr_marker = pg.LinearRegionItem(values=x_range, movable=False)
-        self.sig_excluded_range.emit(x_range[0], x_range[1])
+        lower, upper = active_section.getRegion()
+        lower, upper = int(lower), int(upper)
+        self._mark_excluded_region(lower, upper)
+        self.sig_excluded_range.emit(lower, upper)
 
     def get_state(self) -> dict[SignalName | str, ManualPeakEdits]:
         return self.peak_edits

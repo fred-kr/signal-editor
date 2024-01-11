@@ -93,6 +93,7 @@ class SignalData:
 
     @property
     def processed_data(self) -> NDArray[np.float64]:
+        """Quick access to the filtered + scaled data column as a numpy array."""
         return self._processed_data
 
     @processed_data.setter
@@ -111,8 +112,8 @@ class SignalData:
         self,
     ) -> dict[str, str | int | bool | NDArray[np.float64] | NDArray[np.int32] | None]:
         """
-        Returns a dictionary containing the attributes and datasets of this `Signal`
-        instance.
+        Returns a dictionary containing all information necessary to create a `Result`
+        object instance.
         """
         return {
             "name": self.name,
@@ -135,8 +136,7 @@ class SignalData:
 
     def get_data(self) -> pl.DataFrame:
         """
-        Saves any changes from the currently active section to `self.data` and returns
-        it.
+        Saves any changes from the currently active section to `self.data` and returns it.
 
         Returns
         -------
@@ -161,17 +161,6 @@ class SignalData:
         self.active_section = self.data.select(
             "index", "temperature", self.name, self.processed_name, "is_peak"
         ).filter(pl.col("index").is_between(start, stop))
-
-    def get_active(self) -> pl.DataFrame:
-        """
-        Get the currently active section of the data.
-
-        Returns
-        -------
-        pl.DataFrame
-            Subset of the total data for this `Signal` instance.
-        """
-        return self.active_section
 
     def reset(self) -> None:
         self.data = self._original_data.clone()
@@ -278,9 +267,9 @@ class SignalData:
         """
         method = kwargs.get("method", "None")
         fs = self.sampling_rate
-        if col_name is None or col_name not in self.active_section.columns:
+        if col_name is None or col_name not in self.data.columns:
             col_name = self.name
-        sig: NDArray[np.float64] = self.active_section.get_column(col_name).to_numpy()
+        sig: NDArray[np.float64] = self.data.get_column(col_name).to_numpy()
         if pipeline == "custom":
             if method == "None":
                 filtered = sig
@@ -293,7 +282,7 @@ class SignalData:
         else:
             raise NotImplementedError(f"Pipeline `{pipeline}` not implemented.")
 
-        self.active_section = self.active_section.with_columns(
+        self.data = self.data.with_columns(
             pl.Series(self.processed_name, filtered, pl.Float64).alias(
                 self.processed_name
             )
@@ -316,15 +305,15 @@ class SignalData:
             The size of the rolling window over which to compute the standardization.
             If None, standardize the entire signal. Defaults to None.
         """
-        if self.active_section.get_column(self.processed_name).is_null().all():
+        if self.data.get_column(self.processed_name).is_null().all():
             use_col = self.name
         else:
             use_col = self.processed_name
         scaled = scale_signal(
-            self.active_section.get_column(use_col), robust, window_size
+            self.data.get_column(use_col), robust, window_size
         )
 
-        self.active_section = self.active_section.with_columns(
+        self.data = self.data.with_columns(
             pl.Series(self.processed_name, scaled, pl.Float64).alias(
                 self.processed_name
             )
@@ -422,7 +411,7 @@ class SignalData:
             peaks = self.peaks
         if len(peaks) < 2:
             return np.empty(0, dtype=np.int32)
-        return np.diff(peaks, prepend=0)
+        return np.ediff1d(peaks, to_begin=[0])
 
     def calculate_rate(self) -> None:
         """
@@ -459,6 +448,15 @@ class SignalData:
         )
         self.signal_rate.rate = rate
         self.signal_rate.rate_interpolated = rate_interp
+
+    @property
+    def data_bounds(self) -> tuple[int, int]:
+        return self.data.get_column("index")[0], self.data.get_column("index")[-1]
+
+    @property
+    def active_region_limits(self) -> tuple[int, int]:
+        col = self.active_section.get_column("index")
+        return col[0], col[-1]
 
 
 class SignalStorage(dict[SignalName | str, SignalData]):

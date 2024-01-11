@@ -85,6 +85,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     sig_show_message = Signal(str, str)
     sig_data_restored = Signal()
     sig_init_finished = Signal()
+    sig_active_region_limits_changed = Signal(int, int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -222,11 +223,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.action_save_state.triggered.connect(self.save_state)
         self.action_load_state.triggered.connect(self.restore_state)
         self.action_remove_deletion_rect.triggered.connect(
-            self.plot.show_exclusion_selector
+            lambda: self.plot.toggle_region_selector(self.signal_name)
         )
-        # self.action_remove_selected_data.triggered.connect(self.plot.mark_excluded)
+        self.action_remove_selected_data.triggered.connect(
+            self.plot.emit_to_be_excluded_range
+        )
+        self.plot.sig_excluded_range.connect(self.data.exclude_region)
 
         self.spin_box_fs.valueChanged.connect(self.data.update_fs)
+
+        self.peak_start_index.valueChanged.connect(self.emit_peak_start_stop_index)
+        self.peak_stop_index.valueChanged.connect(self.emit_peak_start_stop_index)
+
+        self.data.sig_dh_new_data_loaded.connect(self.update_active_region)
+
+        self.sig_active_region_limits_changed.connect(self.update_active_region)
 
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
         self.plot.sig_peaks_edited.connect(self._sync_peaks_data_plot)
@@ -235,6 +246,37 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.action_reset_view.triggered.connect(
             lambda: self.plot.reset_views(self.data.sigs[self.signal_name].data.height)
         )
+
+    @Slot()
+    def emit_peak_start_stop_index(self) -> None:
+        limits = self.peak_start_index.value(), self.peak_stop_index.value()
+        self.sig_active_region_limits_changed.emit(min(limits), max(limits))
+
+    @Slot(int, int)
+    def update_active_region(self, start: int, stop: int) -> None:
+        self.peak_start_index.blockSignals(True)
+        self.peak_start_index.setMinimum(start)
+        self.peak_start_index.setMaximum(stop)
+        self.peak_start_index.setValue(start)
+        self.peak_start_index.blockSignals(False)
+
+        self.peak_stop_index.blockSignals(True)
+        self.peak_stop_index.setMinimum(start)
+        self.peak_stop_index.setMaximum(stop)
+        self.peak_stop_index.setValue(stop)
+        self.peak_stop_index.blockSignals(False)
+
+        reg = self.plot.plot_items[self.signal_name].active_section
+        reg.setBounds(self.data.sigs[self.signal_name].data_bounds)
+        reg.blockSignals(True)
+        reg.setRegion((start, stop))
+        reg.blockSignals(False)
+
+        for name in ["hbr", "ventilation"]:
+            if name in self.data.sigs:
+                self.data.sigs[name].set_active(start, stop)
+
+        self.sig_plot_data_changed.emit(self.signal_name)
 
     @Slot(str)
     def _sync_peaks_data_plot(self, name: SignalName | str) -> None:
@@ -429,7 +471,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._set_x_ranges()
 
     def _set_x_ranges(self) -> None:
-        data_length = self.data.df.height
+        data_length = self.data.df.shape[0]
         view_boxes = self.plot.plot_widgets.get_all_view_boxes()
         for vb in view_boxes:
             vb.setLimits(
@@ -439,8 +481,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 minYRange=0.5,
             )
             vb.setXRange(0, data_length)
-        self._update_plot_view("hbr")
-        self._update_plot_view("ventilation")
+        for name in ["hbr", "ventilation"]:
+            self._update_plot_view(name)
+            self.plot.plot_items[name].active_section.setRegion((0, data_length))
 
     def _update_signal(self, name: SignalName | str) -> None:
         signal_data = self.data.sigs[name].processed_data
@@ -770,6 +813,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             raise ValueError(f"Unknown peak detection method: {method}")
 
+        for key, val in vals.items():
+            if isinstance(val, float):
+                vals[key] = np.round(val, 2)
+                
         return PeakDetectionParameters(
             start_index=start_index,
             stop_index=stop_index,

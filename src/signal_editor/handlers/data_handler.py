@@ -7,7 +7,7 @@ import numpy as np
 import polars as pl
 import polars.selectors as ps
 from numpy.typing import NDArray
-from PySide6.QtCore import QObject, Slot
+from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QInputDialog
 
 from ..models.io import read_edf
@@ -81,6 +81,7 @@ class DataState:
 
 
 class DataHandler(QObject):
+    sig_dh_new_data_loaded = Signal(int, int)
     def __init__(self, window: "MainWindow") -> None:
         super().__init__()
         self._window = window
@@ -156,6 +157,9 @@ class DataHandler(QObject):
                 continue
             sig = SignalData(name=name, data=df, sampling_rate=self.fs)
             self.sigs[name] = sig
+
+        index_col = df.get_column("index")
+        self.sig_dh_new_data_loaded.emit(index_col[0], index_col[-1])
 
     def _sampling_rate_unavailable(self) -> None:
         self.df = pl.DataFrame()
@@ -296,3 +300,12 @@ class DataHandler(QObject):
         else:
             self.df = df
         self.calc_minmax()
+
+    @Slot(int, int)
+    def exclude_region(self, lower: int, upper: int) -> None:
+        name = self._window.signal_name
+        if name not in self.sigs:
+            return
+        self.sigs[name].mark_excluded(lower, upper)
+        
+        
