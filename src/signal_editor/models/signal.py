@@ -451,7 +451,8 @@ class SignalData:
 
     @property
     def data_bounds(self) -> tuple[int, int]:
-        return self.data.get_column("index")[0], self.data.get_column("index")[-1]
+        col = self.data.get_column("index")
+        return col[0], col[-1]
 
     @property
     def active_region_limits(self) -> tuple[int, int]:

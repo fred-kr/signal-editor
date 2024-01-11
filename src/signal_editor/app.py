@@ -222,11 +222,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.action_get_results.triggered.connect(self.update_results)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_load_state.triggered.connect(self.restore_state)
-        self.action_remove_deletion_rect.triggered.connect(
+        self.action_toggle_region_selector.triggered.connect(
             lambda: self.plot.toggle_region_selector(self.signal_name)
         )
         self.action_remove_selected_data.triggered.connect(
             self.plot.emit_to_be_excluded_range
+        )
+        self.action_remove_marked_areas.triggered.connect(
+            self.remove_excluded_regions
         )
         self.plot.sig_excluded_range.connect(self.data.exclude_region)
 
@@ -241,12 +244,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
         self.plot.sig_peaks_edited.connect(self._sync_peaks_data_plot)
-        # self.plot.sig_excluded_range.connect(self.data.sigs[self.signal_name].mark_excluded)
 
         self.action_reset_view.triggered.connect(
             lambda: self.plot.reset_views(self.data.sigs[self.signal_name].data.height)
         )
 
+    @Slot()
+    def remove_excluded_regions(self) -> None:
+        name = self.signal_name
+        self.data.sigs[name].apply_exclusion_mask()
     @Slot()
     def emit_peak_start_stop_index(self) -> None:
         limits = self.peak_start_index.value(), self.peak_stop_index.value()
@@ -257,14 +263,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.peak_start_index.blockSignals(True)
         self.peak_start_index.setMinimum(start)
         self.peak_start_index.setMaximum(stop)
-        self.peak_start_index.setValue(start)
         self.peak_start_index.blockSignals(False)
+        self.peak_start_index.setValue(start)
 
         self.peak_stop_index.blockSignals(True)
         self.peak_stop_index.setMinimum(start)
         self.peak_stop_index.setMaximum(stop)
-        self.peak_stop_index.setValue(stop)
         self.peak_stop_index.blockSignals(False)
+        self.peak_stop_index.setValue(stop)
 
         reg = self.plot.plot_items[self.signal_name].active_section
         reg.setBounds(self.data.sigs[self.signal_name].data_bounds)
@@ -650,17 +656,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.restoreGeometry(geometry)
 
         self.data_dir = self.config.data_dir
-        # self.data_dir = Path(data_dir)
-        # data_dir = settings.value("data_dir", str(Path.cwd()))
 
         self.output_dir = self.config.output_dir
-        # output_dir = settings.value("output_dir", str(Path.cwd() / "output"))
-        # self.output_dir = Path(output_dir)
 
         self.theme_switcher.set_style(self.config.style)
-        # style = settings.value("style", "dark")
-        # self.theme_switcher.set_style(style)
-        # self.spin_box_fs.setValue(self.config.sample_rate)
 
     def _write_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
@@ -674,14 +673,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.config.data_dir = Path(data_dir)
         self.config.output_dir = Path(output_dir)
 
-        # settings.setValue("data_dir", data_dir)
-        # settings.setValue("output_dir", output_dir)
-
         self.config.style = self.theme_switcher.active_style
         self.config.sample_rate = self.data.fs
         self.config.write_config()
-        # settings.setValue("style", style)
-        # self.config.sample_rate = self.spin_box_fs.value()
 
     @Slot()
     def _start_profiler(self):

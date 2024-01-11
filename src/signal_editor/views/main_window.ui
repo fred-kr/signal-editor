@@ -2869,6 +2869,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  <property name="accelerated">
                   <bool>true</bool>
                  </property>
+                 <property name="correctionMode">
+                  <enum>QAbstractSpinBox::CorrectToNearestValue</enum>
+                 </property>
                  <property name="showGroupSeparator" stdset="0">
                   <bool>true</bool>
                  </property>
@@ -2918,6 +2921,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  </property>
                  <property name="accelerated">
                   <bool>true</bool>
+                 </property>
+                 <property name="correctionMode">
+                  <enum>QAbstractSpinBox::CorrectToNearestValue</enum>
                  </property>
                  <property name="showGroupSeparator" stdset="0">
                   <bool>true</bool>
@@ -2977,13 +2983,10 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
+   <addaction name="action_toggle_region_selector"/>
+   <addaction name="action_remove_marked_areas"/>
+   <addaction name="separator"/>
    <addaction name="action_reset_view"/>
-   <addaction name="separator"/>
-   <addaction name="action_remove_selected_peaks"/>
-   <addaction name="action_remove_peak_rect"/>
-   <addaction name="separator"/>
-   <addaction name="action_remove_selected_data"/>
-   <addaction name="action_remove_deletion_rect"/>
   </widget>
   <action name="action_open_console">
    <property name="checked">
@@ -3312,16 +3315,16 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::ApplicationSpecificRole</enum>
    </property>
   </action>
-  <action name="action_remove_deletion_rect">
+  <action name="action_toggle_region_selector">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
      <normaloff>:/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Hide red rectangle</string>
+    <string>Toggle Region Selector</string>
    </property>
    <property name="toolTip">
-    <string>Toggles visibility of data exclusion rectangle. Shortcut: Alt+F</string>
+    <string>Toggles visibility of visual region that allows limiting the data on which to run the peak detection</string>
    </property>
    <property name="shortcut">
     <string>Alt+F</string>
@@ -3343,6 +3346,24 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="shortcut">
     <string>Ctrl+S</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_remove_marked_areas">
+   <property name="icon">
+    <iconset resource="../../resources/icons/icons.qrc">
+     <normaloff>:/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</iconset>
+   </property>
+   <property name="text">
+    <string>Remove Marked Areas</string>
+   </property>
+   <property name="toolTip">
+    <string>Remove the sections marked red from the data set</string>
+   </property>
+   <property name="shortcut">
+    <string>Del</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>

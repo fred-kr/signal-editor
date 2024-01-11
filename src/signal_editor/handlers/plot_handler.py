@@ -843,7 +843,7 @@ class PlotHandler(QObject):
         scatter_x, scatter_y = scatter_ref.getData()
         if scatter_x is None or scatter_y is None:
             return
-        if scatter_x.size == 0 or scatter_y.size == 0:
+        if scatter_x.shape[0] == 0 or scatter_y.shape[0] == 0:
             return
 
         to_remove = np.argwhere(
@@ -853,7 +853,7 @@ class PlotHandler(QObject):
             & (scatter_y <= y_range[1])
         )
 
-        if to_remove.size == 0:
+        if to_remove.shape[0] == 0:
             return
         scatter_ref.setData(
             x=np.delete(scatter_x, to_remove), y=np.delete(scatter_y, to_remove)
