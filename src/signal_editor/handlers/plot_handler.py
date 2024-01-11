@@ -7,13 +7,11 @@ import pyqtgraph as pg
 from numpy.typing import NDArray
 from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6 import QtCore, QtGui, QtWidgets
-from PySide6.QtCore import QObject, QRectF, Qt, Signal, Slot
-from PySide6.QtGui import QFont
+from PySide6.QtCore import QObject, QPointF, QRectF, Qt, Signal, Slot
 
 from ..models.result import ManualPeakEdits
 from ..type_aliases import (
     SignalName,
-    SpotItemDict,
 )
 
 if TYPE_CHECKING:
@@ -319,8 +317,12 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         self.sigPlotChanged.emit(self)
 
 
-type PlotItemAttr = Literal["signal", "peaks", "rate", "rate_mean"]
-type PlotItemVal = pg.PlotDataItem | pg.ScatterPlotItem | pg.InfiniteLine
+type PlotItemAttr = Literal[
+    "name", "signal", "peaks", "rate", "rate_mean", "temperature_label"
+]
+type PlotItemVal = (
+    str | pg.PlotDataItem | pg.ScatterPlotItem | pg.InfiniteLine | pg.LabelItem | None
+)
 
 
 @dataclass(slots=True)
@@ -330,7 +332,7 @@ class PlotItems:
     peaks: CustomScatterPlotItem = CustomScatterPlotItem()
     rate: pg.PlotDataItem = pg.PlotDataItem()
     rate_mean: pg.InfiniteLine = pg.InfiniteLine()
-    # excluded_regions: list[pg.LinearRegionItem] | None = None
+    temperature_label: pg.LabelItem | None = None
 
     def as_dict(self) -> dict[PlotItemAttr, PlotItemVal]:
         return {
@@ -346,6 +348,9 @@ class PlotItemsContainer(dict[SignalName | str, PlotItems]):
         self, *args: Iterable[tuple[SignalName | str, PlotItems]], **kwargs: PlotItems
     ) -> None:
         super().__init__(*args, **kwargs)
+
+    def __setitem__(self, key: SignalName | str, value: PlotItems) -> None:
+        super().__setitem__(key, value)
 
 
 def make_plot_widget(
@@ -398,15 +403,12 @@ class PlotHandler(QObject):
 
     def __init__(
         self,
-        parent: "MainWindow",
+        window: "MainWindow",
     ):
-        super().__init__(parent=parent)
-        self._parent = parent
+        super().__init__()
+        self._window = window
         self.click_tolerance = 80
-        self.plot_items: dict[str, PlotItems] = {
-            "hbr": PlotItems(name="hbr"),
-            "ventilation": PlotItems(name="ventilation"),
-        }
+        self.plot_items = PlotItemsContainer()
         self.plot_widgets = PlotWidgetContainer()
         self.peak_edits: dict[SignalName | str, ManualPeakEdits] = {
             name: ManualPeakEdits() for name in ("hbr", "ventilation")
@@ -418,6 +420,9 @@ class PlotHandler(QObject):
         self.plot_widgets.make_plot_widget(name="hbr_rate")
         self.plot_widgets.make_plot_widget(name="ventilation_rate")
 
+        self.plot_items["hbr"] = PlotItems(name="hbr")
+        self.plot_items["ventilation"] = PlotItems(name="ventilation")
+
         self._prepare_plot_items()
 
     @property
@@ -428,9 +433,44 @@ class PlotHandler(QObject):
     def last_edit_index(self, value: int | float) -> None:
         self._last_edit_index = int(value)
 
-    # def _init_plot_items(self) -> None:
-    #     self.plot_items["hbr"] = PlotItems(name="hbr")
-    #     self.plot_items["ventilation"] = PlotItems(name="ventilation")
+    def _prepare_plot_items(self) -> None:
+        style = self._window.theme_switcher.active_style
+        color = "white" if style == "dark" else "black"
+        self._set_plot_labels(color=color)
+
+        for name, pw in self.plot_widgets.items():
+            plot_item = pw.getPlotItem()
+
+            plot_item.showGrid(x=False, y=True)
+            plot_item.getViewBox().enableAutoRange("y")
+            plot_item.setDownsampling(auto=True)
+            plot_item.setClipToView(True)
+            plot_item.addLegend(colCount=2, labelTextColor=color, pen=color)
+            plot_item.addLegend().anchor(
+                itemPos=(0, 1), parentPos=(0, 1), offset=(5, -5)
+            )
+            plot_item.register(name)
+            plot_item.getViewBox().setAutoVisible(y=True)
+            plot_item.setMouseEnabled(x=True, y=False)
+
+        self.plot_widgets.get_view_box("hbr").setXLink("hbr_rate")
+        self.plot_widgets.get_view_box("ventilation").setXLink("ventilation_rate")
+        self.plot_widgets.get_view_box("hbr_rate").setMouseMode(pg.ViewBox.RectMode)
+        self.plot_widgets.get_view_box("ventilation_rate").setMouseMode(
+            pg.ViewBox.RectMode
+        )
+        for name in {"hbr", "ventilation"}:
+            self.plot_items[name].temperature_label = pg.LabelItem(
+                text=self._generate_styled_label(
+                    color="orange",
+                    content="Temperature: -- °C",
+                ),
+                parent=self.plot_widgets[name].plotItem,
+                angle=0,
+            )
+            self.plot_widgets[name].getPlotItem().scene().sigMouseMoved.connect(
+                self.on_mouse_moved
+            )
 
     @staticmethod
     def set_plot_titles_and_labels(
@@ -440,97 +480,44 @@ class PlotHandler(QObject):
         plot_item.setLabel(axis="left", text=left_label)
         plot_item.setLabel(axis="bottom", text=bottom_label)
 
-    def set_style(self, style: Literal["dark", "light"]) -> None:
-        plot_widgets = self.plot_widgets.get_all_widgets()
-
-        if style == "dark":
-            self._set_dark_style(plot_widgets)
-        elif style == "light":
-            self._set_light_style(plot_widgets)
-
-    def _set_dark_style(self, plot_widgets: list[pg.PlotWidget]) -> None:
-        self._set_plot_labels(color="lightgray")
-        for pw in plot_widgets:
-            pw.setBackground("black")
-            legend = pw.getPlotItem().legend
-            if legend is not None:
-                legend.setBrush("gray")
-                legend.setPen("white")
-                legend.setLabelTextColor("lightgray")
-
-    def _set_light_style(self, plot_widgets: list[pg.PlotWidget]) -> None:
-        self._set_plot_labels(color="black")
-        for pw in plot_widgets:
-            pw.setBackground("white")
-            legend = pw.getPlotItem().legend
-            if legend is not None:
-                legend.setBrush("gray")
-                legend.setPen("black")
-                legend.setLabelTextColor("black")
-
-    def _prepare_plot_items(self) -> None:
-        # self._init_plot_items()
-
-        style = self._parent.active_style
-        pen_col = "lightgray" if style == "dark" else "black"
-        plot_font = QFont("Segoe UI", 10, 400)
-        plot_font.setBold(True)
-        self._set_plot_labels(color=pen_col)
-
-        for name, pw in self.plot_widgets.items():
-            plot_item = pw.getPlotItem()
-
-            plot_item.showGrid(x=False, y=True)
-            plot_item.getViewBox().enableAutoRange("y")
-            plot_item.setDownsampling(auto=True)
-            plot_item.setClipToView(True)
-            plot_item.addLegend(
-                pen=pen_col,
-                labelTextColor=pen_col,
-                brush="transparent",
-                colCount=2,
-            )
-            plot_item.legend.anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(5, -5))  # type: ignore
-            plot_item.register(name)
-            plot_item.getViewBox().setAutoVisible(y=True)
-            plot_item.setMouseEnabled(x=True, y=False)
-            for axis in {"left", "bottom", "top", "right"}:
-                plot_item.getAxis(axis).label.setFont(plot_font)
-
-        self.plot_widgets.get_view_box("hbr").setXLink("hbr_rate")
-        self.plot_widgets.get_view_box("ventilation").setXLink("ventilation_rate")
-        self.plot_widgets.get_view_box("hbr_rate").setMouseMode(pg.ViewBox.RectMode)
-        self.plot_widgets.get_view_box("ventilation_rate").setMouseMode(
-            pg.ViewBox.RectMode
-        )
+    def _generate_styled_label(
+        self,
+        color: str,
+        content: str,
+        font_family: str = "Segoe UI",
+        font_size: int = 12,
+    ) -> str:
+        return f"<span style='color: {color}; font-family: {font_family}; font-size: {font_size}pt;'>{content}</span>"
 
     def _set_plot_labels(
-        self, color: str, font_family: str = "Segoe UI", title_font_size: int = 12
+        self,
+        color: str = "gray",
+        font_family: str = "Segoe UI",
+        title_font_size: int = 12,
     ) -> None:
-        self.set_plot_titles_and_labels(
-            self.plot_widgets["hbr"].getPlotItem(),
-            title=f"<span style='color: {color}; font-family: {font_family}; font-size: {title_font_size}pt;'><b>Heart</b></span>",
-            left_label=f"<span style='color: {color};'>Signal Amplitude</span>",
-            bottom_label=f"<span style='color: {color};'>n samples</span>",
-        )
-        self.set_plot_titles_and_labels(
-            self.plot_widgets["ventilation"].getPlotItem(),
-            title=f"<span style='color: {color}; font-family: {font_family}; font-size: {title_font_size}pt;'><b>Ventilation</b></span>",
-            left_label=f"<span style='color: {color};'>Signal Amplitude</span>",
-            bottom_label=f"<span style='color: {color};'>n samples</span>",
-        )
-        self.set_plot_titles_and_labels(
-            self.plot_widgets["hbr_rate"].getPlotItem(),
-            title=f"<span style='color: {color}; font-family: {font_family}; font-size: {title_font_size}pt;'><b>Estimated Rate</b></span>",
-            left_label=f"<span style='color: {color};'>Cycles per minute</span>",
-            bottom_label=f"<span style='color: {color};'>n samples</span>",
-        )
-        self.set_plot_titles_and_labels(
-            self.plot_widgets["ventilation_rate"].getPlotItem(),
-            title=f"<span style='color: {color}; font-family: {font_family}; font-size: {title_font_size}pt;'><b>Estimated Rate</b></span>",
-            left_label=f"<span style='color: {color};'>Cycles per minute</span>",
-            bottom_label=f"<span style='color: {color};'>n samples</span>",
-        )
+        plot_titles = {
+            "hbr": "<b>Heart</b>",
+            "ventilation": "<b>Ventilation</b>",
+            "hbr_rate": "<b>Estimated Rate</b>",
+            "ventilation_rate": "<b>Estimated Rate</b>",
+        }
+        for plot_key, title_content in plot_titles.items():
+            title = self._generate_styled_label(
+                color, title_content, font_family, title_font_size
+            )
+            left_label = self._generate_styled_label(
+                color,
+                "Signal Amplitude"
+                if plot_key in ["hbr", "ventilation"]
+                else "Cycles per minute",
+            )
+            bottom_label = self._generate_styled_label(color, "n samples")
+            self.set_plot_titles_and_labels(
+                self.plot_widgets[plot_key].getPlotItem(),
+                title=title,
+                left_label=left_label,
+                bottom_label=bottom_label,
+            )
 
     @Slot()
     def reset_plots(self) -> None:
@@ -538,11 +525,51 @@ class PlotHandler(QObject):
             pw.getPlotItem().clear()
             pw.getPlotItem().addLegend().clear()
 
-        self.plot_items = {
-            "hbr": PlotItems(name="hbr"),
-            "ventilation": PlotItems(name="ventilation"),
-        }
-        self._prepare_plot_items()
+        self.plot_items = PlotItemsContainer()
+        self.plot_items["hbr"] = PlotItems(
+            name="hbr",
+            temperature_label=pg.LabelItem(
+                "Temperature: -- °C", parent=self.plot_widgets["hbr"].plotItem, angle=0
+            ),
+        )
+        self.plot_items["ventilation"] = PlotItems(
+            name="ventilation",
+            temperature_label=pg.LabelItem(
+                "Temperature: -- °C",
+                parent=self.plot_widgets["ventilation"].plotItem,
+                angle=0,
+            ),
+        )
+
+    @Slot(QPointF)
+    def on_mouse_moved(self, pos: QPointF) -> None:
+        if not hasattr(self._window, "data"):
+            return
+        name = self._window.signal_name
+        if self._window.data.sigs == {}:
+            return
+        sig_df = self._window.data.sigs[name].data
+        if sig_df.is_empty():
+            return
+        temperature_label = self.plot_items[name].temperature_label
+        if temperature_label is None:
+            return
+        mapped_pos = self.plot_widgets[name].plotItem.vb.mapSceneToView(pos)
+        index = int(mapped_pos.x())
+        index = np.clip(index, 0, sig_df.height - 1)
+
+        temperature = (
+            sig_df.get_column("temperature")
+            .gather(index)
+            .to_numpy(zero_copy_only=True)[0]
+        )
+
+        text = f"<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: {temperature:.1f} °C</span>"
+
+        temperature_label.setText(text)
+        self._window.statusbar.showMessage(
+            f"Cursor position (scene): (x = {pos.x()}, y = {pos.y()}); Cursor position (data): (x = {int(mapped_pos.x()):_}, y = {mapped_pos.y():.2f})"
+        )
 
     @Slot(int)
     def reset_views(self, upper_range: int) -> None:
@@ -554,7 +581,6 @@ class PlotHandler(QObject):
         sig: NDArray[np.float64],
         plot_widget: pg.PlotWidget,
         signal_name: SignalName | str,
-        # **kwargs: NDArray[np.float_ | np.int_],
     ) -> None:
         color = "crimson" if signal_name == "hbr" else "royalblue"
         signal_line = pg.PlotDataItem(
@@ -568,16 +594,6 @@ class PlotHandler(QObject):
         signal_line.curve.setClickable(True, width=self.click_tolerance)
 
         # IDEA: Add temperature as second y-axis
-        # temperature = kwargs.get("temperature", None)
-        # if temperature is not None:
-        #     temperature_line = pg.PlotDataItem(
-        #         temperature,
-        #         pen="magenta",
-        #         skipFiniteCheck=True,
-        #         autoDownSample=True,
-        #         name="temperature",
-        #     )
-        #     plot_widget.addItem(temperature_line)
 
         rate_name = f"{signal_name}_rate"
         rate_plot_widget = self.plot_widgets[rate_name]
@@ -751,7 +767,7 @@ class PlotHandler(QObject):
         """
         Removes peaks inside a rectangular selection.
         """
-        name = self._parent.signal_name
+        name = self._window.signal_name
         vb = self.plot_widgets.get_view_box(name)
         if vb.mapped_peak_selection is None:
             return
@@ -857,7 +873,7 @@ class PlotHandler(QObject):
     @Slot()
     def show_region_selector(self) -> None:
         # TODO: Get name through widget (QApplication.widgetAt(cursor_pos)) at mouse cursor position (QCursor.pos())
-        name = self._parent.signal_name
+        name = self._window.signal_name
         view_box = self.plot_widgets.get_view_box(name)
         selection_box = view_box.selection_box
         selection_box.setVisible(not selection_box.isVisible())
@@ -866,7 +882,7 @@ class PlotHandler(QObject):
     @Slot()
     def show_exclusion_selector(self) -> None:
         # TODO: Get name through widget (QApplication.widgetAt(cursor_pos)) at mouse cursor position (QCursor.pos())
-        name = self._parent.signal_name
+        name = self._window.signal_name
         view_box = self.plot_widgets.get_view_box(name)
         deletion_box = view_box.deletion_box
         deletion_box.setVisible(not deletion_box.isVisible())
@@ -874,7 +890,7 @@ class PlotHandler(QObject):
 
     @Slot()
     def mark_excluded(self) -> None:
-        name = self._parent.signal_name
+        name = self._window.signal_name
         vb = self.plot_widgets.get_view_box(name)
         if vb.mapped_deletion_selection is None:
             return

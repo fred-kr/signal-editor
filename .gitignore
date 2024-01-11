@@ -157,3 +157,4 @@ build/
 **/_internal
 pickles/
 external-typings/
+config.ini

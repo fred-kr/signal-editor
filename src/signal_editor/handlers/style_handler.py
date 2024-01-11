@@ -1,34 +1,39 @@
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
+import pyqtgraph as pg
 import qdarkstyle
 from PySide6.QtCore import Slot
-
-if TYPE_CHECKING:
-    from ..app import MainWindow
+from PySide6.QtWidgets import QApplication
 
 
 class ThemeSwitcher:
-    def __init__(self, main_window: "MainWindow") -> None:
-        self.main_window = main_window
-        self.active_style = "light"
+    def __init__(
+        self,
+        plot_widgets: list[pg.PlotWidget] | None = None,
+        style: Literal["light", "dark"] = "dark",
+    ) -> None:
+        self.active_style: Literal["light", "dark"] = style
+        self.plot_widgets = plot_widgets
+        self.app = QApplication.instance()
 
     def _set_light_style(self) -> None:
-        self.main_window.setStyleSheet(
+        self.app.setStyleSheet(
             qdarkstyle.load_stylesheet(
                 qt_api="pyside6", palette=qdarkstyle.LightPalette
             )
         )
-        self.main_window.plot.set_style("light")
         self.active_style = "light"
 
     def _set_dark_style(self) -> None:
-        self.main_window.setStyleSheet(
+        self.app.setStyleSheet(
             qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.DarkPalette)
         )
-        self.main_window.plot.set_style("dark")
+
         self.active_style = "dark"
 
-    def set_style(self, style: Literal["light", "dark"]) -> None:
+    def set_style(self, style: Literal["light", "dark"] | None = None) -> None:
+        if style is None:
+            style = self.active_style
         if style == "light":
             self._set_light_style()
         elif style == "dark":

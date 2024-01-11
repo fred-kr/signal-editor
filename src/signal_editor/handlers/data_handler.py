@@ -1,11 +1,14 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
+from loguru import logger
 
 import numpy as np
 import polars as pl
+import polars.selectors as ps
 from numpy.typing import NDArray
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Slot
+from PySide6.QtWidgets import QInputDialog
 
 from ..models.io import read_edf
 from ..models.result import (
@@ -25,6 +28,37 @@ from ..type_aliases import (
 
 if TYPE_CHECKING:
     from ..app import MainWindow
+
+
+def try_infer_sampling_rate(
+    df: pl.DataFrame,
+    time_col: str = "auto",
+    time_unit: Literal["auto", "s", "ms"] = "auto",
+) -> int:
+    if time_col == "auto":
+        # Try to infer the column holding the time data
+        for col in df.columns:
+            if "time" in col:
+                time_col = col
+                break
+
+    if time_unit == "auto":
+        if df.get_column(time_col).dtype.is_float():
+            time_unit = "s"
+        elif df.get_column(time_col).dtype.is_integer():
+            time_unit = "ms"
+        else:
+            logger.error(f"Could not infer time unit from column '{time_col}'")
+            return -1
+
+    target = 1000 if time_unit == "ms" else 1.0
+    closed = "left" if df.get_column(time_col)[0] == 0 else "both"
+    lower = df.get_column(time_col)[0]
+    return df.filter(
+        pl.col(time_col).is_between(lower, target, closed=closed)
+    ).height
+
+    
 
 
 def get_array_stats(
@@ -47,21 +81,13 @@ class DataState:
 
 
 class DataHandler(QObject):
-    sig_dh_error = Signal(str)
-    # sig_dh_peaks_updated = Signal(str)
-    # sig_dh_rate_updated = Signal(str)
-
-    def __init__(self, parent: "MainWindow") -> None:
-        super().__init__(parent)
-        self._parent = parent
+    def __init__(self, window: "MainWindow") -> None:
+        super().__init__()
+        self._window = window
         self.df: pl.DataFrame = pl.DataFrame()
         self.sigs: SignalStorage = SignalStorage()
         self.focused_results: dict[SignalName | str, FocusedResult] = {}
-        self._sampling_rate: int = parent.spin_box_fs.value()
-        # self._connect_signals()
-
-    # def _connect_signals(self) -> None:
-    # self.sig_dh_peaks_updated.connect(self.run_rate_calculation)
+        self._sampling_rate: int = -1
 
     @property
     def fs(self) -> int:
@@ -70,59 +96,93 @@ class DataHandler(QObject):
     @fs.setter
     def fs(self, value: int | float) -> None:
         self._sampling_rate = int(value)
+        self._window.spin_box_fs.blockSignals(True)
+        self._window.spin_box_fs.setValue(int(value))
+        self._window.spin_box_fs.blockSignals(False)
 
     @Slot(int)
     def update_fs(self, value: int) -> None:
         self.fs = value
+        self.sigs.update_sampling_rate(value)
 
     def read(self, path: str | Path) -> None:
         path = Path(path)
         suffix = path.suffix
         if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx", ".pkl"}:
             info_msg = "Currently only .csv, .txt, .xlsx, .feather, .pkl and .edf files are supported"
-            self._parent.sig_show_message.emit(info_msg, "info")
+            self._window.sig_show_message.emit(info_msg, "info")
             return
 
-        if suffix == ".pkl":
-            self._parent.restore_state(path)
-            return
-        elif suffix == ".csv":
+        if suffix == ".csv":
             df = pl.read_csv(path)
-        elif suffix == ".txt":
-            df = pl.read_csv(path, separator="\t")
         elif suffix == ".edf":
             lf, self.meas_date, self.fs = read_edf(path.as_posix())
             df = lf.collect()
         elif suffix == ".feather":
             df = pl.read_ipc(path, use_pyarrow=True)
+        elif suffix == ".pkl":
+            self._window.restore_state(path)
+            return
+        elif suffix == ".txt":
+            df = pl.read_csv(path, separator="\t")
         elif suffix == ".xlsx":
             df = pl.read_excel(path)
         else:
             raise NotImplementedError(f"File type `{suffix}` not supported")
 
+        if suffix != ".edf":
+            self.fs = try_infer_sampling_rate(df)
+
+        if self.fs == -1:
+            fs, ok = QInputDialog.getInt(
+                self._window,
+                "Sampling rate",
+                "Enter sampling rate (samples per second): ",
+                200,
+                1,
+                10000,
+                1,
+            )
+            if ok:
+                self.fs = fs
+            else:
+                self._sampling_rate_unavailable()
+                return
         self.df = df
         self.calc_minmax()
 
         for name in {"hbr", "ventilation"}:
+            if name not in df.columns:
+                continue
             sig = SignalData(name=name, data=df, sampling_rate=self.fs)
             self.sigs[name] = sig
 
+    def _sampling_rate_unavailable(self) -> None:
+        self.df = pl.DataFrame()
+        self.fs = -1
+        self.minmax_map = {}
+        self.meas_date = None
+        msg = "Sampling rate not set, no data loaded."
+        self._window.sig_show_message.emit(msg, "warning")
+        return
+
     def calc_minmax(self, col_names: list[str] | None = None) -> None:
         if col_names is None or len(col_names) == 0:
-            col_names = ["index", "time_s", "temperature"]
-        for name in col_names:
-            if name not in self.df.columns:
-                col_names.remove(name)
+            col_names = ["index", "time", "temp"]
+        columns = self.df.select(ps.contains(col_names)).columns
+        if len(columns) == 0:
+            self.minmax_map = {}
+            return
 
         self.minmax_map = {
             name: {
                 "min": self.df.get_column(name).min(),
                 "max": self.df.get_column(name).max(),
             }
-            for name in col_names
+            for name in columns
         }
 
-    def get_slice_indices(
+    def _get_slice_indices(
         self, filter_col: str, lower: float, upper: float
     ) -> tuple[int, int]:
         lf = self.df.lazy().with_columns(pl.col("temperature").round(1))
@@ -150,7 +210,7 @@ class DataHandler(QObject):
         ):
             return
         if subset_col in {"time_s", "temperature"}:
-            lower, upper = self.get_slice_indices(subset_col, lower, upper)
+            lower, upper = self._get_slice_indices(subset_col, lower, upper)
         self.df = lf.filter(pl.col("index").is_between(lower, upper)).collect()
 
     def run_preprocessing(
@@ -162,7 +222,7 @@ class DataHandler(QObject):
     ) -> None:
         self.sigs[name].filter_values(pipeline=pipeline, col_name=None, **filter_params)
 
-        standardize = self._parent.scale_method
+        standardize = self._window.scale_method
         if standardize.lower() == "none":
             return
         self.sigs[name].scale_values(**standardize_params)
@@ -170,16 +230,11 @@ class DataHandler(QObject):
     def run_peak_detection(
         self, name: SignalName | str, peak_parameters: PeakDetectionParameters
     ) -> None:
-        # sig = self.sigs[name].processed_data
         self.sigs[name].detect_peaks(**peak_parameters)
         self.run_rate_calculation(name)
-        # self.sigs[name].calculate_rate()
-        # self.sig_dh_peaks_updated.emit(name)
 
-    # @Slot(str)
     def run_rate_calculation(self, name: SignalName | str) -> None:
         self.sigs[name].calculate_rate()
-        # self.sig_dh_rate_updated.emit(name)
 
     def get_descriptive_stats(self, name: SignalName | str) -> SummaryStatistics:
         intervals = self.sigs[name].get_peak_diffs()

@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 import polars as pl
+import polars.selectors as ps
 import pyqtgraph as pg
 import rich as r
 from pyqtgraph.console import ConsoleWidget
@@ -15,8 +16,9 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QStandardItemModel
+from PySide6.QtGui import QCursor, QStandardItemModel
 from PySide6.QtWidgets import (
+    QApplication,
     QDockWidget,
     QVBoxLayout,
 )
@@ -238,10 +240,10 @@ class UIHandler(QObject):
 
     def __init__(self, window: "MainWindow", plot: PlotHandler) -> None:
         super(UIHandler, self).__init__()
-        self.window = window
+        self._window = window
         self.plot = plot
         self.setup_widgets()
-        self.connect_signals()
+        self._connect_signals()
 
     def setup_widgets(self) -> None:
         self._set_combo_box_items()
@@ -249,14 +251,11 @@ class UIHandler(QObject):
         # Signal Filtering
         self._prepare_inputs()
 
-        # Peak Detection
-        # self.create_peak_detection_trees()
-
         # File Info
         self._prepare_widgets()
 
         # Statusbar
-        self.window.statusbar.showMessage("Idle")
+        self._window.statusbar.showMessage("Idle")
 
         # Toolbar Plots
         self._prepare_toolbars()
@@ -269,20 +268,18 @@ class UIHandler(QObject):
         self.create_console_widget()
 
     def _prepare_widgets(self) -> None:
-        self.window.container_file_info.setEnabled(False)
+        self._window.container_file_info.setEnabled(False)
+        self._window.btn_load_selection.setEnabled(False)
 
     def _prepare_inputs(self) -> None:
         # Signal Filtering
-        self.window.combo_box_preprocess_pipeline.setValue("custom")
-        self.window.container_custom_filter_inputs.setEnabled(True)
+        self._window.combo_box_preprocess_pipeline.setValue("custom")
+        self._window.container_custom_filter_inputs.setEnabled(True)
         self._set_elgendi_cleaning_params()
 
         # Peak Detection
-        peak_combo_box = self.window.combo_box_peak_detection_method
-        stacked_peak_widget = self.window.stacked_peak_parameters
-        # if peak_combo_box.value() not in COMBO_BOX_ITEMS["combo_box_peak_detection_method"]:
-        # peak_combo_box.clear()
-        # peak_combo_box.currentIndexChanged.disconnect()
+        peak_combo_box = self._window.combo_box_peak_detection_method
+        stacked_peak_widget = self._window.stacked_peak_parameters
         peak_combo_box.blockSignals(True)
         peak_combo_box.clear()
         peak_combo_box.setItems(COMBO_BOX_ITEMS["combo_box_peak_detection_method"])
@@ -292,72 +289,76 @@ class UIHandler(QObject):
         peak_combo_box.currentIndexChanged.connect(stacked_peak_widget.setCurrentIndex)
 
     def _setup_active_plot_btn_grp(self) -> None:
-        self.window.stacked_hbr_vent.setCurrentIndex(0)
-        self.window.btn_group_plot_view.setId(self.window.btn_view_hbr, 0)
-        self.window.btn_group_plot_view.setId(self.window.btn_view_vent, 1)
+        self._window.stacked_hbr_vent.setCurrentIndex(0)
+        self._window.btn_group_plot_view.setId(self._window.btn_view_hbr, 0)
+        self._window.btn_group_plot_view.setId(self._window.btn_view_vent, 1)
 
-    def connect_signals(self) -> None:
-        self.window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
-        self.window.combo_box_filter_method.currentTextChanged.connect(
+    def _connect_signals(self) -> None:
+        self._window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
+        self._window.combo_box_filter_method.currentTextChanged.connect(
             self.handle_filter_method_changed
         )
-        self.window.combo_box_preprocess_pipeline.currentTextChanged.connect(
+        self._window.combo_box_preprocess_pipeline.currentTextChanged.connect(
             self.handle_preprocess_pipeline_changed
         )
 
-        self.window.btn_apply_filter.clicked.connect(
-            lambda: self.window.btn_detect_peaks.setEnabled(True)  # type: ignore
+        self._window.btn_apply_filter.clicked.connect(
+            lambda: self._window.btn_detect_peaks.setEnabled(True)  # type: ignore
         )
-        self.window.btn_detect_peaks.clicked.connect(
-            lambda: self.window.btn_compute_results.setEnabled(True)  # type: ignore
+        self._window.btn_detect_peaks.clicked.connect(
+            lambda: self._window.btn_compute_results.setEnabled(True)  # type: ignore
         )
 
-        self.window.action_open_console.triggered.connect(self.show_console_widget)
-        self.window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
+        self._window.action_open_console.triggered.connect(self.show_console_widget)
+        self._window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
 
     def _prepare_toolbars(self) -> None:
-        self.window.toolbar_plots.setVisible(False)
+        self._window.toolbar_plots.setVisible(False)
 
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():
-            combo_box: pg.ComboBox = getattr(self.window, key)
+            combo_box: pg.ComboBox = getattr(self._window, key)
             combo_box.clear()
             combo_box.setItems(value)
 
     def update_data_selection_widgets(self, path: str) -> None:
-        self.window.container_file_info.setEnabled(True)
-        self.window.group_box_subset_params.setEnabled(True)
-        self.window.btn_load_selection.setEnabled(True)
-        viable_filter_columns = ("index", "time_s", "temperature")
-        column_box = self.window.combo_box_filter_column
+        self._window.container_file_info.setEnabled(True)
+        self._window.group_box_subset_params.setEnabled(True)
+        self._window.btn_load_selection.setEnabled(True)
+        available_filter_cols = self._window.data.df.select(ps.contains(["index", "time", "temp"])).columns
+        # viable_filter_columns = ("index", "time_s", "temperature")
+        column_box = self._window.combo_box_filter_column
         column_box.blockSignals(True)
         column_box.clear()
-        column_box.addItems(viable_filter_columns)
+        column_box.addItems(available_filter_cols)
         column_box.setCurrentIndex(0)
         column_box.currentTextChanged.connect(self.update_subset_param_widgets)
-        self.update_subset_param_widgets(viable_filter_columns[0])
+        if len(available_filter_cols) > 0:
+            self.update_subset_param_widgets(available_filter_cols[0])
         column_box.blockSignals(False)
         try:
             parsed_date, parsed_id, parsed_oxy = parse_file_name(Path(path).name)
-            self.window.date_edit_file_info.setDate(
+            self._window.date_edit_file_info.setDate(
                 QDate(parsed_date.year, parsed_date.month, parsed_date.day)
             )
-            self.window.line_edit_subject_id.setText(parsed_id)
-            self.window.combo_box_oxygen_condition.setValue(parsed_oxy)
+            self._window.line_edit_subject_id.setText(parsed_id)
+            self._window.combo_box_oxygen_condition.setValue(parsed_oxy)
         except Exception:
-            self.window.date_edit_file_info.setDate(QDate(1970, 1, 1))
-            self.window.line_edit_subject_id.setText("unknown")
-            self.window.combo_box_oxygen_condition.setValue("unknown")
+            self._window.date_edit_file_info.setDate(QDate(1970, 1, 1))
+            self._window.line_edit_subject_id.setText("unknown")
+            self._window.combo_box_oxygen_condition.setValue("unknown")
 
     @Slot(str)
     def update_subset_param_widgets(self, col_name: str) -> None:
-        lower = cast(float, self.window.data.minmax_map[col_name]["min"])
-        upper = cast(float, self.window.data.minmax_map[col_name]["max"])
-        fs = self.window.data.fs
+        if not col_name or col_name not in self._window.data.df.columns:
+            return
+        lower = cast(float, self._window.data.minmax_map[col_name]["min"])
+        upper = cast(float, self._window.data.minmax_map[col_name]["max"])
+        fs = self._window.data.fs
 
         widgets = [
-            self.window.dbl_spin_box_subset_min,
-            self.window.dbl_spin_box_subset_max,
+            self._window.dbl_spin_box_subset_min,
+            self._window.dbl_spin_box_subset_max,
         ]
         for w in widgets:
             if col_name == "index":
@@ -377,7 +378,7 @@ class UIHandler(QObject):
 
     @Slot()
     def reset_widget_state(self) -> None:
-        mw = self.window
+        mw = self._window
         mw.tabs_main.setCurrentIndex(0)
         mapping = INITIAL_STATE_METHODS_MAP
         for widget_name, state in INITIAL_STATE_MAP.items():
@@ -385,83 +386,28 @@ class UIHandler(QObject):
                 getattr(mw, widget_name).__getattribute__(mapping[attribute])(value)
 
         self.plot.reset_plots()
-        self.temperature_label_hbr.setText("Temperature: -")
-        self.temperature_label_ventilation.setText("Temperature: -")
-        mw.statusbar.showMessage("Ready")
+        mw.statusbar.showMessage("Idle")
 
     @Slot(int)
     def on_main_tab_changed(self, index: int) -> None:
         is_index_one = index == 1
 
-        self.window.toolbar_plots.setVisible(is_index_one)
-        self.window.toolbar_plots.setEnabled(is_index_one)
+        self._window.toolbar_plots.setVisible(is_index_one)
+        self._window.toolbar_plots.setEnabled(is_index_one)
 
     def create_plot_widgets(self) -> None:
-        self.window.plot_widget_hbr.setLayout(QVBoxLayout())
-        self.window.plot_widget_vent.setLayout(QVBoxLayout())
+        self._window.plot_widget_hbr.setLayout(QVBoxLayout())
+        self._window.plot_widget_vent.setLayout(QVBoxLayout())
         hbr_pw = self.plot.plot_widgets["hbr"]
         vent_pw = self.plot.plot_widgets["ventilation"]
         hbr_rate_pw = self.plot.plot_widgets["hbr_rate"]
         vent_rate_pw = self.plot.plot_widgets["ventilation_rate"]
 
-        self.window.plot_widget_hbr.layout().addWidget(hbr_pw)
-        self.window.plot_widget_vent.layout().addWidget(vent_pw)
+        self._window.plot_widget_hbr.layout().addWidget(hbr_pw)
+        self._window.plot_widget_hbr.layout().addWidget(hbr_rate_pw)
 
-        self.window.plot_widget_hbr.layout().addWidget(hbr_rate_pw)
-        self.window.plot_widget_vent.layout().addWidget(vent_rate_pw)
-
-        self.temperature_label_hbr = pg.LabelItem(
-            text="<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: -</span>",
-            parent=hbr_pw.getPlotItem(),
-            angle=0,
-        )
-        self.temperature_label_ventilation = pg.LabelItem(
-            text="<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: -</span>",
-            parent=vent_pw.getPlotItem(),
-            angle=0,
-        )
-        hbr_pw.getPlotItem().scene().sigMouseMoved.connect(
-            lambda pos: self.update_temperature_label("hbr", pos)  # type: ignore
-        )
-        vent_pw.getPlotItem().scene().sigMouseMoved.connect(
-            lambda pos: self.update_temperature_label("ventilation", pos)  # type: ignore
-        )
-
-    @Slot(QPointF)
-    def update_temperature_label(self, signal_name: SignalName, pos: QPointF) -> None:
-        if not hasattr(self.window, "data"):
-            return
-        if self.window.data.df.is_empty():
-            return
-        # view_box = self.plot.plot_widgets.get_view_box(signal_name)
-        data_pos = (
-            self.plot.plot_widgets[signal_name].plotItem.vb.mapSceneToView(pos).x()
-        )
-        data_pos = np.clip(
-            data_pos,
-            0,
-            self.window.data.sigs[signal_name].data.height - 1,
-            dtype=np.int32,
-            casting="unsafe",
-        )
-        temp_value = (
-            self.window.data.sigs[signal_name]
-            .data.get_column("temperature")
-            .gather(data_pos)
-            .to_numpy(zero_copy_only=True)[0]
-        )
-        # TODO: give temperature labels same treatment as all the other things with two versions
-        if signal_name == "hbr":
-            self.temperature_label_hbr.setText(
-                f"<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: {temp_value:.1f} °C, cursor position: {data_pos}</span>"
-            )
-        elif signal_name == "ventilation":
-            self.temperature_label_ventilation.setText(
-                f"<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: {temp_value:.1f} °C, cursor position: {data_pos}</span>"
-            )
-        self.window.statusbar.showMessage(
-            f"Temperature: {temp_value:.1f}°C, {data_pos = }"
-        )
+        self._window.plot_widget_vent.layout().addWidget(vent_pw)
+        self._window.plot_widget_vent.layout().addWidget(vent_rate_pw)
 
     def create_console_widget(self) -> None:
         module_names = [
@@ -472,7 +418,7 @@ class UIHandler(QObject):
             "r (rich)",
         ]
         namespace: "dict[str, types.ModuleType | MainWindow]" = {
-            "self": self.window,
+            "self": self._window,
             "pg": pg,
             "np": np,
             "pl": pl,
@@ -480,7 +426,7 @@ class UIHandler(QObject):
         }
         startup_message = f"Available namespaces: {', '.join(module_names)}.\n\nUse `r.print()` for more readable formatting."
         self.console = ConsoleWidget(
-            parent=self.window,
+            parent=self._window,
             namespace=namespace,
             historyFile="history.pickle",
             text=startup_message,
@@ -505,38 +451,38 @@ class UIHandler(QObject):
 
     @Slot(str)
     def handle_filter_method_changed(self, text: str) -> None:
-        method = self.window.filter_method
+        method = self._window.filter_method
 
         for widget_name, enabled in FILTER_INPUT_STATES[method].items():
-            getattr(self.window, widget_name).setEnabled(enabled)
+            getattr(self._window, widget_name).setEnabled(enabled)
 
         self.sig_filter_inputs_ready.emit()
 
     def _set_elgendi_cleaning_params(self) -> None:
-        self.window.combo_box_filter_method.blockSignals(True)
-        self.window.combo_box_filter_method.setValue("butterworth")
-        self.window.combo_box_filter_method.blockSignals(False)
-        self.window.dbl_spin_box_lowcut.setValue(0.5)
-        self.window.dbl_spin_box_highcut.setValue(8.0)
-        self.window.spin_box_order.setValue(3)
-        self.window.slider_order.setValue(3)
+        self._window.combo_box_filter_method.blockSignals(True)
+        self._window.combo_box_filter_method.setValue("butterworth")
+        self._window.combo_box_filter_method.blockSignals(False)
+        self._window.dbl_spin_box_lowcut.setValue(0.5)
+        self._window.dbl_spin_box_highcut.setValue(8.0)
+        self._window.spin_box_order.setValue(3)
+        self._window.slider_order.setValue(3)
         self.sig_filter_inputs_ready.emit()
 
     @Slot()
     def handle_preprocess_pipeline_changed(self) -> None:
-        pipeline_value = self.window.pipeline
+        pipeline_value = self._window.pipeline
         if pipeline_value == "custom":
-            self.window.container_custom_filter_inputs.setEnabled(True)
-            selected_filter = self.window.filter_method
+            self._window.container_custom_filter_inputs.setEnabled(True)
+            selected_filter = self._window.filter_method
             self.handle_filter_method_changed(selected_filter)
 
         elif pipeline_value == "ppg_elgendi":
-            self.window.container_custom_filter_inputs.setEnabled(False)
-            self.window.combo_box_filter_method.setValue("butterworth")
+            self._window.container_custom_filter_inputs.setEnabled(False)
+            self._window.combo_box_filter_method.setValue("butterworth")
             self._set_elgendi_cleaning_params()
         else:
             # TODO: add UI and logic for other signal cleaning pipelines
-            self.window.container_custom_filter_inputs.setEnabled(False)
+            self._window.container_custom_filter_inputs.setEnabled(False)
             msg = f"Selected pipeline {pipeline_value} not yet implemented, use either 'custom' or 'ppg_elgendi'."
-            self.window.sig_show_message.emit(msg, "info")
+            self._window.sig_show_message.emit(msg, "info")
             return

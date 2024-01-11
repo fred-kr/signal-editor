@@ -2,7 +2,6 @@ import cProfile
 import os
 import pickle
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Literal, TypedDict, cast
@@ -10,7 +9,6 @@ from typing import Literal, TypedDict, cast
 import h5py
 import numpy as np
 import pyqtgraph as pg
-import qdarkstyle
 from loguru import logger
 from PySide6.QtCore import (
     QAbstractTableModel,
@@ -34,8 +32,10 @@ from PySide6.QtWidgets import (
     QTableView,
 )
 
+from .handlers.config_handler import ConfigHandler
 from .handlers.data_handler import DataHandler, DataState
 from .handlers.plot_handler import PlotHandler
+from .handlers.style_handler import ThemeSwitcher
 from .handlers.ui_handler import UIHandler
 from .models.data import (
     CompactDFModel,
@@ -50,6 +50,7 @@ from .models.result import (
     ResultContainer,
     ResultIdentifier,
     SelectionParameters,
+    SummaryStatistics,
 )
 from .type_aliases import (
     FileMetadata,
@@ -83,29 +84,38 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     sig_results_updated = Signal(str)
     sig_show_message = Signal(str, str)
     sig_data_restored = Signal()
+    sig_init_finished = Signal()
 
     def __init__(self) -> None:
         super().__init__()
         self.setupUi(self)
-        self._add_style_toggle()
-        self.active_style: Literal["light", "dark"] = "dark"
         self.setWindowTitle("Signal Editor")
-        self._app_dir: Path = Path.cwd()
-        self._data_dir: Path = Path.cwd()
-        self._output_dir: Path = Path(self._app_dir / "output")
-        self._output_dir.mkdir(exist_ok=True)
-        self._read_settings()
+        self.config = ConfigHandler("config.ini")
+        self.theme_switcher = ThemeSwitcher()
         self.plot = PlotHandler(self)
         self.data = DataHandler(self)
+        self._read_settings()
         self.ui = UIHandler(self, self.plot)
         self.file_info: QFileInfo = QFileInfo()
-        self._add_profiler()
-        self.connect_signals()
-        self.set_style(self.active_style)
-        self.line_edit_output_dir.setText(self._output_dir.as_posix())
+        self._connect_signals()
         self._results: ResultContainer = ResultContainer()
+        self.sig_init_finished.emit()
 
-    # region Development
+    @Slot()
+    def _on_init_finished(self) -> None:
+        self.line_edit_output_dir.setText(self.config.output_dir.as_posix())
+        saved_style = self.config.style
+        if saved_style in ["dark", "light"]:
+            self.theme_switcher.set_style(saved_style)
+        else:
+            self.theme_switcher.set_style("dark")
+        self._add_style_toggle()
+        self._add_profiler()
+        self.data.fs = int(
+            self.config.config.get("Defaults", "SampleRate", fallback=-1)
+        )
+
+    # region Dev
     def _add_profiler(self) -> None:
         self.menubar.addAction("Start Profiler", self._start_profiler)
         self.menubar.addAction("Stop Profiler", self._stop_profiler)
@@ -115,23 +125,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     # region Properties
     @property
     def output_dir(self) -> Path:
-        return self._output_dir
+        return self.config.output_dir
 
     @output_dir.setter
     def output_dir(self, value: Path | str) -> None:
-        self._output_dir = Path(value)
+        self.config.output_dir = Path(value)
 
     @property
     def app_dir(self) -> Path:
-        return self._app_dir
+        return self.config.app_dir
 
     @property
     def data_dir(self) -> Path:
-        return self._data_dir
+        return self.config.data_dir
 
     @data_dir.setter
     def data_dir(self, value: Path | str) -> None:
-        self._data_dir = Path(value)
+        self.config.data_dir = Path(value)
 
     @property
     def signal_name(self) -> SignalName:
@@ -154,10 +164,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return cast(FilterMethod, self.combo_box_filter_method.value())
 
     @property
-    def filter_parameters(self) -> SignalFilterParameters:
-        return self.get_filter_values()
-
-    @property
     def peak_detection_method(self) -> PeakDetectionMethod:
         return cast(PeakDetectionMethod, self.combo_box_peak_detection_method.value())
 
@@ -167,47 +173,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     # endregion
 
-    # region Theme Switcher
     def _add_style_toggle(self) -> None:
         self.menubar.addSeparator()
-        self.menubar.addAction("Switch Theme", self._switch_theme)
+        self.menubar.addAction("Switch Theme", self.theme_switcher.switch_theme)
 
-    @Slot()
-    def _switch_theme(self) -> None:
-        if self.active_style == "light":
-            self._set_dark_style()
-        else:
-            self._set_light_style()
-
-    def set_style(self, style: Literal["light", "dark"]) -> None:
-        if style == "light":
-            self._set_light_style()
-        elif style == "dark":
-            self._set_dark_style()
-
-    @Slot()
-    def _set_light_style(self) -> None:
-        self.setStyleSheet(
-            qdarkstyle.load_stylesheet(
-                qt_api="pyside6", palette=qdarkstyle.LightPalette
-            )
-        )
-        self.plot.set_style("light")
-        self.active_style = "light"
-
-    @Slot()
-    def _set_dark_style(self) -> None:
-        self.setStyleSheet(
-            qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.DarkPalette)
-        )
-        self.plot.set_style("dark")
-        self.active_style = "dark"
-
-    # endregion Theme Switcher
-    def connect_signals(self) -> None:
+    def _connect_signals(self) -> None:
         """
         Connect signals to slots.
         """
+        self.sig_init_finished.connect(self._on_init_finished)
+
         self.sig_data_filtered.connect(self.handle_table_view_data)
         self.sig_data_loaded.connect(self.handle_plot_draw)
         self.sig_data_loaded.connect(self.handle_table_view_data)
@@ -262,16 +237,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     @Slot(str)
-    def _sync_peaks_data_plot(self, name: SignalName) -> None:
+    def _sync_peaks_data_plot(self, name: SignalName | str) -> None:
         plot_item = self.plot.plot_items[name].peaks
-        if plot_item is None:
-            return
-        plot_peak_indices = plot_item.data["x"].astype(np.int32)  # type: ignore
+        plot_peak_indices = plot_item.data["x"].astype(np.int32)
         data_peak_indices = self.data.sigs[name].peaks.copy()
         plot_peak_indices.sort()
         data_peak_indices.sort()
 
-        if not np.array_equal(plot_peak_indices, data_peak_indices):  # type: ignore
+        if not np.array_equal(plot_peak_indices, data_peak_indices):
             self.data.sigs[name].peaks = plot_peak_indices
 
     def read_hdf5(self, file_path: str | Path) -> None:
@@ -305,7 +278,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def update_results(self) -> None:
-        if self.data.sigs[self.signal_name].peaks.size == 0:
+        if self.data.sigs[self.signal_name].peaks.shape[0] == 0:
             msg = f"No peaks detected for signal '{self.signal_name}'. Please run peak detection first."
             self.sig_show_message.emit(msg, "info")
             return
@@ -377,7 +350,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         path, _ = QFileDialog.getOpenFileName(
             self,
             caption="Select File",
-            dir=self.data_dir.as_posix(),
+            dir=self.config.data_dir.as_posix(),
             filter="EDF (*.edf);;CSV (*.csv);;TXT (*.txt);;Feather (*.feather);;State Files (*.pkl);;All Files (*.edf *.csv *.txt *.feather *.pkl)",
             selectedFilter="All Files (*.edf *.csv *.txt *.feather *.pkl)",
         )
@@ -388,7 +361,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.data.read(path)
             self.ui.update_data_selection_widgets(path)
 
-            self.data_dir = Path(path).parent
+            self.config.data_dir = self.file_info.dir().path()
             self._file_path = path
 
     @Slot()
@@ -480,11 +453,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def handle_table_view_data(self) -> None:
         """
         Update the data preview table and the data info table with the current data.
-
-        Parameters
-        ----------
-        n_rows : int, optional
-            The number of rows from the top and bottom of the data to show in the preview table, by default 10.
         """
         # Get top and bottom parts of the data and its description
         data = self.data.df
@@ -546,73 +514,71 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot()
     def handle_apply_filter(self) -> None:
         btn = self.btn_apply_filter
-        btn.processing("Applying filter...")
-        filter_start = time.perf_counter()
-        filter_params = self.get_filter_values()
-        standardize_params = self.get_standardization_values()
+        btn.processing("Filtering...")
+        with pg.BusyCursor():
+            filter_params = self.get_filter_values()
+            standardize_params = self.get_standardization_values()
 
-        pipeline = self.pipeline
+            pipeline = self.pipeline
 
-        signal_name = self.signal_name
+            signal_name = self.signal_name
 
-        self.data.run_preprocessing(
-            name=signal_name,
-            pipeline=pipeline,
-            filter_params=filter_params,
-            standardize_params=standardize_params,
-        )
-        self.plot.draw_signal(
-            sig=self.data.sigs[signal_name].processed_data,
-            plot_widget=self.plot.plot_widgets[signal_name],
-            signal_name=signal_name,
-        )
-        filter_stop = time.perf_counter()
-        duration_msg = f"Last run took {filter_stop - filter_start:.2f}s"
-        btn.feedback(True, tip=duration_msg)
+            self.data.run_preprocessing(
+                name=signal_name,
+                pipeline=pipeline,
+                filter_params=filter_params,
+                standardize_params=standardize_params,
+            )
+            self.plot.draw_signal(
+                sig=self.data.sigs[signal_name].processed_data,
+                plot_widget=self.plot.plot_widgets[signal_name],
+                signal_name=signal_name,
+            )
+        btn.success("Finished")
         self.sig_plot_data_changed.emit(signal_name)
         self.sig_data_filtered.emit(signal_name)
 
     @Slot()
     def handle_peak_detection(self) -> None:
         btn = self.btn_detect_peaks
-        btn.processing("Working...")
-        peak_params = self.get_peak_detection_values()
-        name = self.signal_name
-        plot_widget = self.plot.plot_widgets[name]
-        if self.data.sigs[name].processed_data.shape[0] == 0:
-            msg = "Signal needs to be filtered before peak detection can be performed."
-            self.sig_show_message.emit(msg, "info")
-            return
+        btn.processing("Detecting...")
+        with pg.BusyCursor():
+            peak_params = self.get_peak_detection_values()
+            name = self.signal_name
+            plot_widget = self.plot.plot_widgets[name]
+            if self.data.sigs[name].processed_data.shape[0] == 0:
+                msg = "Signal needs to be filtered before peak detection can be performed."
+                self.sig_show_message.emit(msg, "info")
+                return
 
-        self.data.run_peak_detection(
-            name=name,
-            peak_parameters=peak_params,
-        )
-        peaks = self.data.sigs[name].peaks
-        peaks_y = self.data.sigs[name].processed_data[peaks]
+            self.data.run_peak_detection(
+                name=name,
+                peak_parameters=peak_params,
+            )
+            peaks = self.data.sigs[name].peaks
+            peaks_y = self.data.sigs[name].processed_data[peaks]
 
-        self.plot.draw_peaks(
-            pos_x=peaks,
-            pos_y=peaks_y,
-            plot_widget=plot_widget,
-            signal_name=name,
-        )
-        btn.feedback(True)
+            self.plot.draw_peaks(
+                pos_x=peaks,
+                pos_y=peaks_y,
+                plot_widget=plot_widget,
+                signal_name=name,
+            )
+        btn.success("Finished")
         self.sig_peaks_updated.emit(name)
 
     @Slot(str)
     def handle_draw_results(self, name: SignalName | str) -> None:
         rate_name = f"{name}_rate"
         rate_plot_widget = self.plot.plot_widgets[rate_name]
-        rate_interp = self.data.sigs[name].signal_rate.rate_interpolated
+        sig_rate = self.data.sigs[name].signal_rate
+        rate_interp = sig_rate.rate_interpolated
 
         self.plot.draw_rate(
             rate_interp,
             plot_widget=rate_plot_widget,
             signal_name=name,
-            mean_peak_interval=self.data.sigs[name].signal_rate.rate.mean(
-                dtype=np.int32
-            ),
+            mean_peak_interval=sig_rate.rate.mean(dtype=np.int32),
         )
 
     @Slot(str)
@@ -624,6 +590,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot(QCloseEvent)
     def closeEvent(self, event: QCloseEvent) -> None:
         self._write_settings()
+        # self.config.save()
         if hasattr(self, "hdf5view_process") and self.hdf5view_process:
             self.hdf5view_process.kill()
             self.hdf5view_process = None
@@ -634,26 +601,44 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _read_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
-        geometry: QByteArray = settings.value("geometry", QByteArray())  # type: ignore
+        geometry = settings.value("geometry", QByteArray(), type=QByteArray)
+
         if geometry.size():
             self.restoreGeometry(geometry)
-        data_dir: str = settings.value("datadir", ".")  # type: ignore
-        self.data_dir = Path(data_dir)
-        output_dir: str = settings.value("outputdir", ".")  # type: ignore
-        self.output_dir = Path(output_dir)
-        style = cast(Literal["light", "dark"], settings.value("style", "dark"))
-        self.active_style = style
+
+        self.data_dir = self.config.data_dir
+        # self.data_dir = Path(data_dir)
+        # data_dir = settings.value("data_dir", str(Path.cwd()))
+
+        self.output_dir = self.config.output_dir
+        # output_dir = settings.value("output_dir", str(Path.cwd() / "output"))
+        # self.output_dir = Path(output_dir)
+
+        self.theme_switcher.set_style(self.config.style)
+        # style = settings.value("style", "dark")
+        # self.theme_switcher.set_style(style)
+        # self.spin_box_fs.setValue(self.config.sample_rate)
 
     def _write_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
+
         geometry = self.saveGeometry()
         settings.setValue("geometry", geometry)
-        data_dir = self.data_dir.as_posix()
-        output_dir = self.output_dir.as_posix()
-        settings.setValue("datadir", data_dir)
-        settings.setValue("outputdir", output_dir)
-        style = self.active_style
-        settings.setValue("style", style)
+
+        data_dir = self.file_info.dir().path()
+        output_dir = self.line_edit_output_dir.text()
+
+        self.config.data_dir = Path(data_dir)
+        self.config.output_dir = Path(output_dir)
+
+        # settings.setValue("data_dir", data_dir)
+        # settings.setValue("output_dir", output_dir)
+
+        self.config.style = self.theme_switcher.active_style
+        self.config.sample_rate = self.data.fs
+        self.config.write_config()
+        # settings.setValue("style", style)
+        # self.config.sample_rate = self.spin_box_fs.value()
 
     @Slot()
     def _start_profiler(self):
@@ -711,7 +696,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
 
     def get_filter_values(self) -> SignalFilterParameters:
-
         method = self.filter_method
 
         filter_params = SignalFilterParameters(
@@ -805,20 +789,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             peak_detection_parameters=peak_detection_params,
         )
 
+    def get_descriptive_stats(self, result_name: str) -> SummaryStatistics:
+        return self.data.get_descriptive_stats(result_name)
+
     def make_results(self, result_name: SignalName | str) -> None:
         btn = self.btn_compute_results
         btn.processing("Working...")
+        with pg.BusyCursor():
+            focused_result_df = self.data.get_focused_result_df(result_name)
+            results = self._assemble_result_data(result_name)
+        btn.success("Finished")
 
+        result_table: QTableView = getattr(self, f"table_view_results_{result_name}")
+        self._set_table_model(result_table, PolarsModel(focused_result_df))
+        self._results[result_name] = results
+        self.tabs_main.setCurrentIndex(2)
+
+    def _assemble_result_data(self, result_name: SignalName | str) -> Result:
         identifier = self.get_identifier(result_name)
         data_info = self.get_data_selection_info()
         processing_info = self.get_processing_info()
 
-        focused_result_df = self.data.get_focused_result_df(result_name)
         focused_result = self.data.focused_results[result_name]
         statistics = self.data.get_descriptive_stats(result_name)
         manual_edits = self.plot.peak_edits[result_name]
         source_data = self.data.sigs[result_name]
-        results = Result(
+        return Result(
             identifier=identifier,
             selection_parameters=data_info,
             processing_parameters=processing_info,
@@ -827,12 +823,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             manual_peak_edits=manual_edits,
             source_data=source_data,
         )
-        result_table: QTableView = getattr(self, f"table_view_results_{result_name}")
-        self._set_table_model(result_table, PolarsModel(focused_result_df))
-        self._results[result_name] = results
-        btn.feedback(True, limitedTime=False)
-        self.tabs_main.setCurrentIndex(2)
-        btn.reset()
 
     @Slot()
     def save_state(self) -> None:
@@ -1061,10 +1051,6 @@ def main(dev_mode: bool = False, antialias: bool = False) -> None:
         level="DEBUG",
     )
     app = QApplication(sys.argv)
-    app.setStyle("Default")
-    app.setStyleSheet(
-        qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.LightPalette)
-    )
     window = MainWindow()
     window.show()
     sys.exit(app.exec())

@@ -68,7 +68,7 @@ class SignalData:
     _original_data: pl.DataFrame = field(init=False, repr=False)
     processed_name: str = field(init=False, repr=False)
     _processed_data: NDArray[np.float64] = field(init=False, repr=False)
-    peaks: NDArray[np.int32] = np.zeros(0, dtype=np.int32)
+    peaks: NDArray[np.int32] = field(default_factory=lambda: np.zeros(0, dtype=np.int32))
     is_finished: bool = False
     _peak_index_offset: int = 0
 
@@ -324,9 +324,6 @@ class SignalData:
             self.active_section.get_column(use_col), robust, window_size
         )
 
-        # if self.processed_name in self.active_section.columns:
-        #     self.active_section = self.active_section.drop(self.processed_name)
-        # self.active_section.hstack([scaled], in_place=True)
         self.active_section = self.active_section.with_columns(
             pl.Series(self.processed_name, scaled, pl.Float64).alias(
                 self.processed_name
@@ -479,3 +476,7 @@ class SignalStorage(dict[SignalName | str, SignalData]):
 
     def deepcopy(self) -> "SignalStorage":
         return copy.deepcopy(self)
+
+    def update_sampling_rate(self, sampling_rate: int) -> None:
+        for sig in self.values():
+            sig.sampling_rate = sampling_rate
