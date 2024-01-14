@@ -1,6 +1,6 @@
 import contextlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Iterable, Literal, Sequence, override
+from typing import TYPE_CHECKING, Any, Literal, Sequence, TypedDict, override
 
 import numpy as np
 import pyqtgraph as pg
@@ -10,9 +10,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QObject, QPointF, QRectF, Qt, Signal, Slot
 
 from ..models.result import ManualPeakEdits
-from ..type_aliases import (
-    SignalName,
-)
+from ..type_aliases import SignalName
 
 if TYPE_CHECKING:
     from ..app import MainWindow
@@ -30,9 +28,7 @@ class CustomViewBox(pg.ViewBox):
     def __init__(self, *args: Any, **kargs: Any) -> None:
         pg.ViewBox.__init__(self, *args, **kargs)
         self._selection_box: QtWidgets.QGraphicsRectItem | None = None
-        # self._deletion_box: QtWidgets.QGraphicsRectItem | None = None
         self.mapped_peak_selection: QtGui.QPolygonF | None = None
-        # self.mapped_deletion_selection: QtGui.QPolygonF | None = None
 
     @property
     def selection_box(self) -> QtWidgets.QGraphicsRectItem:
@@ -57,30 +53,6 @@ class CustomViewBox(pg.ViewBox):
         selection_box.hide()
         self.addItem(selection_box, ignoreBounds=True)
         return
-
-    # @property
-    # def deletion_box(self) -> QtWidgets.QGraphicsRectItem:
-    #     if self._deletion_box is None:
-    #         deletion_box = QtWidgets.QGraphicsRectItem(0, 0, 1, 1)
-    #         deletion_box.setPen(pg.mkPen((255, 100, 100), width=1))
-    #         deletion_box.setBrush(pg.mkBrush((255, 100, 100, 100)))
-    #         deletion_box.setZValue(1e9)
-    #         deletion_box.hide()
-    #         self._deletion_box = deletion_box
-    #         self.addItem(deletion_box, ignoreBounds=True)
-    #     return self._deletion_box
-
-    # @deletion_box.setter
-    # def deletion_box(self, deletion_box: QtWidgets.QGraphicsRectItem | None) -> None:
-    #     if self._deletion_box is not None:
-    #         self.removeItem(self._deletion_box)
-    #     self._deletion_box = deletion_box
-    #     if deletion_box is None:
-    #         return
-    #     deletion_box.setZValue(1e9)
-    #     deletion_box.hide()
-    #     self.addItem(deletion_box, ignoreBounds=True)
-    #     return
 
     @override
     def mouseDragEvent(
@@ -128,12 +100,6 @@ class CustomViewBox(pg.ViewBox):
             else:
                 self.updateSelectionBox(ev.pos(), ev.buttonDownPos())
                 self.mapped_peak_selection = None
-        # elif is_left_button_with_alt(ev):
-        #     if ev.isFinish():
-        #         self.mapped_deletion_selection = create_selection(ev)
-        #     else:
-        #         self.updateDeletionBox(ev.pos(), ev.buttonDownPos())
-        #         self.mapped_deletion_selection = None
         elif is_left_button(ev):
             if self.state["mouseMode"] == pg.ViewBox.RectMode and axis is None:
                 if ev.isFinish():
@@ -186,14 +152,6 @@ class CustomViewBox(pg.ViewBox):
         tr = QtGui.QTransform.fromScale(rect.width(), rect.height())
         self.selection_box.setTransform(tr)
         self.selection_box.show()
-
-    # def updateDeletionBox(self, pos1: pg.Point, pos2: pg.Point) -> None:
-    #     rect = QRectF(pos1, pos2)
-    #     rect = self.childGroup.mapRectFromParent(rect)
-    #     self.deletion_box.setPos(rect.topLeft())
-    #     tr = QtGui.QTransform.fromScale(rect.width(), rect.height())
-    #     self.deletion_box.setTransform(tr)
-    #     self.deletion_box.show()
 
 
 class CustomScatterPlotItem(pg.ScatterPlotItem):
@@ -317,31 +275,25 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         self.sigPlotChanged.emit(self)
 
 
-type PlotItemAttr = Literal[
-    "name", "signal", "peaks", "rate", "rate_mean", "temperature_label"
-]
-type PlotItemVal = (
-    str
-    | pg.PlotDataItem
-    | pg.ScatterPlotItem
-    | pg.InfiniteLine
-    | pg.LabelItem
-    | pg.LinearRegionItem
-    | None
-)
+class PlotItemDict(TypedDict):
+    signal: pg.PlotDataItem
+    peaks: pg.ScatterPlotItem
+    rate: pg.PlotDataItem
+    rate_mean: pg.InfiniteLine
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, init=False)
 class PlotItems:
-    name: SignalName | str
-    signal: pg.PlotDataItem = pg.PlotDataItem()
-    peaks: CustomScatterPlotItem = CustomScatterPlotItem()
-    rate: pg.PlotDataItem = pg.PlotDataItem()
-    rate_mean: pg.InfiniteLine = pg.InfiniteLine()
-    temperature_label: pg.LabelItem | None = None
-    active_section: pg.LinearRegionItem = pg.LinearRegionItem()
+    # name: str
+    signal: pg.PlotDataItem
+    peaks: CustomScatterPlotItem
+    rate: pg.PlotDataItem
+    rate_mean: pg.InfiniteLine
+    temperature_label: pg.LabelItem
+    active_section: pg.LinearRegionItem
+    active_section_labels: list[pg.InfLineLabel]
 
-    def as_dict(self) -> dict[PlotItemAttr, PlotItemVal]:
+    def as_dict(self) -> PlotItemDict:
         return {
             "signal": self.signal,
             "peaks": self.peaks,
@@ -349,15 +301,21 @@ class PlotItems:
             "rate_mean": self.rate_mean,
         }
 
+    def reset(self) -> None:
+        self.signal = None
+        self.peaks = None
+        self.rate = None
+        self.rate_mean = None
+        self.temperature_label = None
+        self.active_section = None
+        self.active_section_labels = []
 
-class PlotItemsContainer(dict[SignalName | str, PlotItems]):
-    def __init__(
-        self, *args: Iterable[tuple[SignalName | str, PlotItems]], **kwargs: PlotItems
-    ) -> None:
-        super().__init__(*args, **kwargs)
 
-    def __setitem__(self, key: SignalName | str, value: PlotItems) -> None:
-        super().__setitem__(key, value)
+# class PlotItemsContainer(dict[str, PlotItems]):
+#     def __init__(
+#         self, *args: Iterable[tuple[str, PlotItems]], **kwargs: PlotItems
+#     ) -> None:
+#         super().__init__(*args, **kwargs)
 
 
 def make_plot_widget(
@@ -371,14 +329,6 @@ def make_plot_widget(
 
 
 class PlotWidgetContainer(dict[str, pg.PlotWidget]):
-    def __init__(
-        self, *args: Iterable[tuple[str, pg.PlotWidget]], **kwargs: pg.PlotWidget
-    ) -> None:
-        super().__init__(*args, **kwargs)
-
-    def __setitem__(self, key: str, value: pg.PlotWidget) -> None:
-        super().__setitem__(key, value)
-
     def make_plot_widget(
         self,
         name: str,
@@ -407,6 +357,7 @@ class PlotHandler(QObject):
 
     sig_peaks_edited = Signal(str)
     sig_excluded_range = Signal(int, int)
+    sig_active_region_changed = Signal(int, int)
 
     def __init__(
         self,
@@ -415,7 +366,7 @@ class PlotHandler(QObject):
         super().__init__()
         self._window = window
         self.click_tolerance = 80
-        self.plot_items = PlotItemsContainer()
+        self.plot_items: dict[str, PlotItems] = {}
         self.plot_widgets = PlotWidgetContainer()
         self.peak_edits: dict[SignalName | str, ManualPeakEdits] = {
             "hbr": ManualPeakEdits(),
@@ -427,6 +378,16 @@ class PlotHandler(QObject):
 
         self._make_plot_items()
         self._prepare_plot_items()
+        self._color_config = {
+            "included": ((0, 255, 0, 100), "lime"),
+            "excluded": ((255, 0, 0, 100), "red"),
+        }
+        self._connect_signals()
+
+    def _connect_signals(self) -> None:
+        self._window.sig_active_region_limits_changed.connect(
+            self._update_region_selector
+        )
 
     @property
     def last_edit_index(self) -> int:
@@ -443,22 +404,8 @@ class PlotHandler(QObject):
         self.plot_widgets.make_plot_widget(name="ventilation_rate")
 
     def _make_plot_items(self) -> None:
-        self.plot_items["hbr"] = PlotItems(
-            name="hbr",
-            temperature_label=pg.LabelItem(
-                "Temperature: -- °C",
-                parent=self.plot_widgets["hbr"].getPlotItem(),
-                angle=0,
-            ),
-        )
-        self.plot_items["ventilation"] = PlotItems(
-            name="ventilation",
-            temperature_label=pg.LabelItem(
-                "Temperature: -- °C",
-                parent=self.plot_widgets["ventilation"].getPlotItem(),
-                angle=0,
-            ),
-        )
+        self.plot_items["hbr"] = PlotItems()
+        self.plot_items["ventilation"] = PlotItems()
 
     def _prepare_plot_items(self) -> None:
         style = self._window.theme_switcher.active_style
@@ -490,40 +437,70 @@ class PlotHandler(QObject):
             self.plot_widgets[name].getPlotItem().scene().sigMouseMoved.connect(
                 self.on_mouse_moved
             )
-            reg = pg.LinearRegionItem(
-                [0, 1],
-                pen=pg.mkPen(color="gold", width=2, style=Qt.PenStyle.DashLine),
-                hoverPen=pg.mkPen(
-                    color="steelblue", width=3, style=Qt.PenStyle.DashLine
-                ),
-            )
-            self.reg_label_low = pg.InfLineLabel(
-                reg.lines[0],
-                "{value:.0f}",
-                position=0.95,
-                anchor=(1, 1),
-            )
-            self.reg_label_high = pg.InfLineLabel(
-                reg.lines[1],
-                "{value:.0f}",
-                position=0.95,
-                anchor=(1, 1),
-            )
-            reg.setZValue(1e3)
-            reg.sigRegionChangeFinished.connect(self.on_active_region_change_finished)
-            self.plot_widgets[name].getPlotItem().getViewBox().addItem(reg)
-            self.plot_items[name].active_section = reg
+            # reg = pg.LinearRegionItem(
+            #     [0, 1],
+            #     pen=pg.mkPen(color="gold", width=1),
+            #     hoverPen=pg.mkPen(color="white", width=3),
+            # )
+            # self.reg_label_low = pg.InfLineLabel(
+            #     reg.lines[0],
+            #     "{value:.0f}",
+            #     position=0.95,
+            #     anchor=(1, 1),
+            # )
+            # self.reg_label_high = pg.InfLineLabel(
+            #     reg.lines[1],
+            #     "{value:.0f}",
+            #     position=0.95,
+            #     anchor=(1, 1),
+            # )
+            # reg.setZValue(1e3)
+            # reg.sigRegionChangeFinished.connect(self.on_active_region_change_finished)
+            # self.plot_widgets[name].getPlotItem().getViewBox().addItem(reg)
+            # self.plot_items[name].active_section = reg
+            # self.plot_items[name].active_section.hide()
 
-    @Slot(str)
-    def toggle_region_selector(self, name: str) -> None:
-        is_visible = self.plot_items[name].active_section.isVisible()
-        is_enabled = self.plot_items[name].active_section.isEnabled()
-        self.plot_items[name].active_section.setVisible(not is_visible)
-        self.plot_items[name].active_section.setEnabled(not is_enabled)
-        sig_data = self._window.data.sigs[name]
-        bounds = sig_data.data_bounds
-        # sig_data.set_active(*bounds)
-        self._window.update_active_region(*bounds)
+    @Slot()
+    def show_section_selector(
+        self,
+        name: str,
+        section_type: Literal["included", "excluded"],
+        bounds: tuple[int, int] = (0, 1),
+    ) -> None:
+        if hasattr(self.plot_items[name], "active_section"):
+            with contextlib.suppress(Exception):
+                self.plot_widgets.get_view_box(name).removeItem(
+                    self.plot_items[name].active_section
+                )
+                self.plot_items[name].active_section.disconnect(self.on_active_region_change_finished)
+            self.plot_items[name].active_section = None
+            self.plot_items[name].active_section_labels = []
+            
+        brush_color, pen_color = self._color_config[section_type]
+        active_region = pg.LinearRegionItem(brush=brush_color, pen=pen_color, hoverPen=dict(color="white", width=3))
+        active_region.setZValue(1e3)
+
+        lower_label = pg.InfLineLabel(
+            active_region.lines[0],
+            "{value:.0f}",
+            position=0.95,
+            anchor=(1, 1),
+            movable=False,
+        )
+        upper_label = pg.InfLineLabel(
+            active_region.lines[1],
+            "{value:.0f}",
+            position=0.95,
+            anchor=(1, 1),
+            movable=False,
+        )
+
+        span = bounds[1] - bounds[0]
+        active_region.setRegion((bounds[0] + span / 4, bounds[1] - span / 4))
+        active_region.sigRegionChangeFinished.connect(self.on_active_region_change_finished)
+        self.plot_widgets.get_view_box(name).addItem(active_region)
+        self.plot_items[name].active_section = active_region
+        self.plot_items[name].active_section_labels = [lower_label, upper_label]
 
     @staticmethod
     def set_plot_titles_and_labels(
@@ -572,19 +549,21 @@ class PlotHandler(QObject):
                 bottom_label=bottom_label,
             )
 
+    @Slot(str, int, int)
+    def _update_region_selector(self, name: str, lower: int, upper: int) -> None:
+        self.plot_items[name].active_section.setRegion((lower, upper))
+
     @Slot(pg.LinearRegionItem)
     def on_active_region_change_finished(self, region: pg.LinearRegionItem) -> None:
-        # logger.debug(f"Signal data: {region}, type: {type(region)}")
         lower, upper = region.getRegion()
         lower, upper = int(lower), int(upper)
-        self._window.update_active_region(lower, upper)
-        # self._window.sig_active_region_limits_changed.emit(lower, upper)
+        self.sig_active_region_changed.emit(lower, upper)
 
     @Slot()
     def reset_plots(self) -> None:
         for pw in self.plot_widgets.get_all_widgets():
-            pw.getPlotItem().clear()
             pw.getPlotItem().addLegend().clear()
+            pw.getPlotItem().clear()
             pw.getPlotItem().getViewBox().clear()
 
         self.plot_items.clear()
@@ -611,11 +590,12 @@ class PlotHandler(QObject):
         index = int(mapped_pos.x())
         index = np.clip(index, 0, sig_df.height - 1)
 
-        temperature = (
-            sig_df.get_column("temperature")
-            .gather(index)
-            .to_numpy(zero_copy_only=True)[0]
-        )
+        # temperature = (
+        # sig_df.get_column("temperature")
+        # .gather(index)
+        # .to_numpy(zero_copy_only=True)[0]
+        # )
+        temperature = sig_df["temperature"][index]
 
         text = f"<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: {temperature:.1f} °C</span>"
 
@@ -645,8 +625,6 @@ class PlotHandler(QObject):
         )
         signal_line.curve.setSegmentedLineMode("on")
         signal_line.curve.setClickable(True, width=self.click_tolerance)
-
-        # IDEA: Add temperature as second y-axis
 
         rate_name = f"{signal_name}_rate"
         rate_plot_widget = self.plot_widgets[rate_name]

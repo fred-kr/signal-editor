@@ -1,11 +1,11 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
-from loguru import logger
 
 import numpy as np
 import polars as pl
 import polars.selectors as ps
+from loguru import logger
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QInputDialog
@@ -54,11 +54,7 @@ def try_infer_sampling_rate(
     target = 1000 if time_unit == "ms" else 1.0
     closed = "left" if df.get_column(time_col)[0] == 0 else "both"
     lower = df.get_column(time_col)[0]
-    return df.filter(
-        pl.col(time_col).is_between(lower, target, closed=closed)
-    ).height
-
-    
+    return df.filter(pl.col(time_col).is_between(lower, target, closed=closed)).height
 
 
 def get_array_stats(
@@ -82,6 +78,7 @@ class DataState:
 
 class DataHandler(QObject):
     sig_dh_new_data_loaded = Signal(int, int)
+
     def __init__(self, window: "MainWindow") -> None:
         super().__init__()
         self._window = window
@@ -254,8 +251,8 @@ class DataHandler(QObject):
 
     def compute_result_df(self, name: SignalName | str) -> None:
         sig = self.sigs[name]
-        peaks = sig.peaks
-        diffs = sig.get_peak_diffs(peaks)
+        peaks = sig.total_peaks
+        diffs = sig.get_peak_diffs()
         rate = sig.signal_rate.rate
 
         data = sig.get_data()
@@ -307,5 +304,3 @@ class DataHandler(QObject):
         if name not in self.sigs:
             return
         self.sigs[name].mark_excluded(lower, upper)
-        
-        

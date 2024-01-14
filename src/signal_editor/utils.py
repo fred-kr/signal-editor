@@ -15,3 +15,5 @@ def target_pos(x: float, y: float) -> str:
     return (
         f"time: {int(hours):02}:{int(minutes):02}:{int(seconds):02}\namplitude: {y:.4f}"
     )
+
+

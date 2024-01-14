@@ -8,6 +8,7 @@ from typing import Literal, TypedDict, cast
 
 import h5py
 import numpy as np
+import polars as pl
 import pyqtgraph as pg
 from loguru import logger
 from PySide6.QtCore import (
@@ -85,7 +86,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     sig_show_message = Signal(str, str)
     sig_data_restored = Signal()
     sig_init_finished = Signal()
-    sig_active_region_limits_changed = Signal(int, int)
+    sig_active_region_limits_changed = Signal(str, int, int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -217,28 +218,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.action_select_file.triggered.connect(self.select_data_file)
         self.action_remove_peak_rect.triggered.connect(self.plot.show_region_selector)
         self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected)
-        self.action_run_peak_detection.triggered.connect(self.handle_peak_detection)
-        self.action_run_preprocessing.triggered.connect(self.handle_apply_filter)
-        self.action_get_results.triggered.connect(self.update_results)
+        # self.action_run_peak_detection.triggered.connect(self.handle_peak_detection)
+        # self.action_run_preprocessing.triggered.connect(self.handle_apply_filter)
+        # self.action_get_results.triggered.connect(self.update_results)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_load_state.triggered.connect(self.restore_state)
-        self.action_toggle_region_selector.triggered.connect(
-            lambda: self.plot.toggle_region_selector(self.signal_name)
-        )
-        self.action_remove_selected_data.triggered.connect(
-            self.plot.emit_to_be_excluded_range
-        )
-        self.action_remove_marked_areas.triggered.connect(
-            self.remove_excluded_regions
-        )
+        # self.action_toggle_region_selector.triggered.connect(
+        #     lambda: self.plot.toggle_region_selector(self.name)
+        # )
+        # self.action_remove_selected_data.triggered.connect(
+        #     self.plot.emit_to_be_excluded_range
+        # )
+        # self.action_remove_marked_areas.triggered.connect(self.remove_excluded_regions)
         self.plot.sig_excluded_range.connect(self.data.exclude_region)
+        self.plot.sig_active_region_changed.connect(self._update_peak_start_stop_index)
 
         self.spin_box_fs.valueChanged.connect(self.data.update_fs)
 
         self.peak_start_index.valueChanged.connect(self.emit_peak_start_stop_index)
         self.peak_stop_index.valueChanged.connect(self.emit_peak_start_stop_index)
 
-        self.data.sig_dh_new_data_loaded.connect(self.update_active_region)
+        self.data.sig_dh_new_data_loaded.connect(self._update_peak_start_stop_widgets)
 
         self.sig_active_region_limits_changed.connect(self.update_active_region)
 
@@ -246,54 +246,87 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.plot.sig_peaks_edited.connect(self._sync_peaks_data_plot)
 
         self.action_reset_view.triggered.connect(
-            lambda: self.plot.reset_views(self.data.sigs[self.signal_name].data.height)
+            lambda: self.plot.reset_views(self.data.sigs[self.signal_name].active_section.data.height)
         )
+
+        self.btn_section_add_new.clicked.connect(self.maybe_new_section)
+        self.btn_section_add_new.clicked.connect(
+            lambda: self.ui.confirm_cancel_buttons.setVisible(True)
+        )
+
+        self.ui.sig_section_confirmed.connect(self.on_section_confirmed)
+
+    @Slot()
+    def maybe_new_section(self) -> None:
+        sender_name = self.sender().objectName()
+        sig_name = self.signal_name
+        if sender_name == "btn_section_add_new":
+            section_type = "included"
+        elif sender_name == "btn_section_exclude_new":
+            section_type = "excluded"
+        else:
+            raise ValueError(f"Unknown sender: {sender_name}")
+
+        self._section_type = section_type
+        current_limits = self.data.sigs[sig_name].active_region_limits
+        self.ui.confirm_cancel_buttons.show()
+        self.plot.show_section_selector(
+            name=self.signal_name, section_type=section_type, bounds=current_limits
+        )
+
+
+    @Slot()
+    def on_section_confirmed(self) -> None:
+        sig_name = self.signal_name
+        section_type = self._section_type
+
+        # Get the new section limits
+        lower, upper = self.plot.plot_items[sig_name].active_section.getRegion()
+        lower, upper = int(lower), int(upper)
+
+        if section_type == "included":
+            self.data.sigs[sig_name].add_section()
+        
 
     @Slot()
     def remove_excluded_regions(self) -> None:
         name = self.signal_name
         self.data.sigs[name].apply_exclusion_mask()
+
     @Slot()
     def emit_peak_start_stop_index(self) -> None:
         limits = self.peak_start_index.value(), self.peak_stop_index.value()
-        self.sig_active_region_limits_changed.emit(min(limits), max(limits))
+        lower, upper = min(limits), max(limits)
+        self.sig_active_region_limits_changed.emit(self.signal_name, lower, upper)
 
     @Slot(int, int)
-    def update_active_region(self, start: int, stop: int) -> None:
-        self.peak_start_index.blockSignals(True)
-        self.peak_start_index.setMinimum(start)
-        self.peak_start_index.setMaximum(stop)
-        self.peak_start_index.blockSignals(False)
+    def _update_peak_start_stop_widgets(self, start: int, stop: int) -> None:
+        for widget in [self.peak_start_index, self.peak_stop_index]:
+            widget.setMinimum(start)
+            widget.setMaximum(stop)
         self.peak_start_index.setValue(start)
-
-        self.peak_stop_index.blockSignals(True)
-        self.peak_stop_index.setMinimum(start)
-        self.peak_stop_index.setMaximum(stop)
-        self.peak_stop_index.blockSignals(False)
         self.peak_stop_index.setValue(stop)
 
-        reg = self.plot.plot_items[self.signal_name].active_section
-        reg.setBounds(self.data.sigs[self.signal_name].data_bounds)
-        reg.blockSignals(True)
-        reg.setRegion((start, stop))
-        reg.blockSignals(False)
+    @Slot(int, int)
+    def _update_peak_start_stop_index(self, start: int, stop: int) -> None:
+        self.peak_start_index.setValue(start)
+        self.peak_stop_index.setValue(stop)
 
-        for name in ["hbr", "ventilation"]:
-            if name in self.data.sigs:
-                self.data.sigs[name].set_active(start, stop)
+    @Slot(str, int, int)
+    def update_active_region(self, name: str, start: int, stop: int) -> None:
+        if name in self.data.sigs:
+            self.data.sigs[name].set_active(start, stop)
 
-        self.sig_plot_data_changed.emit(self.signal_name)
+        self.sig_plot_data_changed.emit(name)
 
     @Slot(str)
     def _sync_peaks_data_plot(self, name: SignalName | str) -> None:
         plot_item = self.plot.plot_items[name].peaks
         plot_peak_indices = plot_item.data["x"].astype(np.int32)
-        data_peak_indices = self.data.sigs[name].peaks.copy()
+        data_series = self.data.sigs[name].active_peaks
         plot_peak_indices.sort()
-        data_peak_indices.sort()
+        data_series.sort()
 
-        if not np.array_equal(plot_peak_indices, data_peak_indices):
-            self.data.sigs[name].peaks = plot_peak_indices
 
     def read_hdf5(self, file_path: str | Path) -> None:
         with h5py.File(file_path, "r") as f:
@@ -326,7 +359,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def update_results(self) -> None:
-        if self.data.sigs[self.signal_name].peaks.shape[0] == 0:
+        if len(self.data.sigs[self.signal_name].active_peaks) == 0:
             msg = f"No peaks detected for signal '{self.signal_name}'. Please run peak detection first."
             self.sig_show_message.emit(msg, "info")
             return
@@ -471,13 +504,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _draw_initial_signals(self) -> None:
         for name, sig in self.data.sigs.items():
             plot_widget = self.plot.plot_widgets[name]
-            self.plot.draw_signal(
-                sig.data.get_column(name).to_numpy(), plot_widget, name
-            )
+            self.plot.draw_signal(sig.active_processed_signal, plot_widget, name)
         self._set_x_ranges()
 
     def _set_x_ranges(self) -> None:
-        data_length = self.data.df.shape[0]
+        data_length = self.data.sigs[self.signal_name].active_section.data.height
         view_boxes = self.plot.plot_widgets.get_all_view_boxes()
         for vb in view_boxes:
             vb.setLimits(
@@ -492,7 +523,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.plot.plot_items[name].active_section.setRegion((0, data_length))
 
     def _update_signal(self, name: SignalName | str) -> None:
-        signal_data = self.data.sigs[name].processed_data
+        signal_data = self.data.sigs[name].active_processed_signal
         plot_widget = self.plot.plot_widgets[name]
         self.plot.draw_signal(signal_data, plot_widget, name)
         self._set_x_ranges()
@@ -579,7 +610,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 standardize_params=standardize_params,
             )
             self.plot.draw_signal(
-                sig=self.data.sigs[signal_name].processed_data,
+                sig=self.data.sigs[signal_name].active_processed_signal,
                 plot_widget=self.plot.plot_widgets[signal_name],
                 signal_name=signal_name,
             )
@@ -595,7 +626,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             peak_params = self.get_peak_detection_values()
             name = self.signal_name
             plot_widget = self.plot.plot_widgets[name]
-            if self.data.sigs[name].processed_data.shape[0] == 0:
+            if self.data.sigs[name].active_section.data.shape[0] == 0:
                 msg = "Signal needs to be filtered before peak detection can be performed."
                 self.sig_show_message.emit(msg, "info")
                 return
@@ -604,8 +635,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 name=name,
                 peak_parameters=peak_params,
             )
-            peaks = self.data.sigs[name].peaks
-            peaks_y = self.data.sigs[name].processed_data[peaks]
+            peaks = self.data.sigs[name].active_peaks.to_numpy()
+            peaks_y = self.data.sigs[name].active_processed_signal[peaks]
 
             self.plot.draw_peaks(
                 pos_x=peaks,
@@ -810,7 +841,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         for key, val in vals.items():
             if isinstance(val, float):
                 vals[key] = np.round(val, 2)
-                
+
         return PeakDetectionParameters(
             start_index=start_index,
             stop_index=stop_index,
@@ -1038,14 +1069,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             processed_name = self.data.sigs[s_name].processed_name
             if processed_name not in self.data.sigs[s_name].data.columns:
                 self.plot.draw_signal(
-                    self.data.sigs[s_name].get_data().get_column(s_name).to_numpy(),
+                    self.data.sigs[s_name]
+                    .active_section.data.get_column(s_name)
+                    .to_numpy(),
                     signal_widget,
                     s_name,
                 )
                 continue
-            processed_signal = self.data.sigs[s_name].processed_data
+            processed_signal = self.data.sigs[s_name].active_processed_signal
             rate = self.data.sigs[s_name].signal_rate.rate_interpolated
-            peaks = self.data.sigs[s_name].get_peak_indices()
+            peaks = self.data.sigs[s_name].total_peaks.to_numpy()
             peaks_y = processed_signal[peaks]
             rate_widget = self.plot.plot_widgets[f"{s_name}_rate"]
             self.plot.draw_signal(processed_signal, signal_widget, s_name)

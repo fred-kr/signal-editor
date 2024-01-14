@@ -15,20 +15,20 @@ from PySide6.QtCore import (
     Qt,
     Signal,
     Slot,
+    
 )
 from PySide6.QtGui import QCursor, QStandardItemModel
 from PySide6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDockWidget,
     QVBoxLayout,
 )
 
 from ..handlers.plot_handler import PlotHandler
 from ..models.io import parse_file_name
-from ..type_aliases import (
-    SignalName,
-)
 from ..views._peak_parameter_states import INITIAL_PEAK_STATES
+from ..views.custom_widgets import ConfirmCancelButtons
 
 if TYPE_CHECKING:
     from ..app import MainWindow
@@ -236,7 +236,7 @@ FILTER_INPUT_STATES = {
 
 class UIHandler(QObject):
     sig_filter_inputs_ready = Signal()
-    sig_ready_for_cleaning = Signal()
+    sig_section_confirmed = Signal(bool)
 
     def __init__(self, window: "MainWindow", plot: PlotHandler) -> None:
         super(UIHandler, self).__init__()
@@ -312,8 +312,16 @@ class UIHandler(QObject):
         self._window.action_open_console.triggered.connect(self.show_console_widget)
         self._window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
 
+
+        self.confirm_cancel_buttons.confirm_button.clicked.connect(lambda: self.sig_section_confirmed.emit(True))
+        self.confirm_cancel_buttons.cancel_button.clicked.connect(lambda: self.sig_section_confirmed.emit(False))
+
     def _prepare_toolbars(self) -> None:
-        self._window.toolbar_plots.setVisible(False)
+        plot_toolbar = self._window.toolbar_plots
+        plot_toolbar.setVisible(False)
+        self.confirm_cancel_buttons = ConfirmCancelButtons(parent=plot_toolbar)
+        plot_toolbar.addWidget(self.confirm_cancel_buttons)
+
 
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():
@@ -321,12 +329,14 @@ class UIHandler(QObject):
             combo_box.clear()
             combo_box.setItems(value)
 
+    def _create_section_selector(self) -> None:
+        self.selection_menu = QComboBox(self._window.toolbar_plots)
+
     def update_data_selection_widgets(self, path: str) -> None:
         self._window.container_file_info.setEnabled(True)
         self._window.group_box_subset_params.setEnabled(True)
         self._window.btn_load_selection.setEnabled(True)
         available_filter_cols = self._window.data.df.select(ps.contains(["index", "time", "temp"])).columns
-        # viable_filter_columns = ("index", "time_s", "temperature")
         column_box = self._window.combo_box_filter_column
         column_box.blockSignals(True)
         column_box.clear()

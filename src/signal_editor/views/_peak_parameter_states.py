@@ -4,11 +4,7 @@ type PeakParameterState = dict[
     str,
     dict[
         str,
-        str
-        | bool
-        | int
-        | float
-        | QAbstractSpinBox.CorrectionMode,
+        str | bool | int | float | QAbstractSpinBox.CorrectionMode,
     ],
 ]
 INITIAL_PEAK_STATES = {
@@ -99,13 +95,11 @@ INITIAL_PEAK_STATES = {
         "accelerated": True,
         "correctionMode": QAbstractSpinBox.CorrectionMode.CorrectToNearestValue,
         "maximum": 50_000_000,
-        "specialValueText": "First",
     },
     "peak_stop_index": {
         "accelerated": True,
         "correctionMode": QAbstractSpinBox.CorrectionMode.CorrectToNearestValue,
         "maximum": 50_000_000,
-        "specialValueText": "Last",
     },
     "peak_xqrs_search_radius": {
         "accelerated": True,
@@ -124,7 +118,7 @@ INITIAL_PEAK_STATES = {
     },
     "peak_neurokit2_algorithm_used": {
         "enabled": False,
-    }
+    },
 }
 
 

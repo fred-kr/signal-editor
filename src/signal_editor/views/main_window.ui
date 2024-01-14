@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>2404</width>
-    <height>1200</height>
+    <width>2621</width>
+    <height>1219</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -23,7 +23,7 @@
    <enum>Qt::ToolButtonFollowStyle</enum>
   </property>
   <property name="dockOptions">
-   <set>QMainWindow::AllowNestedDocks|QMainWindow::AllowTabbedDocks|QMainWindow::AnimatedDocks|QMainWindow::ForceTabbedDocks|QMainWindow::VerticalTabs</set>
+   <set>QMainWindow::AllowNestedDocks|QMainWindow::AllowTabbedDocks|QMainWindow::AnimatedDocks|QMainWindow::VerticalTabs</set>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="_2">
@@ -499,7 +499,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
               <item row="4" column="1">
                <widget class="QTextBrowser" name="textBrowser">
                 <property name="sizePolicy">
-                 <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+                 <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
                   <horstretch>0</horstretch>
                   <verstretch>0</verstretch>
                  </sizepolicy>
@@ -574,7 +574,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>2404</width>
+     <width>2621</width>
      <height>22</height>
     </rect>
    </property>
@@ -590,7 +590,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
     </property>
     <addaction name="action_remove_peak_rect"/>
     <addaction name="action_remove_selected_peaks"/>
+    <addaction name="action_reset_view"/>
     <addaction name="separator"/>
+    <addaction name="action_previous_section"/>
+    <addaction name="action_next_section"/>
+    <addaction name="separator"/>
+    <addaction name="action_reset_all"/>
    </widget>
    <widget class="QMenu" name="menu_file">
     <property name="title">
@@ -609,7 +614,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     </property>
     <addaction name="action_toggle_whats_this_mode"/>
    </widget>
-   <widget class="QMenu" name="menuDebug">
+   <widget class="QMenu" name="menu_debug">
     <property name="title">
      <string>Debug</string>
     </property>
@@ -618,7 +623,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <addaction name="menu_file"/>
    <addaction name="menu_info"/>
    <addaction name="menu_editing_tools"/>
-   <addaction name="menuDebug"/>
+   <addaction name="menu_debug"/>
   </widget>
   <widget class="QToolBar" name="toolbar">
    <property name="windowTitle">
@@ -663,6 +668,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
      <height>1130</height>
     </size>
    </property>
+   <property name="toolTip">
+    <string>Sidebars can be moved by dragging the title bar</string>
+   </property>
    <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
    </property>
@@ -670,7 +678,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <set>Qt::LeftDockWidgetArea|Qt::RightDockWidgetArea</set>
    </property>
    <property name="windowTitle">
-    <string>Sidebar (can be moved by dragging the title bar)</string>
+    <string>Main Sidebar</string>
    </property>
    <attribute name="dockWidgetArea">
     <number>1</number>
@@ -935,16 +943,10 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   <string/>
                  </property>
                  <property name="specialValueText">
-                  <string>not set</string>
-                 </property>
-                 <property name="minimum">
-                  <number>-1</number>
+                  <string>Try to infer</string>
                  </property>
                  <property name="maximum">
                   <number>2000</number>
-                 </property>
-                 <property name="value">
-                  <number>-1</number>
                  </property>
                 </widget>
                </item>
@@ -957,7 +959,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
          <item row="3" column="0">
           <widget class="QFrame" name="container_file_info">
            <property name="enabled">
-            <bool>false</bool>
+            <bool>true</bool>
            </property>
            <property name="sizePolicy">
             <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
@@ -2831,13 +2833,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
             <item row="1" column="0">
              <widget class="QWidget" name="widget" native="true">
               <property name="toolTip">
-               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Specify a section of the signal on which to run the selected peak detection.&lt;/p&gt;&lt;p&gt;Visual selection by holding 'Alt' + 'LeftClick' and dragging while cursor is inside the upper plot window.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Specify a section of the signal on which to run the selected peak detection.&lt;/p&gt;&lt;p&gt;If 'Stop Index' is 0, it will be interpreted as the last available index instead.&lt;/p&gt;&lt;p&gt;Can also be done visually via the region selector that can be toggled using 'Alt + F'.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
               </property>
               <property name="statusTip">
                <string/>
               </property>
               <property name="whatsThis">
-               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Specify a section of the signal on which to run the selected peak detection. Visual selection by holding 'Alt' + 'LeftClick' and dragging while cursor is inside the upper plot window.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Specify a section of the signal on which to run the selected peak detection.&lt;/p&gt;&lt;p&gt;If 'Stop Index' is 0, it will be interpreted as the last available index instead.&lt;/p&gt;&lt;p&gt;Can also be done visually via the region selector that can be toggled using 'Alt + F'.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
               </property>
               <layout class="QHBoxLayout" name="horizontalLayout">
                <item>
@@ -2863,9 +2865,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                </item>
                <item>
                 <widget class="QSpinBox" name="peak_start_index">
-                 <property name="specialValueText">
-                  <string>First</string>
-                 </property>
                  <property name="accelerated">
                   <bool>true</bool>
                  </property>
@@ -2916,9 +2915,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                </item>
                <item>
                 <widget class="QSpinBox" name="peak_stop_index">
-                 <property name="specialValueText">
-                  <string>Last</string>
-                 </property>
                  <property name="accelerated">
                   <bool>true</bool>
                  </property>
@@ -2951,7 +2947,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <bool>false</bool>
    </property>
    <property name="sizePolicy">
-    <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
      <horstretch>0</horstretch>
      <verstretch>0</verstretch>
     </sizepolicy>
@@ -2983,10 +2979,98 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="action_toggle_region_selector"/>
-   <addaction name="action_remove_marked_areas"/>
-   <addaction name="separator"/>
    <addaction name="action_reset_view"/>
+   <addaction name="separator"/>
+   <addaction name="action_next_section"/>
+   <addaction name="action_previous_section"/>
+  </widget>
+  <widget class="QDockWidget" name="dock_widget_sections">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="features">
+    <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
+   </property>
+   <property name="allowedAreas">
+    <set>Qt::LeftDockWidgetArea|Qt::RightDockWidgetArea</set>
+   </property>
+   <property name="windowTitle">
+    <string>Data Sections</string>
+   </property>
+   <attribute name="dockWidgetArea">
+    <number>2</number>
+   </attribute>
+   <widget class="QWidget" name="section_dock_contents">
+    <layout class="QGridLayout" name="gridLayout_7">
+     <item row="0" column="0">
+      <widget class="QWidget" name="section_widgets_container" native="true">
+       <layout class="QGridLayout" name="gridLayout_18">
+        <item row="2" column="0" colspan="2">
+         <widget class="QComboBox" name="combo_box_section_select">
+          <property name="inputMethodHints">
+           <set>Qt::ImhNone</set>
+          </property>
+          <property name="placeholderText">
+           <string>Default (Entire Signal Data)</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QPushButton" name="btn_section_exclude_new">
+          <property name="text">
+           <string>Exclude Section</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QPushButton" name="btn_section_mark_finished">
+          <property name="text">
+           <string>Mark Finished</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_6">
+          <property name="text">
+           <string>Currently showing:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="0" colspan="2">
+         <widget class="QTreeWidget" name="tree_widget_current_section_info">
+          <column>
+           <property name="text">
+            <string notr="true">1</string>
+           </property>
+          </column>
+         </widget>
+        </item>
+        <item row="0" column="0">
+         <widget class="QPushButton" name="btn_section_add_new">
+          <property name="text">
+           <string>Add Section</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QPushButton" name="btn_section_reset_current">
+          <property name="text">
+           <string>Reset Section</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0" colspan="2">
+         <widget class="QPushButton" name="btn_section_options">
+          <property name="text">
+           <string>Options</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </widget>
   </widget>
   <action name="action_open_console">
    <property name="checked">
@@ -3057,16 +3141,16 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Exit program</string>
    </property>
   </action>
-  <action name="action_update_result">
+  <action name="action_reset_all">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/refresh_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/refresh_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material-symbols/frame_reload_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/frame_reload_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Update result preview</string>
+    <string>Reset All</string>
    </property>
    <property name="toolTip">
-    <string>Updates the results from the current values, viewable in the &quot;Results&quot; tab</string>
+    <string>Resets state of data and app back to how it was just after being loaded. Only use in case of weird app behaviour or sth, as all unsaved progress will be lost.</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
@@ -3123,16 +3207,16 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_step_backward">
+  <action name="action_previous_section">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
      <normaloff>:/material-symbols/arrow_back_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/arrow_back_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Step Backward</string>
+    <string>Previous Section</string>
    </property>
    <property name="toolTip">
-    <string>Go to the previous state of the plot</string>
+    <string>Show the previous section</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Left</string>
@@ -3141,16 +3225,16 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_step_forward">
+  <action name="action_next_section">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
      <normaloff>:/material-symbols/arrow_forward_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/arrow_forward_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Step Forward</string>
+    <string>Next Section</string>
    </property>
    <property name="toolTip">
-    <string>Go to the next state of the plot</string>
+    <string>Show the next section</string>
    </property>
    <property name="shortcut">
     <string>Ctrl+Right</string>
