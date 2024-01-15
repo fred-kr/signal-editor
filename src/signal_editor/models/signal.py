@@ -31,6 +31,23 @@ def ensure_correct_order(start: int, stop: int) -> tuple[int, int]:
     return (stop, start) if start > stop else (start, stop)
 
 
+def _is_new_section_within_existing(new_limits: tuple[int, int], existing_limits: tuple[int, int]) -> bool:
+    return new_limits[0] > existing_limits[0] and new_limits[1] < existing_limits[1]
+
+
+def _is_new_section_overlapping_start(new_limits: tuple[int, int], existing_limits: tuple[int, int]) -> bool:
+    return new_limits[0] < existing_limits[0] and new_limits[1] < existing_limits[1]
+
+
+def _is_new_section_overlapping_stop(new_limits: tuple[int, int], existing_limits: tuple[int, int]) -> bool:
+    return new_limits[0] > existing_limits[0] and new_limits[1] > existing_limits[1]
+
+
+def _is_new_section_enclosing_existing(new_limits: tuple[int, int], existing_limits: tuple[int, int]) -> bool:
+    return new_limits[0] < existing_limits[0] and new_limits[1] > existing_limits[1]
+
+
+
 class SectionIndices(NamedTuple):
     start: int
     stop: int
@@ -259,6 +276,14 @@ class SectionContainer:
             else self._excluded[next_id]
         )
 
+    def get_section_by_id(self, section_id: SectionID) -> Section:
+        if section_id in self._included:
+            return self._included[section_id]
+        elif section_id in self._excluded:
+            return self._excluded[section_id]
+        else:
+            raise ValueError("Section not found")
+
     def get_included(self) -> dict[SectionID, Section]:
         return self._included
 
@@ -279,13 +304,41 @@ class SectionContainer:
         self._included[section_id].is_active = True
 
     def add_section(self, section: Section) -> None:
-        if section.is_included:
-            self._included[section.section_id] = section
-        else:
+        if not section.is_included:
             self._excluded[section.section_id] = section
+            return
+
+        new_limits = section.start_index, section.stop_index
+        for existing_section in self._included.values():
+            existing_limits = existing_section.start_index, existing_section.stop_index
+
+            if _is_new_section_within_existing(new_limits, existing_limits):
+                self._handle_new_within_existing(existing_section, section)
+            elif _is_new_section_enclosing_existing(new_limits, existing_limits):
+                self.remove_section(existing_section.section_id)
+            elif _is_new_section_overlapping_start(new_limits, existing_limits):
+                self._handle_new_overlapping_start(existing_section, section)
+            elif _is_new_section_overlapping_stop(new_limits, existing_limits):
+                self._handle_new_overlapping_stop(existing_section, section)
+
+        self._included[section.section_id] = section
 
         if section.is_active:
             self.set_active_section(section.section_id)
+
+    def _handle_new_within_existing(self, existing_section: Section, new_section: Section) -> None:
+        right_data = existing_section.data.filter(pl.col("index").is_between(new_section.stop_index + 1, existing_section.stop_index))
+        right_section = Section(right_data, name=self._name)
+        existing_section.resize(existing_section.start_index, new_section.start_index - 1)
+        self._included[right_section.section_id] = right_section
+
+    def _handle_new_overlapping_start(self, existing_section: Section, new_section: Section) -> None:
+        adjusted_start = new_section.stop_index + 1
+        existing_section.resize(adjusted_start, existing_section.stop_index)
+
+    def _handle_new_overlapping_stop(self, existing_section: Section, new_section: Section) -> None:
+        adjusted_stop = new_section.start_index - 1
+        existing_section.resize(existing_section.start_index, adjusted_stop)
 
     def remove_section(self, section_id: SectionID) -> None:
         if section_id in self._included and self._included[section_id].is_active:
@@ -357,37 +410,25 @@ class SignalData(QObject):
     def active_section(self) -> Section:
         return self.sections.get_active_section()
 
-    def add_section(self, lower: int, upper: int, set_active: bool = False,include: bool = True) -> None:
-        data = self.data.filter(pl.col("index").is_between(lower, upper))
-        self.sections.add_section(
-            Section(data, name=self.name, set_active=set_active, include=include)
-        )
-
-    # def set_active_by_start_stop(self, start: int, stop: int) -> None:
-    #     index = next(
-    #         (
-    #             index
-    #             for index, section in self.sections.items()
-    #             if section.start_index == start and section.stop_index == stop
-    #         ),
-    #         None,
-    #     )
-    #     if index is not None:
-    #         self.sections.set_active_section(index)
-    #         return
-    #     else:
-    #         new_section = Section(
-    #             self.active_section.data.filter(
-    #                 pl.col("index").is_between(start, stop)
-    #             ),
-    #             name=self.name,
-    #         )
-    #         new_section.is_active = True
-    #         self.sections.add_section(new_section)
-
     @property
     def active_peaks(self) -> NDArray[np.int32]:
         return self.active_section.get_peaks()
+
+    def get_section_by_id(self, section_id: SectionID) -> Section:
+        return self.sections.get_section_by_id(section_id)
+
+    def save_section_changes(self) -> None:
+        for excluded_section in self.sections.get_excluded().values():
+            self.data = self.data.filter(pl.col("index").is_between(excluded_section.start_index, excluded_section.stop_index).is_not())
+        for section in self.sections.get_included().values():
+            section_data = section.data.select(pl.col("index", "is_peak"))
+            self.data.update(section_data, on="index")
+    
+    def add_section(self, lower: int, upper: int, set_active: bool = False, include: bool = True) -> None:
+        data = self.data.filter(pl.col("index").is_between(lower, upper))
+        new_section = Section(data, name=self.name, set_active=set_active, include=include)
+        self.sections.add_section(new_section)
+
 
     @property
     def total_peaks(self) -> pl.Series:
@@ -515,82 +556,7 @@ class SignalData(QObject):
         if self.data["is_processed"].all():
             self.is_finished = True
 
-    def filter_values(
-        self,
-        pipeline: Pipeline | None = None,
-        col_name: SignalName | str | None = None,
-        **kwargs: Unpack[SignalFilterParameters],
-    ) -> None:
-        """
-        Filters the signal values of a specified column using a given pipeline
-        or custom method with additional parameters.
 
-        Parameters
-        ----------
-        pipeline : Pipeline | None, optional
-            The pipeline or method to use for filtering. If set to 'custom',
-            the method specified in kwargs is used. If set to 'ppg_elgendi',
-            the Elgendi method is used. If None, no filtering is applied.
-        col_name : SignalName | str | None, optional
-            The name of the column to filter. If None, the name of the signal
-            itself is used.
-        kwargs : Unpack[SignalFilterParameters]
-            Additional keyword arguments specifying filter parameters. The
-            expected parameters depend on the selected pipeline or custom
-            method.
-
-        """
-        method = kwargs.get("method", "None")
-        fs = self.sampling_rate
-        if col_name is None or col_name not in self.active_section.data.columns:
-            col_name = self.processed_name
-        sig = self.active_section.processed_signal()
-        if pipeline == "custom":
-            if method == "None":
-                filtered = sig
-            elif method == "fir":
-                filtered = auto_correct_fir_length(sig, fs, **kwargs)
-            else:
-                filtered = filter_custom(sig, fs, **kwargs)
-        elif pipeline == "ppg_elgendi":
-            filtered = filter_elgendi(sig, fs)
-        else:
-            raise NotImplementedError(f"Pipeline `{pipeline}` not implemented.")
-
-        self.active_section.data = self.active_section.data.with_columns(
-            pl.Series(self.processed_name, filtered, pl.Float64).alias(
-                self.processed_name
-            )
-        )
-
-    def scale_values(
-        self, robust: bool = False, window_size: int | None = None
-    ) -> None:
-        """
-        Standardize a signal using either Z-score or median absolute deviation
-        (MAD). Can be applied using a rolling window if a window size is provided.
-
-        Parameters
-        ----------
-        robust : bool, optional
-            If True, use MAD for scaling, otherwise use Z-score. Defaults to False.
-        window_size : int | None, optional
-            The size of the rolling window over which to compute the standardization.
-            If None, standardize the entire signal. Defaults to None.
-        """
-        # if self.data.get_column(self.processed_name).is_null().all():
-        #     use_col = self.name
-        # else:
-        #     use_col = self.processed_name
-        scaled = scale_signal(
-            self.active_section.processed_signal(), robust, window_size
-        )
-
-        self.active_section.data = self.active_section.data.with_columns(
-            pl.Series(self.processed_name, scaled, pl.Float64).alias(
-                self.processed_name
-            )
-        )
 
     def save_active(self) -> None:
         """
@@ -625,55 +591,6 @@ class SignalData(QObject):
         # )
         self.mark_processed()
 
-    def get_remaining(self) -> pl.DataFrame:
-        """
-        Returns the data where `is_processed` is False.
-        """
-        return self.data.filter(pl.col("is_processed").not_())
-
-    def detect_peaks(
-        self,
-        method: PeakDetectionMethod,
-        input_values: PeakDetectionInputValues,
-        start_index: int | None = None,
-        stop_index: int | None = None,
-    ) -> None:
-        if start_index is None or stop_index is None:
-            start_index, stop_index = self.active_region_limits
-        # if stop_index == 0:
-        #     stop_index = len(self.processed_data)
-
-        self._peak_index_offset = start_index
-        # sig = (
-        #     self.active_section.data.filter(
-        #         pl.col("index").is_between(start_index, stop_index)
-        #     )
-        #     .get_column(self.processed_name)
-        #     .to_numpy()
-        # )
-        sig = (
-            self.active_section.data.get_column(self.processed_name)
-            .is_between(start_index, stop_index)
-            .to_numpy()
-        )
-
-        peaks = find_peaks(
-            sig=sig,
-            sampling_rate=self.sampling_rate,
-            method=method,
-            input_values=input_values,
-        )
-
-        pl_peaks = pl.Series("peaks", peaks, pl.Int32)
-        self.active_section.data = self.active_section.data.with_columns(
-            (
-                pl.when(pl.col("index").is_in(pl_peaks))
-                .then(pl.lit(True))
-                .otherwise(pl.col("is_peak"))
-            ).alias("is_peak")
-        )
-
-        self.calculate_rate()
 
     def set_total_peak_indices(self, indices: Iterable[int]) -> None:
         indices = pl.Series("peaks", indices, pl.Int32)
@@ -699,42 +616,6 @@ class SignalData(QObject):
             return np.empty(0, dtype=np.int32)
         return np.diff(peaks, prepend=0)
 
-    def calculate_rate(self) -> None:
-        """
-        Calculates the rate of the signal using the detected peaks.
-
-        Raises
-        ------
-        ValueError
-            If there are less than 3 peaks.
-        """
-        peaks = self.active_peaks
-        # if len(peaks) < 3:
-        # raise ValueError("Too few peaks to calculate rate.")
-        fs = self.sampling_rate
-
-        rate = np.asarray(
-            nk.signal_rate(
-                peaks,
-                fs,
-                desired_length=None,
-                interpolation_method="monotone_cubic",
-                show=False,
-            ),
-            dtype=np.float64,
-        )
-        rate_interp = np.asarray(
-            nk.signal_rate(
-                peaks,
-                fs,
-                desired_length=len(self.active_section.processed_signal()),
-                interpolation_method="monotone_cubic",
-                show=False,
-            ),
-            dtype=np.float64,
-        )
-        sig_rate = RateData(rate=rate, rate_interpolated=rate_interp)
-        self.signal_rate = sig_rate
 
     @property
     def data_bounds(self) -> tuple[int, int]:
