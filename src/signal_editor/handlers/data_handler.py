@@ -84,6 +84,7 @@ class DataHandler(QObject):
         self.sigs: SignalStorage = SignalStorage()
         self.focused_results: dict[SignalName | str, FocusedResult] = {}
         self._sampling_rate: int = -1
+        self.minmax_map = {}
 
     @property
     def fs(self) -> int:
@@ -188,21 +189,25 @@ class DataHandler(QObject):
 
     def _get_slice_indices(self, filter_col: str, lower: float, upper: float) -> tuple[int, int]:
         lf = self.df.lazy().with_columns(pl.col("temperature").round(1))
-        b1: int = (
-            lf.sort(pl.col(filter_col), maintain_order=True)
-            .filter(pl.col(filter_col) >= pl.lit(lower))
-            .collect()
-            .get_column("index")[0]
-        )
-        b2: int = (
-            lf.sort(pl.col(filter_col), maintain_order=True)
-            .filter(pl.col(filter_col) >= pl.lit(upper))
-            .collect()
-            .get_column("index")[0]
-        )
-        out = [b1, b2]
-        out.sort()
-        return out[0], out[1]
+        sorted_lf = lf.sort(pl.col(filter_col), maintain_order=True)
+        b1: int = sorted_lf.filter(pl.col(filter_col) >= pl.lit(lower)).collect().get_column("index")[0]
+        b2: int = sorted_lf.filter(pl.col(filter_col) >= pl.lit(upper)).collect().get_column("index")[0]
+        return b1, b2
+        # b1: int = (
+            # lf.sort(pl.col(filter_col), maintain_order=True)
+            # .filter(pl.col(filter_col) >= pl.lit(lower))
+            # .collect()
+            # .get_column("index")[0]
+        # )
+        # b2: int = (
+            # lf.sort(pl.col(filter_col), maintain_order=True)
+            # .filter(pl.col(filter_col) >= pl.lit(upper))
+            # .collect()
+            # .get_column("index")[0]
+        # )
+        # out = [b1, b2]
+        # out.sort()
+        # return out[0], out[1]
 
     def get_subset(self, subset_col: str, lower: float, upper: float) -> None:
         lf = self.df.lazy()

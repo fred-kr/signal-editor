@@ -12,7 +12,6 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
     QDockWidget,
     QVBoxLayout,
@@ -20,221 +19,17 @@ from PySide6.QtWidgets import (
 
 from ..handlers.plot_handler import PlotHandler
 from ..models.io import parse_file_name
-from ..views._peak_parameter_states import INITIAL_PEAK_STATES
+from ..views._ui_state_maps import (
+    COMBO_BOX_ITEMS,
+    FILTER_INPUT_STATES,
+    INITIAL_PEAK_STATES,
+    INITIAL_STATE_MAP,
+    INITIAL_STATE_METHODS_MAP,
+)
 from ..views.custom_widgets import ConfirmCancelButtons, JupyterConsoleWidget
 
 if TYPE_CHECKING:
     from ..app import MainWindow
-
-
-COMBO_BOX_ITEMS = {
-    "combo_box_peak_detection_method": {
-        "Elgendi (PPG, fast)": "elgendi_ppg",
-        "Local Maxima (Any, fast)": "local",
-        "Neurokit (ECG, fast)": "neurokit2",
-        "ProMAC (ECG, slow)": "promac",
-        "Pan and Tompkins (ECG, medium)": "pantompkins",
-        "XQRS (ECG, medium)": "wfdb_xqrs",
-    },
-    # "peak_neurokit2_algorithm_used": {
-    #     "Neurokit2 (Default)": "neurokit",
-    #     "Nabian (ECG)": "nabian",
-    #     "Gamboa (ECG)": "gamboa",
-    #     "Slope Sum Function (ECG)": "slopesumfunction",
-    #     "Zong (ECG)": "zong",
-    #     "Hamilton (ECG)": "hamilton",
-    #     "Christov (ECG)": "christov",
-    #     "Engzeemod (ECG)": "engzeemod",
-    #     "Elgendi (ECG)": "elgendi",
-    #     "Kalidas (ECG)": "kalidas",
-    #     "Martinez (ECG)": "martinez",
-    #     "Rodrigues (ECG)": "rodrigues",
-    #     "VGraph (ECG)": "vgraph",
-    # },
-    "combo_box_filter_method": {
-        "Butterworth (SOS)": "butterworth",
-        "Butterworth (BA)": "butterworth_ba",
-        "Savitzky-Golay": "savgol",
-        "FIR": "fir",
-        "Bessel": "bessel",
-        "No Filter": "None",
-    },
-    "combo_box_oxygen_condition": {
-        "Normoxic": "normoxic",
-        "Hypoxic": "hypoxic",
-        "Unknown": "unknown",
-    },
-    "combo_box_scale_method": {
-        "No Standardization": "None",
-        "Z-Score": "zscore",
-        "Median Absolute Deviation": "mad",
-    },
-    "combo_box_preprocess_pipeline": {
-        "Custom": "custom",
-        "Elgendi (PPG)": "ppg_elgendi",
-        "Neurokit (ECG)": "ecg_neurokit2",
-    },
-}
-
-
-INITIAL_STATE_MAP = {
-    "table_data_preview": {
-        "model": QStandardItemModel(),
-    },
-    "table_data_info": {
-        "model": QStandardItemModel(),
-    },
-    "line_edit_active_file": {"text": ""},
-    "group_box_subset_params": {
-        "enabled": False,
-        "checked": False,
-    },
-    "container_file_info": {
-        "enabled": True,
-    },
-    "date_edit_file_info": {
-        "date": QDate.currentDate(),
-    },
-    "line_edit_subject_id": {
-        "text": "",
-    },
-    "combo_box_oxygen_condition": {
-        "value": "normoxic",
-    },
-    "btn_load_selection": {
-        "enabled": False,
-    },
-    "stacked_hbr_vent": {
-        "currentIndex": 0,
-    },
-    "btn_view_hbr": {
-        "checked": True,
-    },
-    "btn_view_vent": {
-        "checked": False,
-    },
-    "combo_box_preprocess_pipeline": {
-        "value": "custom",
-    },
-    "combo_box_filter_method": {
-        "enabled": True,
-        "value": "None",
-    },
-    "combo_box_scale_method": {
-        "value": "None",
-    },
-    "container_standardize": {
-        "enabled": True,
-    },
-    "container_scale_window_inputs": {
-        "enabled": True,
-        "checked": True,
-    },
-    "dbl_spin_box_lowcut": {
-        "value": 0.5,
-    },
-    "dbl_spin_box_highcut": {
-        "value": 8.0,
-    },
-    "spin_box_order": {
-        "value": 3,
-    },
-    "slider_order": {
-        "value": 3,
-    },
-    "spin_box_window_size": {
-        "value": 250,
-    },
-    "slider_window_size": {
-        "value": 250,
-    },
-    "combo_box_peak_detection_method": {
-        "value": "elgendi_ppg",
-    },
-    "btn_detect_peaks": {
-        "enabled": True,
-    },
-    "btn_compute_results": {"enabled": True},
-    "table_view_results_hbr": {
-        "model": QStandardItemModel(),
-    },
-    "table_view_results_ventilation": {
-        "model": QStandardItemModel(),
-    },
-    "tabs_result": {
-        "currentIndex": 0,
-    },
-    "dock_widget_sections": {
-        "visible": False,
-    },
-} | INITIAL_PEAK_STATES
-
-INITIAL_STATE_METHODS_MAP = {
-    "enabled": "setEnabled",
-    "visible": "setVisible",
-    "checked": "setChecked",
-    "text": "setText",
-    "model": "setModel",
-    "value": "setValue",
-    "currentText": "setCurrentText",
-    "currentIndex": "setCurrentIndex",
-    "date": "setDate",
-    "decimals": "setDecimals",
-    "minimum": "setMinimum",
-    "maximum": "setMaximum",
-    "singleStep": "setSingleStep",
-    "stepType": "setStepType",
-    "accelerated": "setAccelerated",
-    "correctionMode": "setCorrectionMode",
-    "isChecked": "setChecked",
-    "items": "setItems",
-    "specialValueText": "setSpecialValueText",
-}
-
-FILTER_INPUT_STATES = {
-    "butterworth": {
-        "container_lowcut": True,
-        "container_highcut": True,
-        "container_order_inputs": True,
-        "container_window_size": False,
-        "container_powerline": False,
-    },
-    "butterworth_ba": {
-        "container_lowcut": True,
-        "container_highcut": True,
-        "container_order_inputs": True,
-        "container_window_size": False,
-        "container_powerline": False,
-    },
-    "bessel": {
-        "container_lowcut": True,
-        "container_highcut": True,
-        "container_order_inputs": True,
-        "container_window_size": False,
-        "container_powerline": False,
-    },
-    "fir": {
-        "container_lowcut": True,
-        "container_highcut": True,
-        "container_order_inputs": False,
-        "container_window_size": True,
-        "container_powerline": False,
-    },
-    "savgol": {
-        "container_lowcut": False,
-        "container_highcut": False,
-        "container_order_inputs": True,
-        "container_window_size": True,
-        "container_powerline": False,
-    },
-    "None": {
-        "container_lowcut": False,
-        "container_highcut": False,
-        "container_order_inputs": False,
-        "container_window_size": False,
-        "container_powerline": False,
-    },
-}
 
 
 class UIHandler(QObject):
@@ -390,7 +185,8 @@ class UIHandler(QObject):
         mw = self._window
         mw.tabs_main.setCurrentIndex(0)
         mapping = INITIAL_STATE_METHODS_MAP
-        for widget_name, state in INITIAL_STATE_MAP.items():
+        combined_map = INITIAL_STATE_MAP | INITIAL_PEAK_STATES
+        for widget_name, state in combined_map.items():
             for attribute, value in state.items():
                 getattr(mw, widget_name).__getattribute__(mapping[attribute])(value)
 

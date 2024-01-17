@@ -2241,7 +2241,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  </widget>
                 </item>
                 <item row="0" column="0" colspan="2">
-                 <widget class="QTextBrowser" name="textBrowser_2">
+                 <widget class="QTextBrowser" name="peak_elgendi_ppg_info">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
                     <horstretch>0</horstretch>
@@ -2309,7 +2309,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  </widget>
                 </item>
                 <item row="0" column="0" colspan="2">
-                 <widget class="QTextBrowser" name="textBrowser_3">
+                 <widget class="QTextBrowser" name="peak_local_max_info">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
                     <horstretch>0</horstretch>
@@ -2545,7 +2545,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  <widget class="QCheckBox" name="peak_neurokit2_correct_artifacts"/>
                 </item>
                 <item row="0" column="0" colspan="2">
-                 <widget class="QTextBrowser" name="textBrowser_4">
+                 <widget class="QTextBrowser" name="peak_neurokit2_info">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
                     <horstretch>0</horstretch>
@@ -2648,7 +2648,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  </widget>
                 </item>
                 <item row="0" column="0" colspan="2">
-                 <widget class="QTextBrowser" name="textBrowser_5">
+                 <widget class="QTextBrowser" name="peak_promac_info">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
                     <horstretch>0</horstretch>
@@ -2694,7 +2694,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  <widget class="QCheckBox" name="peak_pantompkins_correct_artifacts"/>
                 </item>
                 <item row="0" column="0" colspan="2">
-                 <widget class="QTextBrowser" name="textBrowser_6">
+                 <widget class="QTextBrowser" name="peak_pantompkins_info">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
                     <horstretch>0</horstretch>
@@ -2722,7 +2722,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
               <widget class="QWidget" name="page_peak_xqrs">
                <layout class="QFormLayout" name="formLayout_9">
                 <item row="0" column="0" colspan="2">
-                 <widget class="QTextBrowser" name="textBrowser_7">
+                 <widget class="QTextBrowser" name="peak_xqrs_info">
                   <property name="sizePolicy">
                    <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
                     <horstretch>0</horstretch>

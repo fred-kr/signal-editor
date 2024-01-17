@@ -77,15 +77,11 @@ from .views.main_window import Ui_MainWindow
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
-    sig_data_filtered = Signal(str)  # Emitted after signal has been filtered & scaled
-    sig_data_loaded = Signal()  # Emitted after loading the (optionally subsetted) data by clicking the `Load Selection` button
-    sig_draw_signal_rate = Signal(
-        str
-    )  # Emitted after peaks were detected & drawn, and after a peak was added/removed by clicking on the plot
-    sig_plot_data_changed = Signal(
-        str
-    )  # Emitted after data has changed (filtered/newly loaded/etc)
-    sig_show_message = Signal(str, str)  # Emitted to show a message in an info box
+    sig_data_filtered = Signal(str)
+    sig_data_loaded = Signal()
+    sig_draw_signal_rate = Signal(str)
+    sig_plot_data_changed = Signal(str)
+    sig_show_message = Signal(str, str)
     sig_data_restored = Signal()
     sig_init_finished = Signal()
     sig_active_section_changed = Signal(str)

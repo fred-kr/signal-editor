@@ -13,9 +13,6 @@ if TYPE_CHECKING:
         SelectionParameters,
     )
 
-# ==================================================================================== #
-#                                     TYPE ALIASES                                     #
-# ==================================================================================== #
 type SignalName = Literal["hbr", "ventilation"]
 type ScaleMethod = Literal["mad", "zscore", "None"]
 type Pipeline = Literal[

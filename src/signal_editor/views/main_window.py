@@ -1296,17 +1296,17 @@ class Ui_MainWindow(object):
 
         self.formLayout_3.setWidget(4, QFormLayout.FieldRole, self.peak_elgendi_ppg_min_delay)
 
-        self.textBrowser_2 = QTextBrowser(self.page_peak_elgendi_ppg)
-        self.textBrowser_2.setObjectName(u"textBrowser_2")
+        self.peak_elgendi_ppg_info = QTextBrowser(self.page_peak_elgendi_ppg)
+        self.peak_elgendi_ppg_info.setObjectName(u"peak_elgendi_ppg_info")
         sizePolicy10 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
         sizePolicy10.setHorizontalStretch(0)
         sizePolicy10.setVerticalStretch(0)
-        sizePolicy10.setHeightForWidth(self.textBrowser_2.sizePolicy().hasHeightForWidth())
-        self.textBrowser_2.setSizePolicy(sizePolicy10)
-        self.textBrowser_2.setMaximumSize(QSize(16777215, 100))
-        self.textBrowser_2.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        sizePolicy10.setHeightForWidth(self.peak_elgendi_ppg_info.sizePolicy().hasHeightForWidth())
+        self.peak_elgendi_ppg_info.setSizePolicy(sizePolicy10)
+        self.peak_elgendi_ppg_info.setMaximumSize(QSize(16777215, 100))
+        self.peak_elgendi_ppg_info.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
 
-        self.formLayout_3.setWidget(0, QFormLayout.SpanningRole, self.textBrowser_2)
+        self.formLayout_3.setWidget(0, QFormLayout.SpanningRole, self.peak_elgendi_ppg_info)
 
         self.stacked_peak_parameters.addWidget(self.page_peak_elgendi_ppg)
         self.page_peak_local_max = QWidget()
@@ -1333,14 +1333,14 @@ class Ui_MainWindow(object):
 
         self.formLayout_5.setWidget(1, QFormLayout.FieldRole, self.peak_local_max_radius)
 
-        self.textBrowser_3 = QTextBrowser(self.page_peak_local_max)
-        self.textBrowser_3.setObjectName(u"textBrowser_3")
-        sizePolicy2.setHeightForWidth(self.textBrowser_3.sizePolicy().hasHeightForWidth())
-        self.textBrowser_3.setSizePolicy(sizePolicy2)
-        self.textBrowser_3.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.textBrowser_3.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        self.peak_local_max_info = QTextBrowser(self.page_peak_local_max)
+        self.peak_local_max_info.setObjectName(u"peak_local_max_info")
+        sizePolicy2.setHeightForWidth(self.peak_local_max_info.sizePolicy().hasHeightForWidth())
+        self.peak_local_max_info.setSizePolicy(sizePolicy2)
+        self.peak_local_max_info.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.peak_local_max_info.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
 
-        self.formLayout_5.setWidget(0, QFormLayout.SpanningRole, self.textBrowser_3)
+        self.formLayout_5.setWidget(0, QFormLayout.SpanningRole, self.peak_local_max_info)
 
         self.stacked_peak_parameters.addWidget(self.page_peak_local_max)
         self.page_peak_neurokit2 = QWidget()
@@ -1449,13 +1449,13 @@ class Ui_MainWindow(object):
 
         self.formLayout_6.setWidget(7, QFormLayout.FieldRole, self.peak_neurokit2_correct_artifacts)
 
-        self.textBrowser_4 = QTextBrowser(self.page_peak_neurokit2)
-        self.textBrowser_4.setObjectName(u"textBrowser_4")
-        sizePolicy2.setHeightForWidth(self.textBrowser_4.sizePolicy().hasHeightForWidth())
-        self.textBrowser_4.setSizePolicy(sizePolicy2)
-        self.textBrowser_4.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        self.peak_neurokit2_info = QTextBrowser(self.page_peak_neurokit2)
+        self.peak_neurokit2_info.setObjectName(u"peak_neurokit2_info")
+        sizePolicy2.setHeightForWidth(self.peak_neurokit2_info.sizePolicy().hasHeightForWidth())
+        self.peak_neurokit2_info.setSizePolicy(sizePolicy2)
+        self.peak_neurokit2_info.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
 
-        self.formLayout_6.setWidget(0, QFormLayout.SpanningRole, self.textBrowser_4)
+        self.formLayout_6.setWidget(0, QFormLayout.SpanningRole, self.peak_neurokit2_info)
 
         self.stacked_peak_parameters.addWidget(self.page_peak_neurokit2)
         self.page_peak_promac = QWidget()
@@ -1502,13 +1502,13 @@ class Ui_MainWindow(object):
 
         self.formLayout_7.setWidget(2, QFormLayout.FieldRole, self.peak_promac_gaussian_sd)
 
-        self.textBrowser_5 = QTextBrowser(self.page_peak_promac)
-        self.textBrowser_5.setObjectName(u"textBrowser_5")
-        sizePolicy2.setHeightForWidth(self.textBrowser_5.sizePolicy().hasHeightForWidth())
-        self.textBrowser_5.setSizePolicy(sizePolicy2)
-        self.textBrowser_5.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        self.peak_promac_info = QTextBrowser(self.page_peak_promac)
+        self.peak_promac_info.setObjectName(u"peak_promac_info")
+        sizePolicy2.setHeightForWidth(self.peak_promac_info.sizePolicy().hasHeightForWidth())
+        self.peak_promac_info.setSizePolicy(sizePolicy2)
+        self.peak_promac_info.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
 
-        self.formLayout_7.setWidget(0, QFormLayout.SpanningRole, self.textBrowser_5)
+        self.formLayout_7.setWidget(0, QFormLayout.SpanningRole, self.peak_promac_info)
 
         self.stacked_peak_parameters.addWidget(self.page_peak_promac)
         self.page_peak_pantompkins = QWidget()
@@ -1528,13 +1528,13 @@ class Ui_MainWindow(object):
 
         self.formLayout_8.setWidget(1, QFormLayout.FieldRole, self.peak_pantompkins_correct_artifacts)
 
-        self.textBrowser_6 = QTextBrowser(self.page_peak_pantompkins)
-        self.textBrowser_6.setObjectName(u"textBrowser_6")
-        sizePolicy2.setHeightForWidth(self.textBrowser_6.sizePolicy().hasHeightForWidth())
-        self.textBrowser_6.setSizePolicy(sizePolicy2)
-        self.textBrowser_6.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        self.peak_pantompkins_info = QTextBrowser(self.page_peak_pantompkins)
+        self.peak_pantompkins_info.setObjectName(u"peak_pantompkins_info")
+        sizePolicy2.setHeightForWidth(self.peak_pantompkins_info.sizePolicy().hasHeightForWidth())
+        self.peak_pantompkins_info.setSizePolicy(sizePolicy2)
+        self.peak_pantompkins_info.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
 
-        self.formLayout_8.setWidget(0, QFormLayout.SpanningRole, self.textBrowser_6)
+        self.formLayout_8.setWidget(0, QFormLayout.SpanningRole, self.peak_pantompkins_info)
 
         self.stacked_peak_parameters.addWidget(self.page_peak_pantompkins)
         self.page_peak_xqrs = QWidget()
@@ -1543,13 +1543,13 @@ class Ui_MainWindow(object):
         self.formLayout_9.setSpacing(4)
         self.formLayout_9.setContentsMargins(7, 7, 7, 7)
         self.formLayout_9.setObjectName(u"formLayout_9")
-        self.textBrowser_7 = QTextBrowser(self.page_peak_xqrs)
-        self.textBrowser_7.setObjectName(u"textBrowser_7")
-        sizePolicy2.setHeightForWidth(self.textBrowser_7.sizePolicy().hasHeightForWidth())
-        self.textBrowser_7.setSizePolicy(sizePolicy2)
-        self.textBrowser_7.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        self.peak_xqrs_info = QTextBrowser(self.page_peak_xqrs)
+        self.peak_xqrs_info.setObjectName(u"peak_xqrs_info")
+        sizePolicy2.setHeightForWidth(self.peak_xqrs_info.sizePolicy().hasHeightForWidth())
+        self.peak_xqrs_info.setSizePolicy(sizePolicy2)
+        self.peak_xqrs_info.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
 
-        self.formLayout_9.setWidget(0, QFormLayout.SpanningRole, self.textBrowser_7)
+        self.formLayout_9.setWidget(0, QFormLayout.SpanningRole, self.peak_xqrs_info)
 
         self.searchRadiusLabel = QLabel(self.page_peak_xqrs)
         self.searchRadiusLabel.setObjectName(u"searchRadiusLabel")
@@ -1988,7 +1988,7 @@ class Ui_MainWindow(object):
         self.peak_elgendi_ppg_beatoffset.setSuffix("")
         self.minimumDelayLabel.setText(QCoreApplication.translate("MainWindow", u"Minimum Delay", None))
         self.peak_elgendi_ppg_min_delay.setSuffix(QCoreApplication.translate("MainWindow", u" s", None))
-        self.textBrowser_2.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        self.peak_elgendi_ppg_info.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "hr { height: 1px; border-width: 0; }\n"
@@ -1999,7 +1999,7 @@ class Ui_MainWindow(object):
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Implementation based on `<span style=\" font-style:italic;\">neurokit2._ppg_fi"
                         "ndpeaks_elgendi`</span> function</p></body></html>", None))
         self.label_22.setText(QCoreApplication.translate("MainWindow", u"Search Radius", None))
-        self.textBrowser_3.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        self.peak_local_max_info.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "hr { height: 1px; border-width: 0; }\n"
@@ -2017,7 +2017,7 @@ class Ui_MainWindow(object):
         self.label_30.setText(QCoreApplication.translate("MainWindow", u"Minimum Delay", None))
         self.peak_neurokit2_mindelay.setSuffix(QCoreApplication.translate("MainWindow", u" s", None))
         self.label_31.setText(QCoreApplication.translate("MainWindow", u"Correct Artifacts", None))
-        self.textBrowser_4.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        self.peak_neurokit2_info.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "hr { height: 1px; border-width: 0; }\n"
@@ -2032,7 +2032,7 @@ class Ui_MainWindow(object):
         self.qRSComplexSizeLabel.setText(QCoreApplication.translate("MainWindow", u"QRS Complex Size", None))
         self.correctArtifactsLabel_2.setText(QCoreApplication.translate("MainWindow", u"Correct Artifacts", None))
         self.peak_promac_gaussian_sd.setSuffix(QCoreApplication.translate("MainWindow", u" ms", None))
-        self.textBrowser_5.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        self.peak_promac_info.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "hr { height: 1px; border-width: 0; }\n"
@@ -2043,7 +2043,7 @@ class Ui_MainWindow(object):
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Source: <a href=\"https://github.com/neuropsychology/NeuroKit/issues/222\"><span style=\" text-decoration: underline; color:#038387;\">https://github.com/neuropsycholo"
                         "gy/NeuroKit/issues/222</span></a></p></body></html>", None))
         self.correctArtifactsLabel.setText(QCoreApplication.translate("MainWindow", u"Correct Artifacts", None))
-        self.textBrowser_6.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        self.peak_pantompkins_info.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "hr { height: 1px; border-width: 0; }\n"
@@ -2052,7 +2052,7 @@ class Ui_MainWindow(object):
 "</style></head><body style=\" font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Uses the algorithm for ECG R-Peak detection by Pan &amp; Tompkins (1985).</p>\n"
 "<p style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\">Uses implementation from 'neurokit2'.</p></body></html>", None))
-        self.textBrowser_7.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
+        self.peak_xqrs_info.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
 "hr { height: 1px; border-width: 0; }\n"
