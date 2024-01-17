@@ -91,22 +91,12 @@ INITIAL_PEAK_STATES = {
     "peak_pantompkins_correct_artifacts": {
         "isChecked": False,
     },
-    "peak_start_index": {
-        "accelerated": True,
-        "correctionMode": QAbstractSpinBox.CorrectionMode.CorrectToNearestValue,
-        "maximum": 50_000_000,
-    },
-    "peak_stop_index": {
-        "accelerated": True,
-        "correctionMode": QAbstractSpinBox.CorrectionMode.CorrectToNearestValue,
-        "maximum": 50_000_000,
-    },
     "peak_xqrs_search_radius": {
         "accelerated": True,
         "correctionMode": QAbstractSpinBox.CorrectionMode.CorrectToNearestValue,
         "minimum": 5,
         "maximum": 99_999,
-        "value": 90,
+        "value": 110,
     },
     "peak_xqrs_peak_dir": {
         "items": {

@@ -1,4 +1,4 @@
-import types
+import pprint
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -6,21 +6,14 @@ import numpy as np
 import polars as pl
 import polars.selectors as ps
 import pyqtgraph as pg
-import rich as r
-from pyqtgraph.console import ConsoleWidget
 from PySide6.QtCore import (
     QDate,
     QObject,
-    QPointF,
-    Qt,
     Signal,
     Slot,
-    
 )
-from PySide6.QtGui import QCursor, QStandardItemModel
+from PySide6.QtGui import QStandardItemModel
 from PySide6.QtWidgets import (
-    QApplication,
-    QComboBox,
     QDockWidget,
     QVBoxLayout,
 )
@@ -28,7 +21,7 @@ from PySide6.QtWidgets import (
 from ..handlers.plot_handler import PlotHandler
 from ..models.io import parse_file_name
 from ..views._peak_parameter_states import INITIAL_PEAK_STATES
-from ..views.custom_widgets import ConfirmCancelButtons
+from ..views.custom_widgets import ConfirmCancelButtons, JupyterConsoleWidget
 
 if TYPE_CHECKING:
     from ..app import MainWindow
@@ -159,9 +152,9 @@ INITIAL_STATE_MAP = {
         "value": "elgendi_ppg",
     },
     "btn_detect_peaks": {
-        "enabled": False,
+        "enabled": True,
     },
-    "btn_compute_results": {"enabled": False},
+    "btn_compute_results": {"enabled": True},
     "table_view_results_hbr": {
         "model": QStandardItemModel(),
     },
@@ -171,10 +164,14 @@ INITIAL_STATE_MAP = {
     "tabs_result": {
         "currentIndex": 0,
     },
+    "dock_widget_sections": {
+        "visible": False,
+    },
 } | INITIAL_PEAK_STATES
 
 INITIAL_STATE_METHODS_MAP = {
     "enabled": "setEnabled",
+    "visible": "setVisible",
     "checked": "setChecked",
     "text": "setText",
     "model": "setModel",
@@ -200,36 +197,42 @@ FILTER_INPUT_STATES = {
         "container_highcut": True,
         "container_order_inputs": True,
         "container_window_size": False,
+        "container_powerline": False,
     },
     "butterworth_ba": {
         "container_lowcut": True,
         "container_highcut": True,
         "container_order_inputs": True,
         "container_window_size": False,
+        "container_powerline": False,
     },
     "bessel": {
         "container_lowcut": True,
         "container_highcut": True,
         "container_order_inputs": True,
         "container_window_size": False,
+        "container_powerline": False,
     },
     "fir": {
         "container_lowcut": True,
         "container_highcut": True,
         "container_order_inputs": False,
         "container_window_size": True,
+        "container_powerline": False,
     },
     "savgol": {
         "container_lowcut": False,
         "container_highcut": False,
         "container_order_inputs": True,
         "container_window_size": True,
+        "container_powerline": False,
     },
     "None": {
         "container_lowcut": False,
         "container_highcut": False,
         "container_order_inputs": False,
         "container_window_size": False,
+        "container_powerline": False,
     },
 }
 
@@ -265,11 +268,15 @@ class UIHandler(QObject):
         self.create_plot_widgets()
 
         # Console
-        self.create_console_widget()
+        # self.create_console_widget()
+        self.create_jupyter_console_widget()
 
     def _prepare_widgets(self) -> None:
         self._window.container_file_info.setEnabled(False)
         self._window.btn_load_selection.setEnabled(False)
+        self._window.dock_widget_sections.setVisible(False)
+        self.confirm_cancel_buttons = ConfirmCancelButtons()
+        self._window.section_widgets_container.layout().addWidget(self.confirm_cancel_buttons)
 
     def _prepare_inputs(self) -> None:
         # Signal Filtering
@@ -302,26 +309,19 @@ class UIHandler(QObject):
             self.handle_preprocess_pipeline_changed
         )
 
-        self._window.btn_apply_filter.clicked.connect(
-            lambda: self._window.btn_detect_peaks.setEnabled(True)  # type: ignore
-        )
-        self._window.btn_detect_peaks.clicked.connect(
-            lambda: self._window.btn_compute_results.setEnabled(True)  # type: ignore
-        )
-
-        self._window.action_open_console.triggered.connect(self.show_console_widget)
+        self._window.action_open_console.triggered.connect(self.show_jupyter_console_widget)
         self._window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
 
-
-        self.confirm_cancel_buttons.confirm_button.clicked.connect(lambda: self.sig_section_confirmed.emit(True))
-        self.confirm_cancel_buttons.cancel_button.clicked.connect(lambda: self.sig_section_confirmed.emit(False))
+        self.confirm_cancel_buttons.confirm_button.clicked.connect(
+            lambda: self.sig_section_confirmed.emit(True)
+        )
+        self.confirm_cancel_buttons.cancel_button.clicked.connect(
+            lambda: self.sig_section_confirmed.emit(False)
+        )
 
     def _prepare_toolbars(self) -> None:
         plot_toolbar = self._window.toolbar_plots
         plot_toolbar.setVisible(False)
-        self.confirm_cancel_buttons = ConfirmCancelButtons(parent=plot_toolbar)
-        plot_toolbar.addWidget(self.confirm_cancel_buttons)
-
 
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():
@@ -329,14 +329,13 @@ class UIHandler(QObject):
             combo_box.clear()
             combo_box.setItems(value)
 
-    def _create_section_selector(self) -> None:
-        self.selection_menu = QComboBox(self._window.toolbar_plots)
-
     def update_data_selection_widgets(self, path: str) -> None:
         self._window.container_file_info.setEnabled(True)
         self._window.group_box_subset_params.setEnabled(True)
         self._window.btn_load_selection.setEnabled(True)
-        available_filter_cols = self._window.data.df.select(ps.contains(["index", "time", "temp"])).columns
+        available_filter_cols = self._window.data.df.select(
+            ps.contains(["index", "time", "temp"])
+        ).columns
         column_box = self._window.combo_box_filter_column
         column_box.blockSignals(True)
         column_box.clear()
@@ -354,7 +353,7 @@ class UIHandler(QObject):
             self._window.line_edit_subject_id.setText(parsed_id)
             self._window.combo_box_oxygen_condition.setValue(parsed_oxy)
         except Exception:
-            self._window.date_edit_file_info.setDate(QDate(1970, 1, 1))
+            self._window.date_edit_file_info.setDate(QDate.currentDate())
             self._window.line_edit_subject_id.setText("unknown")
             self._window.combo_box_oxygen_condition.setValue("unknown")
 
@@ -404,6 +403,8 @@ class UIHandler(QObject):
 
         self._window.toolbar_plots.setVisible(is_index_one)
         self._window.toolbar_plots.setEnabled(is_index_one)
+        self._window.dock_widget_sections.setVisible(is_index_one)
+        self._window.dock_widget_sections.setEnabled(is_index_one)
 
     def create_plot_widgets(self) -> None:
         self._window.plot_widget_hbr.setLayout(QVBoxLayout())
@@ -419,45 +420,20 @@ class UIHandler(QObject):
         self._window.plot_widget_vent.layout().addWidget(vent_pw)
         self._window.plot_widget_vent.layout().addWidget(vent_rate_pw)
 
-    def create_console_widget(self) -> None:
-        module_names = [
-            "self (MainWindow)",
-            "pg (pyqtgraph)",
-            "np (numpy)",
-            "pl (polars)",
-            "r (rich)",
-        ]
-        namespace: "dict[str, types.ModuleType | MainWindow]" = {
-            "self": self._window,
-            "pg": pg,
-            "np": np,
-            "pl": pl,
-            "r": r,
-        }
-        startup_message = f"Available namespaces: {', '.join(module_names)}.\n\nUse `r.print()` for more readable formatting."
-        self.console = ConsoleWidget(
-            parent=self._window,
-            namespace=namespace,
-            historyFile="history.pickle",
-            text=startup_message,
-        )
-        self.console_dock = QDockWidget("Debug Console")
-        self.console_dock.setWidget(self.console)
-        self.console_dock.setMinimumSize(800, 600)
-        self.console_dock.setAllowedAreas(Qt.DockWidgetArea.AllDockWidgetAreas)
-        self.console_dock.setFeatures(
-            QDockWidget.DockWidgetFeature.DockWidgetFloatable
-            | QDockWidget.DockWidgetFeature.DockWidgetMovable
-            | QDockWidget.DockWidgetFeature.DockWidgetClosable
+    def create_jupyter_console_widget(self) -> None:
+        self.jupyter_console = JupyterConsoleWidget()
+        self.jupyter_console_dock = QDockWidget("Jupyter Console")
+        self.jupyter_console_dock.setWidget(self.jupyter_console)
+        self.jupyter_console.kernel_manager.kernel.shell.push(
+            dict(mw=self._window, pg=pg, np=np, pl=pl, pp=pprint.pprint)
         )
 
     @Slot()
-    def show_console_widget(self) -> None:
-        if self.console_dock.isVisible():
-            self.console_dock.close()
+    def show_jupyter_console_widget(self) -> None:
+        if self.jupyter_console_dock.isVisible():
+            self.jupyter_console_dock.close()
         else:
-            self.console_dock.show()
-            self.console.input.setFocus()
+            self.jupyter_console_dock.show()
 
     @Slot(str)
     def handle_filter_method_changed(self, text: str) -> None:

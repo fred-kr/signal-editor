@@ -7,7 +7,7 @@ import polars as pl
 import polars.selectors as ps
 from loguru import logger
 from numpy.typing import NDArray
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, Slot
 from PySide6.QtWidgets import QInputDialog
 
 from ..models.io import read_edf
@@ -17,7 +17,7 @@ from ..models.result import (
     SummaryStatistics,
     make_focused_result,
 )
-from ..models.signal import SignalData, SignalStorage
+from ..models.signal import Section, SectionID, SignalData, SignalStorage
 from ..type_aliases import (
     PeakDetectionParameters,
     Pipeline,
@@ -77,8 +77,6 @@ class DataState:
 
 
 class DataHandler(QObject):
-    sig_dh_new_data_loaded = Signal(int, int)
-
     def __init__(self, window: "MainWindow") -> None:
         super().__init__()
         self._window = window
@@ -93,9 +91,10 @@ class DataHandler(QObject):
 
     @fs.setter
     def fs(self, value: int | float) -> None:
-        self._sampling_rate = int(value)
+        value = int(value)
+        self._sampling_rate = value
         self._window.spin_box_fs.blockSignals(True)
-        self._window.spin_box_fs.setValue(int(value))
+        self._window.spin_box_fs.setValue(value)
         self._window.spin_box_fs.blockSignals(False)
 
     @Slot(int)
@@ -103,11 +102,18 @@ class DataHandler(QObject):
         self.fs = value
         self.sigs.update_sampling_rate(value)
 
+    @property
+    def active_section(self) -> Section:
+        """Easy access to the currently active section."""
+        return self.sigs[self._window.signal_name].active_section
+
     def read(self, path: str | Path) -> None:
         path = Path(path)
         suffix = path.suffix
         if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx", ".pkl"}:
-            info_msg = "Currently only .csv, .txt, .xlsx, .feather, .pkl and .edf files are supported"
+            info_msg = (
+                "Currently only .csv, .txt, .xlsx, .feather, .pkl and .edf files are supported"
+            )
             self._window.sig_show_message.emit(info_msg, "info")
             return
 
@@ -155,9 +161,6 @@ class DataHandler(QObject):
             sig = SignalData(name=name, data=df, sampling_rate=self.fs)
             self.sigs[name] = sig
 
-        index_col = df.get_column("index")
-        self.sig_dh_new_data_loaded.emit(index_col[0], index_col[-1])
-
     def _sampling_rate_unavailable(self) -> None:
         self.df = pl.DataFrame()
         self.fs = -1
@@ -183,9 +186,7 @@ class DataHandler(QObject):
             for name in columns
         }
 
-    def _get_slice_indices(
-        self, filter_col: str, lower: float, upper: float
-    ) -> tuple[int, int]:
+    def _get_slice_indices(self, filter_col: str, lower: float, upper: float) -> tuple[int, int]:
         lf = self.df.lazy().with_columns(pl.col("temperature").round(1))
         b1: int = (
             lf.sort(pl.col(filter_col), maintain_order=True)
@@ -221,25 +222,31 @@ class DataHandler(QObject):
         filter_params: SignalFilterParameters,
         standardize_params: StandardizeParameters,
     ) -> None:
-        self.sigs[name].filter_values(pipeline=pipeline, col_name=None, **filter_params)
+        self.sigs[name].active_section.filter_signal(
+            pipeline=pipeline, sampling_rate=self.fs, **filter_params
+        )
 
         standardize = self._window.scale_method
         if standardize.lower() == "none":
             return
-        self.sigs[name].scale_values(**standardize_params)
+        self.sigs[name].active_section.scale_signal(**standardize_params)
 
     def run_peak_detection(
         self, name: SignalName | str, peak_parameters: PeakDetectionParameters
     ) -> None:
-        self.sigs[name].detect_peaks(**peak_parameters)
+        self.sigs[name].active_section.detect_peaks(
+            sampling_rate=self.fs,
+            method=peak_parameters["method"],
+            input_values=peak_parameters["input_values"],
+        )
         self.run_rate_calculation(name)
 
     def run_rate_calculation(self, name: SignalName | str) -> None:
-        self.sigs[name].calculate_rate()
+        self.sigs[name].active_section.calculate_rate(sampling_rate=self.fs)
 
     def get_descriptive_stats(self, name: SignalName | str) -> SummaryStatistics:
-        intervals = self.sigs[name].get_peak_diffs()
-        rate = self.sigs[name].signal_rate.rate
+        intervals = self.sigs[name].active_section.get_peak_intervals()
+        rate = self.sigs[name].active_section.rate_data.rate
 
         interval_stats = get_array_stats(intervals, "peak_intervals")
         rate_stats = get_array_stats(rate, "rate")
@@ -249,16 +256,21 @@ class DataHandler(QObject):
             signal_rate=rate_stats,
         )
 
-    def compute_result_df(self, name: SignalName | str) -> None:
+    def compute_result_df(
+        self, name: SignalName | str, section_id: SectionID | None = None
+    ) -> None:
         sig = self.sigs[name]
-        peaks = sig.total_peaks
-        diffs = sig.get_peak_diffs()
-        rate = sig.signal_rate.rate
-
-        data = sig.get_data()
-        indices = data.get_column("index").gather(peaks)
+        # section_dict = sig.as_dict()
+        # TODO: refactor result creation to work with new section structure
+        if section_id is None:
+            section_id = sig.active_section.section_id
+        sec = sig.get_section_by_id(section_id)
+        peaks = sec.get_peaks()
+        diffs = sec.get_peak_intervals()
+        rate = sig.default_rate
+        indices = sec.data.get_column("index").gather(peaks)
         time_s = (indices * (1 / self.fs)).round(4)
-        temperature = data.get_column("temperature").gather(peaks).round(1)
+        temperature = sec.data.get_column("temperature").gather(peaks).round(1)
         focused_result = make_focused_result(
             time_s=time_s,
             index=indices,
@@ -268,9 +280,7 @@ class DataHandler(QObject):
         )
         self.focused_results[name] = focused_result
 
-    def get_focused_result_df(
-        self, name: SignalName | str, compute: bool = True
-    ) -> pl.DataFrame:
+    def get_focused_result_df(self, name: SignalName | str, compute: bool = True) -> pl.DataFrame:
         if compute or name not in self.focused_results:
             self.compute_result_df(name)
         return self.focused_results[name].to_polars()
@@ -288,12 +298,9 @@ class DataHandler(QObject):
     def restore_df(self, df: pl.DataFrame) -> None:
         self.df = df
         if all(
-            col in df.columns
-            for col in ["index", "time_s", "temperature", "hbr", "ventilation"]
+            col in df.columns for col in ["index", "time_s", "temperature", "hbr", "ventilation"]
         ):
-            self.df = self.df.select(
-                pl.col("index", "time_s", "temperature", "hbr", "ventilation")
-            )
+            self.df = self.df.select(pl.col("index", "time_s", "temperature", "hbr", "ventilation"))
         else:
             self.df = df
         self.calc_minmax()
@@ -303,4 +310,4 @@ class DataHandler(QObject):
         name = self._window.signal_name
         if name not in self.sigs:
             return
-        self.sigs[name].mark_excluded(lower, upper)
+        self.sigs[name].add_section(lower, upper, set_active=False, include=False)

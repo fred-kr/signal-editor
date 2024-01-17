@@ -8,7 +8,6 @@ from typing import Literal, TypedDict, cast
 
 import h5py
 import numpy as np
-import polars as pl
 import pyqtgraph as pg
 from loguru import logger
 from PySide6.QtCore import (
@@ -53,6 +52,7 @@ from .models.result import (
     SelectionParameters,
     SummaryStatistics,
 )
+from .models.signal import SectionID
 from .type_aliases import (
     FileMetadata,
     FilterMethod,
@@ -77,16 +77,18 @@ from .views.main_window import Ui_MainWindow
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
-    sig_data_filtered = Signal(str)
-    sig_data_loaded = Signal()
-    sig_filter_column_changed = Signal()
-    sig_peaks_updated = Signal(str)
-    sig_plot_data_changed = Signal(str)
-    sig_results_updated = Signal(str)
-    sig_show_message = Signal(str, str)
+    sig_data_filtered = Signal(str)  # Emitted after signal has been filtered & scaled
+    sig_data_loaded = Signal()  # Emitted after loading the (optionally subsetted) data by clicking the `Load Selection` button
+    sig_draw_signal_rate = Signal(
+        str
+    )  # Emitted after peaks were detected & drawn, and after a peak was added/removed by clicking on the plot
+    sig_plot_data_changed = Signal(
+        str
+    )  # Emitted after data has changed (filtered/newly loaded/etc)
+    sig_show_message = Signal(str, str)  # Emitted to show a message in an info box
     sig_data_restored = Signal()
     sig_init_finished = Signal()
-    sig_active_region_limits_changed = Signal(str, int, int)
+    sig_active_section_changed = Signal(str)
 
     def __init__(self) -> None:
         super().__init__()
@@ -113,9 +115,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.theme_switcher.set_style("dark")
         self._add_style_toggle()
         self._add_profiler()
-        self.data.fs = int(
-            self.config.config.get("Defaults", "SampleRate", fallback=-1)
-        )
+        self.data.fs = int(self.config.config.get("Defaults", "SampleRate", fallback=-1))
 
     # region Dev
     def _add_profiler(self) -> None:
@@ -179,82 +179,71 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.menubar.addSeparator()
         self.menubar.addAction("Switch Theme", self.theme_switcher.switch_theme)
 
+    def _setup_section_combo_box(self) -> None:
+        self.combo_box_section_select.addItem("IN_001")
+
     def _connect_signals(self) -> None:
         """
         Connect signals to slots.
         """
-        self.sig_init_finished.connect(self._on_init_finished)
 
-        self.sig_data_filtered.connect(self.handle_table_view_data)
-        self.sig_data_loaded.connect(self.handle_plot_draw)
-        self.sig_data_loaded.connect(self.handle_table_view_data)
-        self.sig_peaks_updated.connect(self.handle_draw_results)
+        # Menu & Toolbar Actions
+        self.action_exit.triggered.connect(self.close)
+        self.action_load_state.triggered.connect(self.restore_state)
+        self.action_save_state.triggered.connect(self.save_state)
+        self.action_select_file.triggered.connect(self.select_data_file)
+
+        # Plotting Related Actions
+        self.action_remove_peak_rect.triggered.connect(self.plot.show_region_selector)
+        self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected)
+        self.action_reset_view.triggered.connect(
+            lambda: self.plot.reset_views(
+                self.data.sigs[self.signal_name].active_section.data.height
+            )
+        )
+        self.plot.sig_excluded_range.connect(self.data.exclude_region)
+        self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
         self.sig_plot_data_changed.connect(self._update_plot_view)
-        self.sig_show_message.connect(self.show_message)
-        self.sig_data_restored.connect(self.refresh_app_state)
-        self.sig_data_loaded.connect(lambda: self.tabs_main.setCurrentIndex(1))
 
+        # Button Actions
         self.btn_apply_filter.clicked.connect(self.handle_apply_filter)
-        self.btn_detect_peaks.clicked.connect(self.handle_peak_detection)
-
-        self.btn_select_file.clicked.connect(self.select_data_file)
-        self.btn_load_selection.clicked.connect(self.handle_load_selection)
-
         self.btn_browse_output_dir.clicked.connect(self.select_output_location)
+        self.btn_compute_results.clicked.connect(self.update_results)
+        self.btn_detect_peaks.clicked.connect(self.handle_peak_detection)
+        self.btn_load_selection.clicked.connect(self.handle_load_selection)
+        self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
+        self.btn_select_file.clicked.connect(self.select_data_file)
+        self.btn_section_add_new.clicked.connect(
+            lambda: self.ui.confirm_cancel_buttons.setVisible(True)
+        )
+        self.btn_section_add_new.clicked.connect(self.maybe_new_section)
+        self.btn_section_exclude_new.clicked.connect(self.maybe_new_section)
 
+        # Data Export Actions
         self.btn_export_to_csv.clicked.connect(lambda: self.export_results("csv"))
         self.btn_export_to_excel.clicked.connect(lambda: self.export_results("excel"))
         self.btn_export_to_text.clicked.connect(lambda: self.export_results("txt"))
 
-        self.btn_compute_results.clicked.connect(self.update_results)
+        # Plot View Actions
+        self.btn_group_plot_view.idClicked.connect(self.stacked_hbr_vent.setCurrentIndex)
 
-        self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
+        # Data Related Signals
+        self.sig_data_filtered.connect(self.handle_table_view_data)
+        self.sig_data_loaded.connect(lambda: self.tabs_main.setCurrentIndex(1))
+        self.sig_data_loaded.connect(self.handle_plot_draw)
+        self.sig_data_loaded.connect(self.handle_table_view_data)
+        self.sig_data_restored.connect(self.refresh_app_state)
+        self.sig_draw_signal_rate.connect(self.handle_draw_results)
+        self.sig_init_finished.connect(self._on_init_finished)
+        self.sig_show_message.connect(self.show_message)
+        self.sig_active_section_changed.connect(self._on_section_changed)
 
-        self.btn_group_plot_view.idClicked.connect(
-            self.stacked_hbr_vent.setCurrentIndex
-        )
+        # UI Handler Signals
+        self.ui.sig_section_confirmed.connect(self._on_section_chosen)
 
-        self.action_exit.triggered.connect(self.close)
-        self.action_select_file.triggered.connect(self.select_data_file)
-        self.action_remove_peak_rect.triggered.connect(self.plot.show_region_selector)
-        self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected)
-        # self.action_run_peak_detection.triggered.connect(self.handle_peak_detection)
-        # self.action_run_preprocessing.triggered.connect(self.handle_apply_filter)
-        # self.action_get_results.triggered.connect(self.update_results)
-        self.action_save_state.triggered.connect(self.save_state)
-        self.action_load_state.triggered.connect(self.restore_state)
-        # self.action_toggle_region_selector.triggered.connect(
-        #     lambda: self.plot.toggle_region_selector(self.name)
-        # )
-        # self.action_remove_selected_data.triggered.connect(
-        #     self.plot.emit_to_be_excluded_range
-        # )
-        # self.action_remove_marked_areas.triggered.connect(self.remove_excluded_regions)
-        self.plot.sig_excluded_range.connect(self.data.exclude_region)
-        self.plot.sig_active_region_changed.connect(self._update_peak_start_stop_index)
-
+        # Widget specific Signals
         self.spin_box_fs.valueChanged.connect(self.data.update_fs)
-
-        self.peak_start_index.valueChanged.connect(self.emit_peak_start_stop_index)
-        self.peak_stop_index.valueChanged.connect(self.emit_peak_start_stop_index)
-
-        self.data.sig_dh_new_data_loaded.connect(self._update_peak_start_stop_widgets)
-
-        self.sig_active_region_limits_changed.connect(self.update_active_region)
-
-        self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
-        self.plot.sig_peaks_edited.connect(self._sync_peaks_data_plot)
-
-        self.action_reset_view.triggered.connect(
-            lambda: self.plot.reset_views(self.data.sigs[self.signal_name].active_section.data.height)
-        )
-
-        self.btn_section_add_new.clicked.connect(self.maybe_new_section)
-        self.btn_section_add_new.clicked.connect(
-            lambda: self.ui.confirm_cancel_buttons.setVisible(True)
-        )
-
-        self.ui.sig_section_confirmed.connect(self.on_section_confirmed)
+        self.combo_box_section_select.currentTextChanged.connect(self._on_section_changed)
 
     @Slot()
     def maybe_new_section(self) -> None:
@@ -267,66 +256,48 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             raise ValueError(f"Unknown sender: {sender_name}")
 
-        self._section_type = section_type
         current_limits = self.data.sigs[sig_name].active_region_limits
         self.ui.confirm_cancel_buttons.show()
         self.plot.show_section_selector(
-            name=self.signal_name, section_type=section_type, bounds=current_limits
+            name=sig_name, section_type=section_type, bounds=current_limits
         )
 
-
-    @Slot()
-    def on_section_confirmed(self) -> None:
+    @Slot(bool)
+    def _on_section_chosen(self, confirmed: bool) -> None:
         sig_name = self.signal_name
-        section_type = self._section_type
 
         # Get the new section limits
         lower, upper = self.plot.plot_items[sig_name].active_section.getRegion()
         lower, upper = int(lower), int(upper)
 
-        if section_type == "included":
-            self.data.sigs[sig_name].add_section()
-        
+        self.data.sigs[sig_name].add_section(lower, upper, set_active=confirmed, include=confirmed)
+        self.combo_box_section_select.addItem(self.data.active_section.section_id)
+        self.ui.confirm_cancel_buttons.hide()
+        self.sig_active_section_changed.emit(self.data.active_section.section_id)
+
+    @Slot(str)
+    def _on_section_changed(self, section_id: SectionID) -> None:
+        self.plot.hide_section_selector(self.signal_name)
+        self.data.sigs[self.signal_name].set_active_section(section_id)
+        self.handle_plot_draw()
 
     @Slot()
     def remove_excluded_regions(self) -> None:
         name = self.signal_name
-        self.data.sigs[name].apply_exclusion_mask()
-
-    @Slot()
-    def emit_peak_start_stop_index(self) -> None:
-        limits = self.peak_start_index.value(), self.peak_stop_index.value()
-        lower, upper = min(limits), max(limits)
-        self.sig_active_region_limits_changed.emit(self.signal_name, lower, upper)
-
-    @Slot(int, int)
-    def _update_peak_start_stop_widgets(self, start: int, stop: int) -> None:
-        for widget in [self.peak_start_index, self.peak_stop_index]:
-            widget.setMinimum(start)
-            widget.setMaximum(stop)
-        self.peak_start_index.setValue(start)
-        self.peak_stop_index.setValue(stop)
-
-    @Slot(int, int)
-    def _update_peak_start_stop_index(self, start: int, stop: int) -> None:
-        self.peak_start_index.setValue(start)
-        self.peak_stop_index.setValue(stop)
-
-    @Slot(str, int, int)
-    def update_active_region(self, name: str, start: int, stop: int) -> None:
-        if name in self.data.sigs:
-            self.data.sigs[name].set_active(start, stop)
-
-        self.sig_plot_data_changed.emit(name)
+        self.data.sigs[name].remove_all_excluded()
 
     @Slot(str)
-    def _sync_peaks_data_plot(self, name: SignalName | str) -> None:
+    def _sync_peak_indices(self, name: SignalName | str) -> None:
         plot_item = self.plot.plot_items[name].peaks
-        plot_peak_indices = plot_item.data["x"].astype(np.int32)
-        data_series = self.data.sigs[name].active_peaks
-        plot_peak_indices.sort()
-        data_series.sort()
+        if plot_item is None:
+            return
+        plot_peaks = plot_item.data["x"].astype(np.int32)
+        data_peaks = self.data.sigs[name].active_peaks
+        plot_peaks.sort()
+        data_peaks.sort()
 
+        if not np.array_equal(plot_peaks, data_peaks):
+            self.data.sigs[name].active_section.set_peaks(plot_peaks)
 
     def read_hdf5(self, file_path: str | Path) -> None:
         with h5py.File(file_path, "r") as f:
@@ -339,16 +310,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         Swarbrick. Link to github repo: https://github.com/marts/hdf5view
         """
         self.hdf5view_process = QProcess(self)
-        self.hdf5view_process.finished.connect(self.process_finished)
+        self.hdf5view_process.finished.connect(self._process_finished)
         self.hdf5view_process.start("hdf5view")
 
     @Slot()
-    def process_finished(self) -> None:
+    def _process_finished(self) -> None:
         self.hdf5view_process = None
 
     @Slot()
     def save_to_hdf5(self) -> None:
-        default_out = f"{self.output_dir.as_posix()}/{self.file_info.completeBaseName()}_results.hdf5"
+        default_out = (
+            f"{self.output_dir.as_posix()}/{self.file_info.completeBaseName()}_results.hdf5"
+        )
         if file_path := QFileDialog.getSaveFileName(
             self,
             "Save to HDF5",
@@ -491,10 +464,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot()
     def handle_plot_draw(self) -> None:
         with pg.BusyCursor():
-            hbr_line_exists = self.plot.plot_items["hbr"].signal.xData is not None
-            ventilation_line_exists = (
-                self.plot.plot_items["ventilation"].signal.xData is not None
-            )
+            hbr_line_exists = self.plot.plot_items["hbr"].signal is not None
+            ventilation_line_exists = self.plot.plot_items["ventilation"].signal is not None
 
             if not hbr_line_exists and not ventilation_line_exists:
                 self._draw_initial_signals()
@@ -504,7 +475,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _draw_initial_signals(self) -> None:
         for name, sig in self.data.sigs.items():
             plot_widget = self.plot.plot_widgets[name]
-            self.plot.draw_signal(sig.active_processed_signal, plot_widget, name)
+            self.plot.draw_signal(sig.get_active_signal(), plot_widget, name)
         self._set_x_ranges()
 
     def _set_x_ranges(self) -> None:
@@ -520,14 +491,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             vb.setXRange(0, data_length)
         for name in ["hbr", "ventilation"]:
             self._update_plot_view(name)
-            self.plot.plot_items[name].active_section.setRegion((0, data_length))
 
     def _update_signal(self, name: SignalName | str) -> None:
-        signal_data = self.data.sigs[name].active_processed_signal
+        signal_data = self.data.sigs[name].get_active_signal()
         plot_widget = self.plot.plot_widgets[name]
         self.plot.draw_signal(signal_data, plot_widget, name)
         self._set_x_ranges()
-        self.sig_plot_data_changed.emit(name)
+        # self.sig_plot_data_changed.emit(name)
 
     @Slot()
     def handle_table_view_data(self) -> None:
@@ -547,9 +517,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         info = DescriptiveStatsModel(df_description)
         self._set_table_model(self.table_data_info, info)
 
-    def _set_table_model(
-        self, table_view: QTableView, model: QAbstractTableModel
-    ) -> None:
+    def _set_table_model(self, table_view: QTableView, model: QAbstractTableModel) -> None:
         """
         Set the model for the given table view
 
@@ -610,13 +578,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 standardize_params=standardize_params,
             )
             self.plot.draw_signal(
-                sig=self.data.sigs[signal_name].active_processed_signal,
+                sig=self.data.sigs[signal_name].get_active_signal(),
                 plot_widget=self.plot.plot_widgets[signal_name],
                 signal_name=signal_name,
             )
         btn.success("Finished")
-        self.sig_plot_data_changed.emit(signal_name)
         self.sig_data_filtered.emit(signal_name)
+        self.sig_plot_data_changed.emit(signal_name)
 
     @Slot()
     def handle_peak_detection(self) -> None:
@@ -635,8 +603,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 name=name,
                 peak_parameters=peak_params,
             )
-            peaks = self.data.sigs[name].active_peaks.to_numpy()
-            peaks_y = self.data.sigs[name].active_processed_signal[peaks]
+            peaks = self.data.sigs[name].active_peaks
+            peaks_y = self.data.sigs[name].get_active_signal()[peaks]
 
             self.plot.draw_peaks(
                 pos_x=peaks,
@@ -645,37 +613,37 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 signal_name=name,
             )
         btn.success("Finished")
-        self.sig_peaks_updated.emit(name)
+        self.sig_draw_signal_rate.emit(name)
 
     @Slot(str)
     def handle_draw_results(self, name: SignalName | str) -> None:
         rate_name = f"{name}_rate"
         rate_plot_widget = self.plot.plot_widgets[rate_name]
-        sig_rate = self.data.sigs[name].signal_rate
-        rate_interp = sig_rate.rate_interpolated
+        self.data.sigs[name].active_section.calculate_rate(sampling_rate=self.data.fs)
+        rate_interp = self.data.sigs[name].active_section.rate_data.rate_interpolated
 
         self.plot.draw_rate(
             rate_interp,
             plot_widget=rate_plot_widget,
             signal_name=name,
-            mean_peak_interval=sig_rate.rate.mean(dtype=np.int32),
         )
 
     @Slot(str)
     def handle_scatter_clicked(self, name: SignalName | str) -> None:
-        self._sync_peaks_data_plot(name)
-        self.data.sigs[name].calculate_rate()
-        self.sig_peaks_updated.emit(name)
+        self._sync_peak_indices(name)
+        self.data.sigs[name].active_section.calculate_rate(sampling_rate=self.data.fs)
+        self.sig_draw_signal_rate.emit(name)
 
     @Slot(QCloseEvent)
     def closeEvent(self, event: QCloseEvent) -> None:
         self._write_settings()
-        # self.config.save()
         if hasattr(self, "hdf5view_process") and self.hdf5view_process:
             self.hdf5view_process.kill()
             self.hdf5view_process = None
-        if self.ui.console_dock.isVisible():
-            self.ui.console_dock.close()
+        # if self.ui.console_dock.isVisible():
+        # self.ui.console_dock.close()
+        if self.ui.jupyter_console_dock.isVisible():
+            self.ui.jupyter_console_dock.close()
 
         super().closeEvent(event)
 
@@ -743,7 +711,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         subset_col = self.combo_box_filter_column.currentText()
         lower_bound = self.dbl_spin_box_subset_min.value()
         upper_bound = self.dbl_spin_box_subset_max.value()
-        length_overall = self.data.sigs[self.result_name].get_data().height
+        length_overall = self.data.sigs[self.result_name].active_section.data.height
         return SelectionParameters(
             filter_column=subset_col,
             lower_bound=lower_bound,
@@ -754,9 +722,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def get_file_metadata(self) -> FileMetadata:
         date_recorded = cast(datetime, self.date_edit_file_info.date().toPython())
         animal_id = self.line_edit_subject_id.text()
-        oxygen_condition = cast(
-            OxygenCondition, self.combo_box_oxygen_condition.value()
-        )
+        oxygen_condition = cast(OxygenCondition, self.combo_box_oxygen_condition.value())
         return FileMetadata(
             date_recorded=date_recorded,
             animal_id=animal_id,
@@ -799,8 +765,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def get_peak_detection_values(self) -> PeakDetectionParameters:
         method = self.peak_detection_method
-        start_index = self.peak_start_index.value()
-        stop_index = self.peak_stop_index.value()
+        start_index = self.data.active_section.start_index
+        stop_index = self.data.active_section.stop_index
 
         if method == "elgendi_ppg":
             vals = PeakDetectionElgendiPPG(
@@ -904,7 +870,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             "Data is clean up to (and including) index:",
             self.plot.last_edit_index,
             0,
-            self.data.sigs[self.signal_name].get_data().height - 1,
+            self.data.sigs[self.signal_name].active_section.data.height - 1,
             1,
         )
         if not ok:
@@ -967,9 +933,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         processing_params: ProcessingParameters,
         file_metadata: FileMetadata,
     ) -> None:
-        self.combo_box_filter_column.setCurrentText(
-            selection_params.filter_column or ""
-        )
+        self.combo_box_filter_column.setCurrentText(selection_params.filter_column or "")
         self.dbl_spin_box_subset_min.setValue(selection_params.lower_bound)
         self.dbl_spin_box_subset_max.setValue(selection_params.upper_bound)
 
@@ -977,12 +941,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.combo_box_preprocess_pipeline.setValue(processing_params.pipeline)
 
-        self.dbl_spin_box_lowcut.setValue(
-            processing_params.filter_parameters["lowcut"] or 0.5
-        )
-        self.dbl_spin_box_highcut.setValue(
-            processing_params.filter_parameters["highcut"] or 8.0
-        )
+        self.dbl_spin_box_lowcut.setValue(processing_params.filter_parameters["lowcut"] or 0.5)
+        self.dbl_spin_box_highcut.setValue(processing_params.filter_parameters["highcut"] or 8.0)
         self.spin_box_order.setValue(processing_params.filter_parameters["order"])
         if processing_params.filter_parameters["window_size"] == "default":
             filter_window = int(np.round(processing_params.sampling_rate / 3))
@@ -991,9 +951,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             filter_window = processing_params.filter_parameters["window_size"]
         self.spin_box_window_size.setValue(filter_window)
-        self.dbl_spin_box_powerline.setValue(
-            processing_params.filter_parameters["powerline"]
-        )
+        self.dbl_spin_box_powerline.setValue(processing_params.filter_parameters["powerline"])
 
         method = "mad" if processing_params.scaling_parameters["robust"] else "zscore"
         self.combo_box_scale_method.setValue(method)
@@ -1069,16 +1027,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             processed_name = self.data.sigs[s_name].processed_name
             if processed_name not in self.data.sigs[s_name].data.columns:
                 self.plot.draw_signal(
-                    self.data.sigs[s_name]
-                    .active_section.data.get_column(s_name)
-                    .to_numpy(),
+                    self.data.sigs[s_name].active_section.data.get_column(s_name).to_numpy(),
                     signal_widget,
                     s_name,
                 )
                 continue
-            processed_signal = self.data.sigs[s_name].active_processed_signal
-            rate = self.data.sigs[s_name].signal_rate.rate_interpolated
-            peaks = self.data.sigs[s_name].total_peaks.to_numpy()
+            processed_signal = self.data.sigs[s_name].get_active_signal()
+            rate = self.data.sigs[s_name].interpolated_rate
+            peaks = self.data.sigs[s_name].get_all_peaks()
             peaks_y = processed_signal[peaks]
             rate_widget = self.plot.plot_widgets[f"{s_name}_rate"]
             self.plot.draw_signal(processed_signal, signal_widget, s_name)
