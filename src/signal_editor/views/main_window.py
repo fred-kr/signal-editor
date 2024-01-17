@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QAbstract
     QMenuBar, QPushButton, QSizePolicy, QSlider,
     QSpacerItem, QSpinBox, QStackedWidget, QStatusBar,
     QTabWidget, QTableView, QTextBrowser, QToolBar,
-    QVBoxLayout, QWidget)
+    QToolButton, QVBoxLayout, QWidget)
 
 from pyqtgraph import (ComboBox, FeedbackButton)
 from . import icons_rc
@@ -1621,43 +1621,40 @@ class Ui_MainWindow(object):
         self.gridLayout_18.setSpacing(4)
         self.gridLayout_18.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_18.setObjectName(u"gridLayout_18")
+        self.btn_section_remove = QPushButton(self.section_widgets_container)
+        self.btn_section_remove.setObjectName(u"btn_section_remove")
+        sizePolicy6.setHeightForWidth(self.btn_section_remove.sizePolicy().hasHeightForWidth())
+        self.btn_section_remove.setSizePolicy(sizePolicy6)
+
+        self.gridLayout_18.addWidget(self.btn_section_remove, 2, 1, 1, 1)
+
         self.combo_box_section_select = QComboBox(self.section_widgets_container)
         self.combo_box_section_select.setObjectName(u"combo_box_section_select")
         self.combo_box_section_select.setInputMethodHints(Qt.ImhNone)
 
-        self.gridLayout_18.addWidget(self.combo_box_section_select, 2, 0, 1, 2)
+        self.gridLayout_18.addWidget(self.combo_box_section_select, 1, 0, 1, 2)
 
-        self.btn_section_add_new = QPushButton(self.section_widgets_container)
-        self.btn_section_add_new.setObjectName(u"btn_section_add_new")
+        self.btn_section_add = QPushButton(self.section_widgets_container)
+        self.btn_section_add.setObjectName(u"btn_section_add")
+        sizePolicy6.setHeightForWidth(self.btn_section_add.sizePolicy().hasHeightForWidth())
+        self.btn_section_add.setSizePolicy(sizePolicy6)
 
-        self.gridLayout_18.addWidget(self.btn_section_add_new, 0, 0, 1, 1)
+        self.gridLayout_18.addWidget(self.btn_section_add, 2, 0, 1, 1)
 
         self.label_6 = QLabel(self.section_widgets_container)
         self.label_6.setObjectName(u"label_6")
         sizePolicy3.setHeightForWidth(self.label_6.sizePolicy().hasHeightForWidth())
         self.label_6.setSizePolicy(sizePolicy3)
 
-        self.gridLayout_18.addWidget(self.label_6, 1, 0, 1, 1)
+        self.gridLayout_18.addWidget(self.label_6, 0, 0, 1, 1)
 
-        self.btn_section_options = QPushButton(self.section_widgets_container)
-        self.btn_section_options.setObjectName(u"btn_section_options")
+        self.btn_section_clear = QToolButton(self.section_widgets_container)
+        self.btn_section_clear.setObjectName(u"btn_section_clear")
+        sizePolicy6.setHeightForWidth(self.btn_section_clear.sizePolicy().hasHeightForWidth())
+        self.btn_section_clear.setSizePolicy(sizePolicy6)
+        self.btn_section_clear.setIcon(icon4)
 
-        self.gridLayout_18.addWidget(self.btn_section_options, 4, 0, 1, 2)
-
-        self.btn_section_reset_current = QPushButton(self.section_widgets_container)
-        self.btn_section_reset_current.setObjectName(u"btn_section_reset_current")
-
-        self.gridLayout_18.addWidget(self.btn_section_reset_current, 3, 1, 1, 1)
-
-        self.btn_section_exclude_new = QPushButton(self.section_widgets_container)
-        self.btn_section_exclude_new.setObjectName(u"btn_section_exclude_new")
-
-        self.gridLayout_18.addWidget(self.btn_section_exclude_new, 0, 1, 1, 1)
-
-        self.btn_section_mark_finished = QPushButton(self.section_widgets_container)
-        self.btn_section_mark_finished.setObjectName(u"btn_section_mark_finished")
-
-        self.gridLayout_18.addWidget(self.btn_section_mark_finished, 3, 0, 1, 1)
+        self.gridLayout_18.addWidget(self.btn_section_clear, 0, 1, 1, 1, Qt.AlignRight)
 
 
         self.gridLayout_7.addWidget(self.section_widgets_container, 0, 0, 1, 1, Qt.AlignTop)
@@ -2065,12 +2062,8 @@ class Ui_MainWindow(object):
         self.adjustPeaksLabel.setText(QCoreApplication.translate("MainWindow", u"Adjust Peaks", None))
         self.toolbar_plots.setWindowTitle(QCoreApplication.translate("MainWindow", u"toolbar_plots", None))
         self.dock_widget_sections.setWindowTitle(QCoreApplication.translate("MainWindow", u"Section Controls", None))
-        self.combo_box_section_select.setPlaceholderText(QCoreApplication.translate("MainWindow", u"Default (Entire Signal Data)", None))
-        self.btn_section_add_new.setText(QCoreApplication.translate("MainWindow", u"Add Section", None))
+        self.btn_section_remove.setText(QCoreApplication.translate("MainWindow", u"Remove Section", None))
+        self.btn_section_add.setText(QCoreApplication.translate("MainWindow", u"Add Section", None))
         self.label_6.setText(QCoreApplication.translate("MainWindow", u"Currently showing:", None))
-        self.btn_section_options.setText(QCoreApplication.translate("MainWindow", u"Options", None))
-        self.btn_section_reset_current.setText(QCoreApplication.translate("MainWindow", u"Reset Section", None))
-        self.btn_section_exclude_new.setText(QCoreApplication.translate("MainWindow", u"Exclude Section", None))
-        self.btn_section_mark_finished.setText(QCoreApplication.translate("MainWindow", u"Mark Finished", None))
     # retranslateUi
 

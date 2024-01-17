@@ -227,9 +227,7 @@ class DataHandler(QObject):
         filter_params: SignalFilterParameters,
         standardize_params: StandardizeParameters,
     ) -> None:
-        self.sigs[name].active_section.filter_signal(
-            pipeline=pipeline, sampling_rate=self.fs, **filter_params
-        )
+        self.sigs[name].active_section.filter_signal(pipeline=pipeline, **filter_params)
 
         standardize = self._window.scale_method
         if standardize.lower() == "none":
@@ -240,14 +238,13 @@ class DataHandler(QObject):
         self, name: SignalName | str, peak_parameters: PeakDetectionParameters
     ) -> None:
         self.sigs[name].active_section.detect_peaks(
-            sampling_rate=self.fs,
             method=peak_parameters["method"],
             input_values=peak_parameters["input_values"],
         )
         self.run_rate_calculation(name)
 
     def run_rate_calculation(self, name: SignalName | str) -> None:
-        self.sigs[name].active_section.calculate_rate(sampling_rate=self.fs)
+        self.sigs[name].active_section.calculate_rate()
 
     def get_descriptive_stats(self, name: SignalName | str) -> SummaryStatistics:
         intervals = self.sigs[name].active_section.get_peak_intervals()

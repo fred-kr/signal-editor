@@ -2880,24 +2880,40 @@ li.checked::marker { content: &quot;\2612&quot;; }
         </sizepolicy>
        </property>
        <layout class="QGridLayout" name="gridLayout_18">
-        <item row="2" column="0" colspan="2">
+        <item row="2" column="1">
+         <widget class="QPushButton" name="btn_section_remove">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Remove Section</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0" colspan="2">
          <widget class="QComboBox" name="combo_box_section_select">
           <property name="inputMethodHints">
            <set>Qt::ImhNone</set>
           </property>
-          <property name="placeholderText">
-           <string>Default (Entire Signal Data)</string>
-          </property>
          </widget>
         </item>
-        <item row="0" column="0">
-         <widget class="QPushButton" name="btn_section_add_new">
+        <item row="2" column="0">
+         <widget class="QPushButton" name="btn_section_add">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
           <property name="text">
            <string>Add Section</string>
           </property>
          </widget>
         </item>
-        <item row="1" column="0">
+        <item row="0" column="0">
          <widget class="QLabel" name="label_6">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
@@ -2910,31 +2926,17 @@ li.checked::marker { content: &quot;\2612&quot;; }
           </property>
          </widget>
         </item>
-        <item row="4" column="0" colspan="2">
-         <widget class="QPushButton" name="btn_section_options">
-          <property name="text">
-           <string>Options</string>
+        <item row="0" column="1" alignment="Qt::AlignRight">
+         <widget class="QToolButton" name="btn_section_clear">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
           </property>
-         </widget>
-        </item>
-        <item row="3" column="1">
-         <widget class="QPushButton" name="btn_section_reset_current">
-          <property name="text">
-           <string>Reset Section</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QPushButton" name="btn_section_exclude_new">
-          <property name="text">
-           <string>Exclude Section</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="0">
-         <widget class="QPushButton" name="btn_section_mark_finished">
-          <property name="text">
-           <string>Mark Finished</string>
+          <property name="icon">
+           <iconset resource="../../resources/icons/icons.qrc">
+            <normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</iconset>
           </property>
          </widget>
         </item>

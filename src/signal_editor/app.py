@@ -188,6 +188,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.action_load_state.triggered.connect(self.restore_state)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_select_file.triggered.connect(self.select_data_file)
+        self.action_next_section.triggered.connect(self.data.sigs[self.signal_name].next_section)
+        self.action_previous_section.triggered.connect(
+            self.data.sigs[self.signal_name].previous_section
+        )
 
         # Plotting Related Actions
         self.action_remove_peak_rect.triggered.connect(self.plot.show_region_selector)
@@ -199,7 +203,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         self.plot.sig_excluded_range.connect(self.data.exclude_region)
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
-        self.sig_plot_data_changed.connect(self._update_plot_view)
+        self.sig_plot_data_changed.connect(self.plot.update_plot_view)
 
         # Button Actions
         self.btn_apply_filter.clicked.connect(self.handle_apply_filter)
@@ -209,11 +213,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.btn_load_selection.clicked.connect(self.handle_load_selection)
         self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
         self.btn_select_file.clicked.connect(self.select_data_file)
-        self.btn_section_add_new.clicked.connect(
+        self.btn_section_add.clicked.connect(
             lambda: self.ui.confirm_cancel_buttons.setVisible(True)
         )
-        self.btn_section_add_new.clicked.connect(self.maybe_new_section)
-        self.btn_section_exclude_new.clicked.connect(self.maybe_new_section)
+        self.btn_section_add.clicked.connect(self.maybe_new_section)
 
         # Data Export Actions
         self.btn_export_to_csv.clicked.connect(lambda: self.export_results("csv"))
@@ -441,22 +444,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             logger.error(msg)
             self.statusbar.showMessage(msg)
 
-    @Slot(str)
-    def _update_plot_view(self, name: SignalName | str) -> None:
-        def update(plot_widget: pg.PlotWidget) -> None:
-            plot_item = plot_widget.getPlotItem()
-            view_box = plot_item.getViewBox()
-            view_box.autoRange()
-            view_box.enableAutoRange("y")
-            plot_item.setDownsampling(auto=True)
-            plot_item.setClipToView(True)
-            view_box.setAutoVisible(y=True)
-            view_box.setMouseEnabled(x=True, y=False)
-
-        for w_name, widget in self.plot.plot_widgets.items():
-            if w_name in name:
-                update(widget)
-
     @Slot()
     def handle_plot_draw(self) -> None:
         with pg.BusyCursor():
@@ -470,8 +457,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _draw_initial_signals(self) -> None:
         for name, sig in self.data.sigs.items():
-            plot_widget = self.plot.plot_widgets[name]
-            self.plot.draw_signal(sig.get_active_signal(), plot_widget, name)
+            self.plot.draw_signal(sig.get_active_signal(), name)
         self._set_x_ranges()
 
     def _set_x_ranges(self) -> None:
@@ -486,14 +472,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             )
             vb.setXRange(0, data_length)
         for name in ["hbr", "ventilation"]:
-            self._update_plot_view(name)
+            self.sig_plot_data_changed.emit(name)
 
     def _update_signal(self, name: SignalName | str) -> None:
         signal_data = self.data.sigs[name].get_active_signal()
-        plot_widget = self.plot.plot_widgets[name]
-        self.plot.draw_signal(signal_data, plot_widget, name)
+        self.plot.draw_signal(signal_data, name)
         self._set_x_ranges()
-        # self.sig_plot_data_changed.emit(name)
 
     @Slot()
     def handle_table_view_data(self) -> None:
@@ -508,22 +492,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         df_description = data.describe(percentiles=None)
 
         model = CompactDFModel(df_head=df_head, df_tail=df_tail)
-        self._set_table_model(self.table_data_preview, model)
+        self._make_table(self.table_data_preview, model)
 
         info = DescriptiveStatsModel(df_description)
-        self._set_table_model(self.table_data_info, info)
+        self._make_table(self.table_data_info, info)
 
-    def _set_table_model(self, table_view: QTableView, model: QAbstractTableModel) -> None:
-        """
-        Set the model for the given table view
-
-        Parameters
-        ----------
-        table_view : QTableView
-            The table view for which to set the model
-        model : QAbstractTableModel
-            The model to use
-        """
+    def _make_table(self, table_view: QTableView, model: QAbstractTableModel) -> None:
         table_view.setModel(model)
         self._customize_table_header(table_view, model.columnCount())
 
@@ -534,21 +508,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         header_alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft,
         resize_mode: QHeaderView.ResizeMode = QHeaderView.ResizeMode.Stretch,
     ) -> None:
-        """
-        Customize header alignment and resize the columns to fill the available
-        horizontal space
-
-        Parameters
-        ----------
-        table_view : QTableView
-            The table view to customize
-        n_columns : int
-            The number of columns in the table
-        header_alignment : Qt.AlignmentFlag, optional
-            The alignment of the header, by default Qt.AlignmentFlag.AlignLeft
-        resize_mode : QHeaderView.ResizeMode, optional
-            The resize mode for the columns, by default QHeaderView.ResizeMode.Stretch
-        """
         table_view.horizontalHeader().setDefaultAlignment(header_alignment)
         table_view.verticalHeader().setVisible(False)
         table_view.resizeColumnsToContents()
@@ -575,7 +534,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             )
             self.plot.draw_signal(
                 sig=self.data.sigs[signal_name].get_active_signal(),
-                plot_widget=self.plot.plot_widgets[signal_name],
                 signal_name=signal_name,
             )
         btn.success("Finished")
@@ -589,7 +547,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         with pg.BusyCursor():
             peak_params = self.get_peak_detection_values()
             name = self.signal_name
-            plot_widget = self.plot.plot_widgets[name]
             if self.data.sigs[name].active_section.data.shape[0] == 0:
                 msg = "Signal needs to be filtered before peak detection can be performed."
                 self.sig_show_message.emit(msg, "info")
@@ -605,7 +562,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.plot.draw_peaks(
                 pos_x=peaks,
                 pos_y=peaks_y,
-                plot_widget=plot_widget,
                 signal_name=name,
             )
         btn.success("Finished")
@@ -615,7 +571,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def handle_draw_results(self, name: SignalName | str) -> None:
         rate_name = f"{name}_rate"
         rate_plot_widget = self.plot.plot_widgets[rate_name]
-        self.data.sigs[name].active_section.calculate_rate(sampling_rate=self.data.fs)
+        self.data.sigs[name].active_section.calculate_rate()
         rate_interp = self.data.sigs[name].active_section.rate_data.rate_interpolated
 
         self.plot.draw_rate(
@@ -627,7 +583,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     @Slot(str)
     def handle_scatter_clicked(self, name: SignalName | str) -> None:
         self._sync_peak_indices(name)
-        self.data.sigs[name].active_section.calculate_rate(sampling_rate=self.data.fs)
+        self.data.sigs[name].active_section.calculate_rate()
         self.sig_draw_signal_rate.emit(name)
 
     @Slot(QCloseEvent)
@@ -636,8 +592,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if hasattr(self, "hdf5view_process") and self.hdf5view_process:
             self.hdf5view_process.kill()
             self.hdf5view_process = None
-        # if self.ui.console_dock.isVisible():
-        # self.ui.console_dock.close()
         if self.ui.jupyter_console_dock.isVisible():
             self.ui.jupyter_console_dock.close()
 
@@ -835,7 +789,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         btn.success("Finished")
 
         result_table: QTableView = getattr(self, f"table_view_results_{result_name}")
-        self._set_table_model(result_table, PolarsModel(focused_result_df))
+        self._make_table(result_table, PolarsModel(focused_result_df))
         self._results[result_name] = results
         self.tabs_main.setCurrentIndex(2)
 
@@ -1019,12 +973,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def refresh_app_state(self) -> None:
         self.handle_table_view_data()
         for s_name in self.data.sigs:
-            signal_widget = self.plot.plot_widgets[s_name]
             processed_name = self.data.sigs[s_name].processed_name
             if processed_name not in self.data.sigs[s_name].data.columns:
                 self.plot.draw_signal(
                     self.data.sigs[s_name].active_section.data.get_column(s_name).to_numpy(),
-                    signal_widget,
                     s_name,
                 )
                 continue
@@ -1033,10 +985,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             peaks = self.data.sigs[s_name].get_all_peaks()
             peaks_y = processed_signal[peaks]
             rate_widget = self.plot.plot_widgets[f"{s_name}_rate"]
-            self.plot.draw_signal(processed_signal, signal_widget, s_name)
-            self.plot.draw_peaks(peaks, peaks_y, signal_widget, s_name)
+            self.plot.draw_signal(processed_signal, s_name)
+            self.plot.draw_peaks(peaks, peaks_y, s_name)
             self.plot.draw_rate(rate, rate_widget, s_name)
-            self._set_table_model(
+            self._make_table(
                 getattr(self, f"table_view_results_{s_name}"),
                 PolarsModel(self.data.focused_results[s_name].to_polars()),
             )

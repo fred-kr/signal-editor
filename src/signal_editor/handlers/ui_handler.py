@@ -27,6 +27,7 @@ from ..views._ui_state_maps import (
     INITIAL_STATE_METHODS_MAP,
 )
 from ..views.custom_widgets import ConfirmCancelButtons, JupyterConsoleWidget
+from .helpers.table_view_helper import TableViewHelper
 
 if TYPE_CHECKING:
     from ..app import MainWindow
@@ -71,7 +72,7 @@ class UIHandler(QObject):
         self._window.btn_load_selection.setEnabled(False)
         self._window.dock_widget_sections.setVisible(False)
         self.confirm_cancel_buttons = ConfirmCancelButtons()
-        self._window.section_widgets_container.layout().addWidget(self.confirm_cancel_buttons)
+        self._window.section_dock_contents.layout().addWidget(self.confirm_cancel_buttons)
 
     def _prepare_inputs(self) -> None:
         # Signal Filtering

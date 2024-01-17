@@ -7,7 +7,7 @@ import neurokit2 as nk
 import numpy as np
 import polars as pl
 from numpy.typing import NDArray
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, Slot
 
 from ..type_aliases import (
     PeakDetectionInputValues,
@@ -25,6 +25,33 @@ from .filters import (
     scale_signal,
 )
 from .peaks import find_peaks
+
+
+class InitialState(TypedDict):
+    name: str
+    sampling_rate: int
+    data: pl.DataFrame
+
+
+class SignalDataDict(TypedDict):
+    name: str
+    sampling_rate: int
+    data: NDArray[np.void]
+    original_data: NDArray[np.void]
+    rate_data: "RateData"
+    peaks: NDArray[np.int32]
+
+
+class SectionDict(TypedDict):
+    section_id: "SectionID"
+    name: str
+    data: NDArray[np.void]
+    peaks: NDArray[np.int32]
+    rate: NDArray[np.float64]
+    rate_interpolated: NDArray[np.float64]
+    filter_parameters: SignalFilterParameters | None
+    standardize_parameters: StandardizeParameters | None
+    peak_detection_parameters: PeakDetectionParameters
 
 
 def ensure_correct_order(start: int, stop: int) -> tuple[int, int]:
@@ -94,32 +121,22 @@ class SectionID(str):
         return super().__new__(cls, value)
 
 
-class SectionDict(TypedDict):
-    section_id: SectionID
-    name: str
-    data: NDArray[np.void]
-    peaks: NDArray[np.int32]
-    rate: NDArray[np.float64]
-    rate_interpolated: NDArray[np.float64]
-    filter_parameters: SignalFilterParameters | None
-    standardize_parameters: StandardizeParameters | None
-    peak_detection_parameters: PeakDetectionParameters
-
-
 class Section:
-    _id_counter: int = 0
+    _id_counters: dict[str, int] = {}
 
     def __init__(
         self,
         data: pl.DataFrame,
         name: str,
+        sampling_rate: int,
         set_active: bool = False,
         include: bool = True,
     ) -> None:
         self._is_included = include
-        self.section_id = self._generate_id()
+        self.section_id = self._generate_id(name)
         self.data = data
         self.name = name
+        self._sampling_rate = sampling_rate
         self._processed_name = f"{name}_processed"
         self._is_active = set_active
         index_col = data.get_column("index")
@@ -133,17 +150,20 @@ class Section:
         }
 
     @classmethod
-    def _get_next_id(cls) -> int:
-        cls._id_counter += 1
-        return cls._id_counter
+    def _get_next_id(cls, name: str) -> int:
+        if name not in cls._id_counters:
+            cls._id_counters[name] = 0
+        cls._id_counters[name] += 1
+        return cls._id_counters[name]
 
     @classmethod
-    def reset_id_counter(cls) -> None:
-        cls._id_counter = 0
+    def reset_id_counter(cls, name: str) -> None:
+        if name in cls._id_counters:
+            cls._id_counters[name] = 0
 
-    def _generate_id(self) -> SectionID:
+    def _generate_id(self, name: str) -> SectionID:
         prefix = "IN" if self._is_included else "EX"
-        number = self._get_next_id()
+        number = self._get_next_id(name)
         return SectionID(f"{prefix}_{number:03d}")
 
     @property
@@ -170,6 +190,14 @@ class Section:
     def processed_signal(self) -> NDArray[np.float64]:
         return self.data.get_column(self._processed_name).to_numpy()
 
+    @property
+    def sampling_rate(self) -> int:
+        return self._sampling_rate
+
+    @sampling_rate.setter
+    def sampling_rate(self, value: int) -> None:
+        self._sampling_rate = value
+
     def resize(self, start_index: int, stop_index: int, data: pl.DataFrame | None = None) -> None:
         start_index, stop_index = ensure_correct_order(start_index, stop_index)
         if start_index == self.start_index and stop_index == self.stop_index:
@@ -187,11 +215,11 @@ class Section:
     def filter_signal(
         self,
         pipeline: Pipeline,
-        sampling_rate: int,
         **kwargs: Unpack[SignalFilterParameters],
     ) -> None:
         method = kwargs.get("method", "None")
         sig = self.processed_signal
+        sampling_rate = self.sampling_rate
         if pipeline == "custom":
             if method == "None":
                 filtered = sig
@@ -227,10 +255,10 @@ class Section:
 
     def detect_peaks(
         self,
-        sampling_rate: int,
         method: PeakDetectionMethod,
         input_values: PeakDetectionInputValues,
     ) -> None:
+        sampling_rate = self.sampling_rate
         peaks = find_peaks(self.processed_signal, sampling_rate, method, input_values)
         pl_peaks = pl.Series("peaks", peaks, pl.Int32)
         self._parameters_used["peak_detection"] = {
@@ -245,7 +273,8 @@ class Section:
             ).alias("is_peak")
         )
 
-    def calculate_rate(self, sampling_rate: int) -> None:
+    def calculate_rate(self) -> None:
+        sampling_rate = self.sampling_rate
         peaks = self.get_peaks()
         rate = np.asarray(
             nk.signal_rate(
@@ -313,6 +342,9 @@ class SectionContainer:
         self._included: dict[SectionID, Section] = {}
         self._excluded: dict[SectionID, Section] = {}
 
+    def __repr__(self) -> str:
+        return f"SectionContainer(name={self._name}, included={self._included}, excluded={self._excluded})"
+
     def get_previous_section(self, section_id: SectionID) -> Section:
         if section_id in self._included:
             prev_id = SectionID(f"IN_{int(section_id[3:]) - 1:03d}")
@@ -350,7 +382,7 @@ class SectionContainer:
     def get_active_section(self) -> Section:
         section = next((section for section in self._included.values() if section.is_active), None)
         if section is None:
-            section = self._included[SectionID("IN_001")]
+            section = self._included[list(self._included.keys())[0]]
         return section
 
     def set_active_section(self, section_id: SectionID) -> None:
@@ -390,7 +422,9 @@ class SectionContainer:
         right_data = existing_section.data.filter(
             pl.col("index").is_between(new_section.stop_index + 1, existing_section.stop_index)
         )
-        right_section = Section(right_data, name=self._name)
+        right_section = Section(
+            right_data, name=self._name, sampling_rate=existing_section.sampling_rate
+        )
         existing_section.resize(existing_section.start_index, new_section.start_index - 1)
         return right_section
 
@@ -416,21 +450,6 @@ class SectionContainer:
             self.set_active_section(new_active.section_id)
         self._included.pop(section_id, None)
         self._excluded.pop(section_id, None)
-
-
-class InitialState(TypedDict):
-    name: str
-    sampling_rate: int
-    data: pl.DataFrame
-
-
-class SignalDataDict(TypedDict):
-    name: str
-    sampling_rate: int
-    data: NDArray[np.void]
-    original_data: NDArray[np.void]
-    rate_data: RateData
-    peaks: NDArray[np.int32]
 
 
 class SignalData(QObject):
@@ -476,9 +495,16 @@ class SignalData(QObject):
             "index", "temperature", self.name, self.processed_name, "is_peak"
         )
 
-        section = Section(active_data, name=self.name, set_active=True, include=True)
+        section = Section(
+            active_data,
+            name=self.name,
+            set_active=True,
+            include=True,
+            sampling_rate=self.sampling_rate,
+        )
         self._default_section = section
         self.sections.add_section(section)
+        
 
     @property
     def active_section(self) -> Section:
@@ -508,6 +534,14 @@ class SignalData(QObject):
     def get_section_by_id(self, section_id: SectionID) -> Section:
         return self.sections.get_section_by_id(section_id)
 
+    @Slot(str)
+    def next_section(self, section_id: SectionID) -> None:
+        self.sections.get_next_section(section_id)
+
+    @Slot(str)
+    def previous_section(self, section_id: SectionID) -> None:
+        self.sections.get_previous_section(section_id)
+
     def set_to_default(self) -> None:
         self.set_active_section(self._default_section.section_id)
 
@@ -526,7 +560,13 @@ class SignalData(QObject):
         self, lower: int, upper: int, set_active: bool = False, include: bool = True
     ) -> None:
         data = self.data.filter(pl.col("index").is_between(lower, upper))
-        new_section = Section(data, name=self.name, set_active=set_active, include=include)
+        new_section = Section(
+            data,
+            name=self.name,
+            set_active=set_active,
+            include=include,
+            sampling_rate=self.sampling_rate,
+        )
         self.sections.add_section(new_section)
         self.sig_new_section_id.emit(new_section.section_id)
 
@@ -560,7 +600,7 @@ class SignalData(QObject):
         self.name = self._initial_state["name"]
         self.sampling_rate = self._initial_state["sampling_rate"]
         self.data = self._initial_state["data"]
-        Section.reset_id_counter()
+        Section.reset_id_counter(name=self.name)
         self._finish_init()
 
     def remove_all_excluded(self) -> None:

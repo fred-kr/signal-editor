@@ -7,7 +7,6 @@ import h5py
 import mne.io
 import numpy as np
 import polars as pl
-from loguru import logger
 
 from .result import ResultDict
 
@@ -82,7 +81,6 @@ def format_column_names(columns: Iterable[str]) -> list[str]:
     """
     if not columns:
         raise ValueError("Column names cannot be empty.")
-    logger.debug(f"Original column names: {columns}")
     default_column_name = "column"
     unique_columns: list[str] = []
     for i, col in enumerate(columns, start=1):
@@ -94,7 +92,6 @@ def format_column_names(columns: Iterable[str]) -> list[str]:
         formatted_col = re.sub(r"_+", "_", formatted_col)
         formatted_col = formatted_col.rstrip("_")
         unique_columns.append(formatted_col)
-    logger.debug(f"Formatted column names: {unique_columns}")
     return unique_columns
 
 
@@ -104,15 +101,19 @@ def read_excel(
     **kwargs: Any,
 ) -> pl.DataFrame:
     """
-    Reads an Excel file and returns the contents as a pandas DataFrame.
+    Reads data from an Excel file into a polars DataFrame.
 
-    Parameters:
-        file_path (str | Path): The path to the Excel file.
-        sheet_id (int, optional): The index of the sheet to read. Defaults to 0.
-        **kwargs: Additional keyword arguments to be passed to the pandas `read_excel` function.
+    Parameters
+    ----------
+    file_path : str | Path
+        Path to the Excel file.
+    sheet_id : int, optional
+        ID of the sheet to read, by default 0
 
-    Returns:
-        pl.DataFrame: The contents of the Excel file as a pandas DataFrame.
+    Returns
+    -------
+    pl.DataFrame
+        The polars DataFrame containing the data from the Excel file.
     """
     return pl.read_excel(
         file_path,
@@ -122,7 +123,6 @@ def read_excel(
     )
 
 
-# TODO: Make generic
 def read_edf(
     file_path: str,
     start: int = 0,
@@ -131,14 +131,25 @@ def read_edf(
     """
     Reads data from an EDF file into a polars DataFrame.
 
-    Args:
-        file_path (str): The path to the EDF file.
-        start (int, optional): The start index of the data to read. Defaults to 0.
-        stop (int, optional): The end index of the data to read. Defaults to None.
+    Parameters
+    ----------
+    file_path : str
+        Path to the EDF file.
+    start : int, optional
+        Index of the first sample to read, by default 0
+    stop : int | None, optional
+        Index of the last sample to read. Set to `None` (default) to read all samples
 
-    Returns:
-        pl.DataFrame: A polars DataFrame containing the data from the EDF file.
-    """
+    Returns
+    -------
+    pl.LazyFrame
+        The polars DataFrame containing the data from the EDF file.
+    datetime
+        The date of measurement stored in the EDF file.
+    float
+        The sampling rate stored in the EDF file.
+        
+    """    
     raw_edf = mne.io.read_raw_edf(file_path)
     channel_names = cast(list[str], raw_edf.info.ch_names)
     date_measured = cast(datetime, raw_edf.info["meas_date"])
@@ -158,20 +169,14 @@ def read_edf(
     ]
     data, times = raw_edf.get_data(start=start, stop=stop, return_times=True)
     lf = (
-        pl.from_numpy(
-            data.transpose(), schema={name: pl.Float64 for name in column_names}
-        )
+        pl.from_numpy(data.transpose(), schema={name: pl.Float64 for name in column_names})
         .lazy()
         .with_row_count("index", offset=start)
         .with_columns(
             pl.Series("time_s", times, dtype=pl.Float64),
             pl.col("temperature").round(1),
         )
-        .filter(
-            (pl.col("temperature") != 0)
-            & (pl.col("hbr") != 0)
-            & (pl.col("ventilation") != 0)
-        )
+        .filter((pl.col("temperature") != 0) & (pl.col("hbr") != 0) & (pl.col("ventilation") != 0))
         .select("index", "time_s", *column_names)
     )
     return lf, date_measured, sampling_rate
