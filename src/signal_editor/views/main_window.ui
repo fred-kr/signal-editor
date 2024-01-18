@@ -31,6 +31,18 @@
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="_2">
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
     <item>
      <widget class="QTabWidget" name="tabs_main">
       <property name="sizePolicy">
@@ -44,6 +56,9 @@
       </property>
       <property name="currentIndex">
        <number>0</number>
+      </property>
+      <property name="documentMode">
+       <bool>true</bool>
       </property>
       <widget class="QWidget" name="tab_data">
        <attribute name="icon">
@@ -682,9 +697,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <property name="toolTip">
     <string>Sidebars can be moved by dragging the title bar</string>
    </property>
-   <property name="toolTipDuration">
-    <number>3</number>
-   </property>
    <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
    </property>
@@ -699,6 +711,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </attribute>
    <widget class="QWidget" name="sidebar_dock_contents">
     <layout class="QVBoxLayout" name="verticalLayout_2">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
      <item>
       <widget class="QStackedWidget" name="sidebar">
        <property name="sizePolicy">
@@ -2871,6 +2889,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </attribute>
    <widget class="QWidget" name="section_dock_contents">
     <layout class="QGridLayout" name="gridLayout_7">
+     <property name="leftMargin">
+      <number>0</number>
+     </property>
+     <property name="rightMargin">
+      <number>0</number>
+     </property>
      <item row="0" column="0" alignment="Qt::AlignTop">
       <widget class="QWidget" name="section_widgets_container" native="true">
        <property name="sizePolicy">
@@ -2900,19 +2924,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
           </property>
          </widget>
         </item>
-        <item row="2" column="0">
-         <widget class="QPushButton" name="btn_section_add">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="text">
-           <string>Add Section</string>
-          </property>
-         </widget>
-        </item>
         <item row="0" column="0">
          <widget class="QLabel" name="label_6">
           <property name="sizePolicy">
@@ -2927,7 +2938,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
          </widget>
         </item>
         <item row="0" column="1" alignment="Qt::AlignRight">
-         <widget class="QToolButton" name="btn_section_clear">
+         <widget class="QPushButton" name="btn_section_clear">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
             <horstretch>0</horstretch>
@@ -2937,6 +2948,22 @@ li.checked::marker { content: &quot;\2612&quot;; }
           <property name="icon">
            <iconset resource="../../resources/icons/icons.qrc">
             <normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</iconset>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QPushButton" name="btn_section_add">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Add Section</string>
           </property>
          </widget>
         </item>

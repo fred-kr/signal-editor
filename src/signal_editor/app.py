@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QInputDialog,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QTableView,
 )
@@ -76,7 +77,7 @@ from .type_aliases import (
 from .views.main_window import Ui_MainWindow
 
 
-class MainWindow(QMainWindow, Ui_MainWindow):
+class SignalEditor(QMainWindow, Ui_MainWindow):
     sig_data_filtered = Signal(str)
     sig_data_loaded = Signal()
     sig_draw_signal_rate = Signal(str)
@@ -112,6 +113,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self._add_style_toggle()
         self._add_profiler()
         self.data.fs = int(self.config.config.get("Defaults", "SampleRate", fallback=-1))
+        self._setup_section_widgets()
 
     # region Dev
     def _add_profiler(self) -> None:
@@ -175,8 +177,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.menubar.addSeparator()
         self.menubar.addAction("Switch Theme", self.theme_switcher.switch_theme)
 
-    def _setup_section_combo_box(self) -> None:
+    def _setup_section_widgets(self) -> None:
+        self.combo_box_section_select.blockSignals(True)
         self.combo_box_section_select.addItem("IN_001")
+        self.combo_box_section_select.blockSignals(False)
+        add_section_menu = QMenu(self.btn_section_add)
+        add_section_menu.addAction("Included", self._new_included_section)
+        add_section_menu.addAction("Excluded", self._new_excluded_section)
+        self.btn_section_add.setMenu(add_section_menu)
 
     def _connect_signals(self) -> None:
         """
@@ -188,10 +196,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.action_load_state.triggered.connect(self.restore_state)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_select_file.triggered.connect(self.select_data_file)
-        self.action_next_section.triggered.connect(self.data.sigs[self.signal_name].next_section)
-        self.action_previous_section.triggered.connect(
-            self.data.sigs[self.signal_name].previous_section
-        )
+        self.action_next_section.triggered.connect(self._on_next_section)
+        self.action_previous_section.triggered.connect(self._on_previous_section)
 
         # Plotting Related Actions
         self.action_remove_peak_rect.triggered.connect(self.plot.show_region_selector)
@@ -213,10 +219,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.btn_load_selection.clicked.connect(self.handle_load_selection)
         self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
         self.btn_select_file.clicked.connect(self.select_data_file)
-        self.btn_section_add.clicked.connect(
-            lambda: self.ui.confirm_cancel_buttons.setVisible(True)
-        )
-        self.btn_section_add.clicked.connect(self.maybe_new_section)
 
         # Data Export Actions
         self.btn_export_to_csv.clicked.connect(lambda: self.export_results("csv"))
@@ -238,47 +240,65 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.sig_active_section_changed.connect(self._on_section_changed)
 
         # UI Handler Signals
-        self.ui.sig_section_confirmed.connect(self._on_section_chosen)
+        self.ui.sig_section_confirmed.connect(self._on_section_confirmed)
+        self.ui.sig_section_canceled.connect(self._on_section_canceled)
 
         # Widget specific Signals
         self.spin_box_fs.valueChanged.connect(self.data.update_fs)
         self.combo_box_section_select.currentTextChanged.connect(self._on_section_changed)
 
     @Slot()
-    def maybe_new_section(self) -> None:
-        sender_name = self.sender().objectName()
+    def _new_included_section(self) -> None:
         sig_name = self.signal_name
-        if sender_name == "btn_section_add_new":
-            section_type = "included"
-        elif sender_name == "btn_section_exclude_new":
-            section_type = "excluded"
-        else:
-            raise ValueError(f"Unknown sender: {sender_name}")
-
         current_limits = self.data.sigs[sig_name].active_region_limits
         self.ui.confirm_cancel_buttons.show()
-        self.plot.show_section_selector(
-            name=sig_name, section_type=section_type, bounds=current_limits
-        )
+        self.plot.show_section_selector(sig_name, "included", current_limits)
 
-    @Slot(bool)
-    def _on_section_chosen(self, confirmed: bool) -> None:
+    @Slot()
+    def _new_excluded_section(self) -> None:
         sig_name = self.signal_name
+        current_limits = self.data.sigs[sig_name].active_region_limits
+        self.ui.confirm_cancel_buttons.show()
+        self.plot.show_section_selector(sig_name, "excluded", current_limits)
 
-        # Get the new section limits
-        lower, upper = self.plot.plot_items[sig_name].active_section.getRegion()
+    @Slot()
+    def _on_section_confirmed(self) -> None:
+        name = self.signal_name
+        active_region = self.plot.plot_items[name].active_section
+        if active_region is None:
+            return
+        lower, upper = active_region.getRegion()
         lower, upper = int(lower), int(upper)
-
-        self.data.sigs[sig_name].add_section(lower, upper, set_active=confirmed, include=confirmed)
+        self.data.sigs[name].add_section(lower, upper, set_active=True)
         self.combo_box_section_select.addItem(self.data.active_section.section_id)
+        self.combo_box_section_select.setCurrentText(self.data.active_section.section_id)
         self.ui.confirm_cancel_buttons.hide()
         self.sig_active_section_changed.emit(self.data.active_section.section_id)
+
+    @Slot()
+    def _on_section_canceled(self) -> None:
+        self.ui.confirm_cancel_buttons.hide()
+        self.plot.hide_section_selector(self.signal_name)
 
     @Slot(str)
     def _on_section_changed(self, section_id: SectionID) -> None:
         self.plot.hide_section_selector(self.signal_name)
         self.data.sigs[self.signal_name].set_active_section(section_id)
         self.handle_plot_draw()
+
+    @Slot()
+    def _on_next_section(self) -> None:
+        if self.signal_name not in self.data.sigs:
+            return
+        self.data.sigs[self.signal_name].next_section(self.combo_box_section_select.currentText())
+
+    @Slot()
+    def _on_previous_section(self) -> None:
+        if self.signal_name not in self.data.sigs:
+            return
+        self.data.sigs[self.signal_name].previous_section(
+            self.combo_box_section_select.currentText()
+        )
 
     @Slot()
     def remove_excluded_regions(self) -> None:
@@ -1029,6 +1049,6 @@ def main(dev_mode: bool = False, antialias: bool = False) -> None:
         level="DEBUG",
     )
     app = QApplication(sys.argv)
-    window = MainWindow()
+    window = SignalEditor()
     window.show()
     sys.exit(app.exec())

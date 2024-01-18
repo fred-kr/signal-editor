@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QAbstract
     QMenuBar, QPushButton, QSizePolicy, QSlider,
     QSpacerItem, QSpinBox, QStackedWidget, QStatusBar,
     QTabWidget, QTableView, QTextBrowser, QToolBar,
-    QToolButton, QVBoxLayout, QWidget)
+    QVBoxLayout, QWidget)
 
 from pyqtgraph import (ComboBox, FeedbackButton)
 from . import icons_rc
@@ -186,6 +186,7 @@ class Ui_MainWindow(object):
         self._2.setSpacing(4)
         self._2.setContentsMargins(7, 7, 7, 7)
         self._2.setObjectName(u"_2")
+        self._2.setContentsMargins(0, 0, 0, 0)
         self.tabs_main = QTabWidget(self.centralwidget)
         self.tabs_main.setObjectName(u"tabs_main")
         sizePolicy1 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -194,6 +195,7 @@ class Ui_MainWindow(object):
         sizePolicy1.setHeightForWidth(self.tabs_main.sizePolicy().hasHeightForWidth())
         self.tabs_main.setSizePolicy(sizePolicy1)
         self.tabs_main.setTabShape(QTabWidget.Rounded)
+        self.tabs_main.setDocumentMode(True)
         self.tab_data = QWidget()
         self.tab_data.setObjectName(u"tab_data")
         self.gridLayout_4 = QGridLayout(self.tab_data)
@@ -517,7 +519,6 @@ class Ui_MainWindow(object):
         self.dock_widget_sidebar = QDockWidget(MainWindow)
         self.dock_widget_sidebar.setObjectName(u"dock_widget_sidebar")
         self.dock_widget_sidebar.setMinimumSize(QSize(475, 1130))
-        self.dock_widget_sidebar.setToolTipDuration(3)
         self.dock_widget_sidebar.setFeatures(QDockWidget.DockWidgetFloatable|QDockWidget.DockWidgetMovable)
         self.dock_widget_sidebar.setAllowedAreas(Qt.LeftDockWidgetArea|Qt.RightDockWidgetArea)
         self.sidebar_dock_contents = QWidget()
@@ -526,6 +527,7 @@ class Ui_MainWindow(object):
         self.verticalLayout_2.setSpacing(4)
         self.verticalLayout_2.setContentsMargins(7, 7, 7, 7)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
+        self.verticalLayout_2.setContentsMargins(0, -1, 0, -1)
         self.sidebar = QStackedWidget(self.sidebar_dock_contents)
         self.sidebar.setObjectName(u"sidebar")
         sizePolicy.setHeightForWidth(self.sidebar.sizePolicy().hasHeightForWidth())
@@ -1613,6 +1615,7 @@ class Ui_MainWindow(object):
         self.gridLayout_7.setSpacing(4)
         self.gridLayout_7.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_7.setObjectName(u"gridLayout_7")
+        self.gridLayout_7.setContentsMargins(0, -1, 0, -1)
         self.section_widgets_container = QWidget(self.section_dock_contents)
         self.section_widgets_container.setObjectName(u"section_widgets_container")
         sizePolicy.setHeightForWidth(self.section_widgets_container.sizePolicy().hasHeightForWidth())
@@ -1634,13 +1637,6 @@ class Ui_MainWindow(object):
 
         self.gridLayout_18.addWidget(self.combo_box_section_select, 1, 0, 1, 2)
 
-        self.btn_section_add = QPushButton(self.section_widgets_container)
-        self.btn_section_add.setObjectName(u"btn_section_add")
-        sizePolicy6.setHeightForWidth(self.btn_section_add.sizePolicy().hasHeightForWidth())
-        self.btn_section_add.setSizePolicy(sizePolicy6)
-
-        self.gridLayout_18.addWidget(self.btn_section_add, 2, 0, 1, 1)
-
         self.label_6 = QLabel(self.section_widgets_container)
         self.label_6.setObjectName(u"label_6")
         sizePolicy3.setHeightForWidth(self.label_6.sizePolicy().hasHeightForWidth())
@@ -1648,13 +1644,21 @@ class Ui_MainWindow(object):
 
         self.gridLayout_18.addWidget(self.label_6, 0, 0, 1, 1)
 
-        self.btn_section_clear = QToolButton(self.section_widgets_container)
+        self.btn_section_clear = QPushButton(self.section_widgets_container)
         self.btn_section_clear.setObjectName(u"btn_section_clear")
         sizePolicy6.setHeightForWidth(self.btn_section_clear.sizePolicy().hasHeightForWidth())
         self.btn_section_clear.setSizePolicy(sizePolicy6)
         self.btn_section_clear.setIcon(icon4)
+        self.btn_section_clear.setFlat(True)
 
         self.gridLayout_18.addWidget(self.btn_section_clear, 0, 1, 1, 1, Qt.AlignRight)
+
+        self.btn_section_add = QPushButton(self.section_widgets_container)
+        self.btn_section_add.setObjectName(u"btn_section_add")
+        sizePolicy6.setHeightForWidth(self.btn_section_add.sizePolicy().hasHeightForWidth())
+        self.btn_section_add.setSizePolicy(sizePolicy6)
+
+        self.gridLayout_18.addWidget(self.btn_section_add, 2, 0, 1, 1)
 
 
         self.gridLayout_7.addWidget(self.section_widgets_container, 0, 0, 1, 1, Qt.AlignTop)
@@ -2063,7 +2067,7 @@ class Ui_MainWindow(object):
         self.toolbar_plots.setWindowTitle(QCoreApplication.translate("MainWindow", u"toolbar_plots", None))
         self.dock_widget_sections.setWindowTitle(QCoreApplication.translate("MainWindow", u"Section Controls", None))
         self.btn_section_remove.setText(QCoreApplication.translate("MainWindow", u"Remove Section", None))
-        self.btn_section_add.setText(QCoreApplication.translate("MainWindow", u"Add Section", None))
         self.label_6.setText(QCoreApplication.translate("MainWindow", u"Currently showing:", None))
+        self.btn_section_add.setText(QCoreApplication.translate("MainWindow", u"Add Section", None))
     # retranslateUi
 

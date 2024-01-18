@@ -4,10 +4,10 @@ from typing import (
     Literal,
     Sequence,
 )
-from loguru import logger
 
 import numpy as np
 import pyqtgraph as pg
+from loguru import logger
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QPointF, Qt, Signal, Slot
 
@@ -18,7 +18,7 @@ from ..views.custom_widgets import CustomScatterPlotItem, CustomViewBox
 if TYPE_CHECKING:
     from pyqtgraph.GraphicsScene import mouseEvents
 
-    from ..app import MainWindow
+    from ..app import SignalEditor
 
 
 @dataclass(slots=True)
@@ -84,7 +84,7 @@ class PlotHandler(QObject):
     sig_excluded_range = Signal(int, int)
     sig_active_region_changed = Signal(int, int)
 
-    def __init__(self, window: "MainWindow", parent: QObject | None = None) -> None:
+    def __init__(self, window: "SignalEditor", parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._window = window
         self._click_tolerance = 80
@@ -190,7 +190,7 @@ class PlotHandler(QObject):
                 left_label=left_label,
                 bottom_label=bottom_label,
             )
-            
+
     def show_section_selector(
         self,
         name: str,
@@ -271,7 +271,7 @@ class PlotHandler(QObject):
         text = f"<span style='color: orange; font-size: 12pt; font-weight: bold; font-family: Segoe UI;'>Temperature: {temperature:.1f} °C</span>"
 
         temperature_label.setText(text)
-        
+
         # self._window.statusbar.showMessage(
         #     f"Cursor position (scene): (x = {pos.x()}, y = {pos.y()}); Cursor position (data): (x = {int(mapped_pos.x()):_}, y = {mapped_pos.y():.2f})"
         # )
@@ -343,11 +343,12 @@ class PlotHandler(QObject):
         )
         peaks_scatter.setZValue(60)
 
-        if self.plot_items[signal_name].peaks is not None:
-            plot_widget.removeItem(self.plot_items[signal_name].peaks)
+        peak_ref = self.plot_items[signal_name].peaks
+        if peak_ref is not None:
+            plot_widget.removeItem(peak_ref)
 
-        peaks_scatter.sigClicked.connect(self.remove_clicked_point)
         plot_widget.addItem(peaks_scatter)
+        peaks_scatter.sigClicked.connect(self.remove_clicked_point)
         self.plot_items[signal_name].peaks = peaks_scatter
 
     def draw_rate(

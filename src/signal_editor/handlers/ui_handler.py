@@ -27,17 +27,17 @@ from ..views._ui_state_maps import (
     INITIAL_STATE_METHODS_MAP,
 )
 from ..views.custom_widgets import ConfirmCancelButtons, JupyterConsoleWidget
-from .helpers.table_view_helper import TableViewHelper
 
 if TYPE_CHECKING:
-    from ..app import MainWindow
+    from ..app import SignalEditor
 
 
 class UIHandler(QObject):
     sig_filter_inputs_ready = Signal()
-    sig_section_confirmed = Signal(bool)
+    sig_section_confirmed = Signal()
+    sig_section_canceled = Signal()
 
-    def __init__(self, window: "MainWindow", plot: PlotHandler) -> None:
+    def __init__(self, window: "SignalEditor", plot: PlotHandler) -> None:
         super(UIHandler, self).__init__()
         self._window = window
         self.plot = plot
@@ -72,7 +72,7 @@ class UIHandler(QObject):
         self._window.btn_load_selection.setEnabled(False)
         self._window.dock_widget_sections.setVisible(False)
         self.confirm_cancel_buttons = ConfirmCancelButtons()
-        self._window.section_dock_contents.layout().addWidget(self.confirm_cancel_buttons)
+        self._window.section_widgets_container.layout().addWidget(self.confirm_cancel_buttons)
 
     def _prepare_inputs(self) -> None:
         # Signal Filtering
@@ -108,12 +108,16 @@ class UIHandler(QObject):
         self._window.action_open_console.triggered.connect(self.show_jupyter_console_widget)
         self._window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
 
-        self.confirm_cancel_buttons.confirm_button.clicked.connect(
-            lambda: self.sig_section_confirmed.emit(True)
-        )
-        self.confirm_cancel_buttons.cancel_button.clicked.connect(
-            lambda: self.sig_section_confirmed.emit(False)
-        )
+        self.confirm_cancel_buttons.confirm_button.clicked.connect(self._emit_section_confirmed)
+        self.confirm_cancel_buttons.cancel_button.clicked.connect(self._emit_section_canceled)
+
+    @Slot()
+    def _emit_section_confirmed(self) -> None:
+        self.sig_section_confirmed.emit()
+
+    @Slot()
+    def _emit_section_canceled(self) -> None:
+        self.sig_section_canceled.emit()
 
     def _prepare_toolbars(self) -> None:
         plot_toolbar = self._window.toolbar_plots

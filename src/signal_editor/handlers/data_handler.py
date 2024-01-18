@@ -27,7 +27,7 @@ from ..type_aliases import (
 )
 
 if TYPE_CHECKING:
-    from ..app import MainWindow
+    from ..app import SignalEditor
 
 
 def try_infer_sampling_rate(
@@ -77,7 +77,7 @@ class DataState:
 
 
 class DataHandler(QObject):
-    def __init__(self, window: "MainWindow") -> None:
+    def __init__(self, window: "SignalEditor") -> None:
         super().__init__()
         self._window = window
         self.df: pl.DataFrame = pl.DataFrame()
@@ -190,20 +190,24 @@ class DataHandler(QObject):
     def _get_slice_indices(self, filter_col: str, lower: float, upper: float) -> tuple[int, int]:
         lf = self.df.lazy().with_columns(pl.col("temperature").round(1))
         sorted_lf = lf.sort(pl.col(filter_col), maintain_order=True)
-        b1: int = sorted_lf.filter(pl.col(filter_col) >= pl.lit(lower)).collect().get_column("index")[0]
-        b2: int = sorted_lf.filter(pl.col(filter_col) >= pl.lit(upper)).collect().get_column("index")[0]
+        b1: int = (
+            sorted_lf.filter(pl.col(filter_col) >= pl.lit(lower)).collect().get_column("index")[0]
+        )
+        b2: int = (
+            sorted_lf.filter(pl.col(filter_col) >= pl.lit(upper)).collect().get_column("index")[0]
+        )
         return b1, b2
         # b1: int = (
-            # lf.sort(pl.col(filter_col), maintain_order=True)
-            # .filter(pl.col(filter_col) >= pl.lit(lower))
-            # .collect()
-            # .get_column("index")[0]
+        # lf.sort(pl.col(filter_col), maintain_order=True)
+        # .filter(pl.col(filter_col) >= pl.lit(lower))
+        # .collect()
+        # .get_column("index")[0]
         # )
         # b2: int = (
-            # lf.sort(pl.col(filter_col), maintain_order=True)
-            # .filter(pl.col(filter_col) >= pl.lit(upper))
-            # .collect()
-            # .get_column("index")[0]
+        # lf.sort(pl.col(filter_col), maintain_order=True)
+        # .filter(pl.col(filter_col) >= pl.lit(upper))
+        # .collect()
+        # .get_column("index")[0]
         # )
         # out = [b1, b2]
         # out.sort()

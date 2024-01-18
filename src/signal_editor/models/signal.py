@@ -149,6 +149,15 @@ class Section:
             "peak_detection": None,
         }
 
+    def __repr__(self) -> str:
+        return (
+            f"Section:\n"
+            f"\tName: {self.name}\n"
+            f"\tID: {self.section_id}\n"
+            f"\tIndices: {self._indices}\n"
+            f"\tIs active: {self._is_active}"
+        )
+
     @classmethod
     def _get_next_id(cls, name: str) -> int:
         if name not in cls._id_counters:
@@ -237,10 +246,8 @@ class Section:
             "method_parameters": kwargs,
         }
         self._parameters_used["filter"] = filter_parameters_used
-
-        self.data = self.data.with_columns(
-            pl.Series(self._processed_name, filtered, pl.Float64).alias(self._processed_name)
-        )
+        pl_filtered = pl.Series(self._processed_name, filtered, pl.Float64)
+        self.data = self.data.with_columns((pl_filtered).alias(self._processed_name))
 
     def scale_signal(self, robust: bool = False, window_size: int | None = None) -> None:
         scaled = scale_signal(self.processed_signal, robust, window_size)
@@ -266,11 +273,7 @@ class Section:
             "input_values": input_values,
         }
         self.data = self.data.with_columns(
-            (
-                pl.when(pl.col("index").is_in(pl_peaks))
-                .then(pl.lit(True))
-                .otherwise(pl.col("is_peak"))
-            ).alias("is_peak")
+            (pl.when(pl.col("index").is_in(pl_peaks)).then(True).otherwise(False)).alias("is_peak")
         )
 
     def calculate_rate(self) -> None:
@@ -343,7 +346,13 @@ class SectionContainer:
         self._excluded: dict[SectionID, Section] = {}
 
     def __repr__(self) -> str:
-        return f"SectionContainer(name={self._name}, included={self._included}, excluded={self._excluded})"
+        return (
+            f"SectionContainer:\n"
+            f"\tIncluded:\n"
+            f"\t\t{self._included}\n"
+            f"\tExcluded:\n"
+            f"\t\t{self._excluded}\n"
+        )
 
     def get_previous_section(self, section_id: SectionID) -> Section:
         if section_id in self._included:
@@ -504,7 +513,6 @@ class SignalData(QObject):
         )
         self._default_section = section
         self.sections.add_section(section)
-        
 
     @property
     def active_section(self) -> Section:
