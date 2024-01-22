@@ -201,13 +201,13 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def _new_included_section(self) -> None:
-        current_limits = self.data.sig_data.active_abs_bounds
+        current_limits = self.data.sig_data.active_bounds
         self.container_section_confirm_cancel.show()
         self.plot.show_section_selector("included", current_limits)
 
     @Slot()
     def _new_excluded_section(self) -> None:
-        current_limits = self.data.sig_data.active_abs_bounds
+        current_limits = self.data.sig_data.active_bounds
         self.container_section_confirm_cancel.show()
         self.plot.show_section_selector("excluded", current_limits)
 
@@ -249,7 +249,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def _emit_data_range_info(self) -> None:
-        data = self.data.sig_data.get_active_signal()
+        data = self.data.sig_data.get_active_signal_data()
         len_data, min_data, max_data = data.shape[0], data.min(), data.max()
         self.sig_update_view_range.emit(len_data, min_data, max_data)
 
@@ -305,9 +305,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         result_location = self.output_dir / result_file_name
 
         result_df = (
-            self.data.sig_data.get_section_by_id(self.active_section_id)
-            .get_focused_result()
-            .to_polars()
+            self.data.sig_data.get_section(self.active_section_id).get_focused_result().to_polars()
         )
 
         try:
@@ -386,7 +384,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.ui.update_data_select_ui(path)
 
             self.config.data_dir = self.file_info.dir().path()
-            self._file_path = path
 
     @Slot()
     def handle_load_selection(self) -> None:
@@ -419,7 +416,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     @Slot()
     def handle_plot_draw(self) -> None:
         with pg.BusyCursor():
-            data = self.data.sig_data.get_active_signal()
+            data = self.data.sig_data.get_active_signal_data()
             len_data, min_data, max_data = data.shape[0], data.min(), data.max()
             self.plot.draw_signal(data, self.signal_name)
             self.plot.update_view_limits(len_data, min_data, max_data)
@@ -481,7 +478,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot(str)
     def handle_draw_results(self, section_id: SectionID) -> None:
-        active_section = self.data.sig_data.get_section_by_id(section_id)
+        active_section = self.data.sig_data.get_section(section_id)
         active_section.calculate_rate()
         rate_interp = active_section.rate_data.rate_interpolated
 
@@ -495,7 +492,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     #     if scatter_item is None:
     #         return
     #     plot_peaks = scatter_item.data["x"].astype(np.int32)
-    #     data_peaks = self.data.active_section.get_peaks()
+    #     data_peaks = self.data.active_section.peaks
     #     plot_peaks.sort()
     #     data_peaks.sort()
 
@@ -509,7 +506,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             return
         plot_peaks = scatter_item.data["x"].astype(np.int32)
         plot_peaks.sort()
-        self.data.sig_data.get_section_by_id(section_id).set_peaks(plot_peaks)
+        self.data.sig_data.get_section(section_id).set_peaks(plot_peaks)
         # self.data.sig_data.active_section.calculate_rate()
         self.sig_new_peak_data.emit(section_id)
 
@@ -584,7 +581,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         )
 
     def get_section_identifier(self, section_id: SectionID) -> _t.SectionIdentifier:
-        return self.data.sig_data.get_section_by_id(section_id).get_section_info()
+        return self.data.sig_data.get_section(section_id).get_section_info()
 
     def get_file_metadata(self) -> _t.FileMetadata:
         date_recorded = cast(datetime, self.date_edit_file_info.date().toPython())
@@ -597,7 +594,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         )
 
     def get_processing_parameters(self, section_id: SectionID) -> _t.ProcessingParameters:
-        return self.data.sig_data.get_section_by_id(section_id).processing_parameters
+        return self.data.sig_data.get_section(section_id).processing_parameters
 
     def get_filter_values(self) -> _t.SignalFilterParameters:
         method = self.filter_method
@@ -635,8 +632,8 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     def get_peak_detection_values(self) -> _t.PeakDetectionParameters:
         method = self.peak_detection_method
-        start_index = self.data.active_section.rel_start
-        stop_index = self.data.active_section.rel_stop
+        start_index = self.data.active_section.sect_start
+        stop_index = self.data.active_section.sect_stop
 
         if method == "elgendi_ppg":
             vals = _t.PeakDetectionElgendiPPG(
@@ -879,7 +876,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
         self.spin_box_fs.setValue(state["sampling_frequency"])
         self.file_info.setFile(state["source_file_path"])
-        self._file_path = state["source_file_path"]
 
         self.output_dir = Path(state["output_dir"])
         self.line_edit_output_dir.setText(state["output_dir"])

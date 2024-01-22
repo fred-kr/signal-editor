@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     )
     from .models.signal import SectionID, SectionIndices
 
+
 type SignalName = Literal["hbr", "ventilation"]
 type ScaleMethod = Literal["mad", "zscore", "None"]
 type Pipeline = Literal[
@@ -52,9 +53,57 @@ type PeakDetectionInputValues = (
     | PeakDetectionXQRS
 )
 
+type SmoothingKernels = Literal[
+    "barthann",
+    "bartlett",
+    "blackman",
+    "blackmanharris",
+    "bohman",
+    "boxcar",
+    "chebwin",
+    "cosine",
+    "dpss",
+    "exponential",
+    "flattop",
+    "gaussian",
+    "general_cosine",
+    "general_gaussian",
+    "general_hamming",
+    "hamming",
+    "hann",
+    "kaiser",
+    "kaiser_bessel_derived",
+    "lanczos",
+    "nuttall",
+    "parzen",
+    "taylor",
+    "triangle",
+    "tukey",
+    "boxzen",
+    "median",
+]
+
+type NKECGAlgorithms = Literal[
+    "neurokit2",
+    "promac",
+    "pantompkins",
+    "nabian",
+    "gamboa",
+    "slopesumfunction",
+    "zong",
+    "hamilton",
+    "christov",
+    "engzeemod",
+    "elgendi",
+    "kalidas",
+    "martinez",
+    "rodrigues",
+    "vgraph",
+]
+
 
 class FileMetadata(TypedDict):
-    date_recorded: datetime.datetime
+    date_recorded: datetime.date
     animal_id: str
     oxygen_condition: OxygenCondition
 
@@ -153,7 +202,7 @@ class SectionResultDict(TypedDict):
     absolute_bounds: "SectionIndices" | tuple[int, int]
     data: npt.NDArray[np.void]
     sampling_rate: int
-    peaks: npt.NDArray[np.int32]
+    peaks: npt.NDArray[np.uint32]
     rate: npt.NDArray[np.float64]
     rate_interpolated: npt.NDArray[np.float64]
     processing_parameters: ProcessingParameters
@@ -161,11 +210,7 @@ class SectionResultDict(TypedDict):
 
 class ResultDict(TypedDict):
     identifier: dict[str, str | datetime.datetime | datetime.date | None]
-    selection_parameters: dict[str, str | int | float | None]
-    processing_parameters: dict[
-        str,
-        int | Pipeline | SignalFilterParameters | StandardizeParameters | PeakDetectionParameters,
-    ]
+    processing_parameters: ProcessingParameters
     summary_statistics: dict[str, dict[str, float]]
     focused_result: npt.NDArray[np.void]
     manual_peak_edits: dict[str, list[int]]

@@ -39,9 +39,9 @@ class UIHandler(QObject):
     sig_section_confirmed = Signal()
     sig_section_canceled = Signal()
 
-    def __init__(self, window: "SignalEditor", plot: PlotHandler) -> None:
+    def __init__(self, app: "SignalEditor", plot: PlotHandler) -> None:
         super(UIHandler, self).__init__()
-        self._window = window
+        self._app = app
         self.plot = plot
         self.setup_widgets()
         self._connect_signals()
@@ -56,7 +56,7 @@ class UIHandler(QObject):
         self._prepare_widgets()
 
         # Statusbar
-        self._window.statusbar.showMessage("Idle")
+        self._app.statusbar.showMessage("Idle")
 
         # Toolbar Plots
         self._prepare_toolbars()
@@ -65,28 +65,28 @@ class UIHandler(QObject):
         self.create_jupyter_console_widget()
 
     def _prepare_widgets(self) -> None:
-        self._window.container_file_info.setEnabled(False)
-        self._window.btn_load_selection.setEnabled(False)
-        self._window.dock_widget_sections.setVisible(False)
-        self._window.container_section_confirm_cancel.setVisible(False)
+        self._app.container_file_info.setEnabled(False)
+        self._app.btn_load_selection.setEnabled(False)
+        self._app.dock_widget_sections.setVisible(False)
+        self._app.container_section_confirm_cancel.setVisible(False)
 
-        export_menu = QMenu(self._window.btn_export_focused)
-        export_menu.addAction("CSV", lambda: self._window.export_focused_result("csv"))
+        export_menu = QMenu(self._app.btn_export_focused)
+        export_menu.addAction("CSV", lambda: self._app.export_focused_result("csv"))
         export_menu.addAction(
-            "Text (tab-delimited)", lambda: self._window.export_focused_result("txt")
+            "Text (tab-delimited)", lambda: self._app.export_focused_result("txt")
         )
-        export_menu.addAction("Excel", lambda: self._window.export_focused_result("xlsx"))
-        self._window.btn_export_focused.setMenu(export_menu)
+        export_menu.addAction("Excel", lambda: self._app.export_focused_result("xlsx"))
+        self._app.btn_export_focused.setMenu(export_menu)
 
     def _prepare_inputs(self) -> None:
         # Signal Filtering
-        self._window.combo_box_preprocess_pipeline.setValue("custom")
-        self._window.container_custom_filter_inputs.setEnabled(True)
+        self._app.combo_box_preprocess_pipeline.setValue("custom")
+        self._app.container_custom_filter_inputs.setEnabled(True)
         self._set_elgendi_cleaning_params()
 
         # Peak Detection
-        peak_combo_box = self._window.combo_box_peak_detection_method
-        stacked_peak_widget = self._window.stacked_peak_parameters
+        peak_combo_box = self._app.combo_box_peak_detection_method
+        stacked_peak_widget = self._app.stacked_peak_parameters
         peak_combo_box.blockSignals(True)
         peak_combo_box.clear()
         peak_combo_box.setItems(COMBO_BOX_ITEMS["combo_box_peak_detection_method"])
@@ -96,16 +96,16 @@ class UIHandler(QObject):
         peak_combo_box.currentIndexChanged.connect(stacked_peak_widget.setCurrentIndex)
 
     def _connect_signals(self) -> None:
-        self._window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
-        self._window.combo_box_filter_method.currentTextChanged.connect(
+        self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
+        self._app.combo_box_filter_method.currentTextChanged.connect(
             self.handle_filter_method_changed
         )
-        self._window.combo_box_preprocess_pipeline.currentTextChanged.connect(
+        self._app.combo_box_preprocess_pipeline.currentTextChanged.connect(
             self.handle_preprocess_pipeline_changed
         )
 
-        self._window.action_open_console.triggered.connect(self.show_jupyter_console_widget)
-        self._window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
+        self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
+        self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
 
     @Slot()
     def _emit_section_confirmed(self) -> None:
@@ -116,12 +116,12 @@ class UIHandler(QObject):
         self.sig_section_canceled.emit()
 
     def _prepare_toolbars(self) -> None:
-        plot_toolbar = self._window.toolbar_plots
+        plot_toolbar = self._app.toolbar_plots
         plot_toolbar.setVisible(False)
 
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():
-            combo_box: pg.ComboBox = getattr(self._window, key)
+            combo_box: pg.ComboBox = getattr(self._app, key)
             combo_box.clear()
             combo_box.setItems(value)
 
@@ -134,29 +134,30 @@ class UIHandler(QObject):
         combo_box.blockSignals(False)
 
     def update_data_select_ui(self, path: str) -> None:
-        self._window.container_file_info.setEnabled(True)
-        self._window.btn_load_selection.setEnabled(True)
-        data_cols = self._window.data.df.select(
+        self._app.container_file_info.setEnabled(True)
+        self._app.btn_load_selection.setEnabled(True)
+        data_cols = self._app.data.df.select(
             (~ps.contains(["index", "time", "temp"])) & (ps.float())
         ).columns
-        data_combo_box = self._window.combo_box_signal_column
+        data_combo_box = self._app.combo_box_signal_column
         self._blocked_set_combo_box_items(data_combo_box, data_cols)
 
         try:
+            metadata = self._app.data.metadata
             parsed_date, parsed_id, parsed_oxy = parse_file_name(Path(path).name)
-            self._window.date_edit_file_info.setDate(
+            self._app.date_edit_file_info.setDate(
                 QDate(parsed_date.year, parsed_date.month, parsed_date.day)
             )
-            self._window.line_edit_subject_id.setText(parsed_id)
-            self._window.combo_box_oxygen_condition.setValue(parsed_oxy)
+            self._app.line_edit_subject_id.setText(parsed_id)
+            self._app.combo_box_oxygen_condition.setValue(parsed_oxy)
         except Exception:
-            self._window.date_edit_file_info.setDate(QDate.currentDate())
-            self._window.line_edit_subject_id.setText("unknown")
-            self._window.combo_box_oxygen_condition.setValue("unknown")
+            self._app.date_edit_file_info.setDate(QDate.currentDate())
+            self._app.line_edit_subject_id.setText("unknown")
+            self._app.combo_box_oxygen_condition.setValue("unknown")
 
     @Slot()
     def reset_widget_state(self) -> None:
-        mw = self._window
+        mw = self._app
         mw.tabs_main.setCurrentIndex(0)
         mapping = INITIAL_STATE_METHODS_MAP
         combined_map = INITIAL_STATE_MAP | INITIAL_PEAK_STATES
@@ -171,10 +172,10 @@ class UIHandler(QObject):
     def on_main_tab_changed(self, index: int) -> None:
         is_index_one = index == 1
 
-        self._window.toolbar_plots.setVisible(is_index_one)
-        self._window.toolbar_plots.setEnabled(is_index_one)
-        self._window.dock_widget_sections.setVisible(is_index_one)
-        self._window.dock_widget_sections.setEnabled(is_index_one)
+        self._app.toolbar_plots.setVisible(is_index_one)
+        self._app.toolbar_plots.setEnabled(is_index_one)
+        self._app.dock_widget_sections.setVisible(is_index_one)
+        self._app.dock_widget_sections.setEnabled(is_index_one)
 
     def create_jupyter_console_widget(self) -> None:
         self.jupyter_console = JupyterConsoleWidget()
@@ -182,7 +183,7 @@ class UIHandler(QObject):
         self.jupyter_console_dock = QDockWidget("Jupyter Console")
         self.jupyter_console_dock.setWidget(self.jupyter_console)
         self.jupyter_console.kernel_manager.kernel.shell.push(
-            dict(mw=self._window, pg=pg, np=np, pl=pl, pp=pprint.pprint, pdir=pdir)
+            dict(mw=self._app, pg=pg, np=np, pl=pl, pp=pprint.pprint, pdir=pdir)
         )
         self.jupyter_console.execute("whos()")
 
@@ -195,38 +196,38 @@ class UIHandler(QObject):
 
     @Slot(str)
     def handle_filter_method_changed(self, text: str) -> None:
-        method = self._window.filter_method
+        method = self._app.filter_method
 
         for widget_name, enabled in FILTER_INPUT_STATES[method].items():
-            getattr(self._window, widget_name).setEnabled(enabled)
+            getattr(self._app, widget_name).setEnabled(enabled)
 
         self.sig_filter_inputs_ready.emit()
 
     def _set_elgendi_cleaning_params(self) -> None:
-        self._window.combo_box_filter_method.blockSignals(True)
-        self._window.combo_box_filter_method.setValue("butterworth")
-        self._window.combo_box_filter_method.blockSignals(False)
-        self._window.dbl_spin_box_lowcut.setValue(0.5)
-        self._window.dbl_spin_box_highcut.setValue(8.0)
-        self._window.spin_box_order.setValue(3)
-        self._window.slider_order.setValue(3)
+        self._app.combo_box_filter_method.blockSignals(True)
+        self._app.combo_box_filter_method.setValue("butterworth")
+        self._app.combo_box_filter_method.blockSignals(False)
+        self._app.dbl_spin_box_lowcut.setValue(0.5)
+        self._app.dbl_spin_box_highcut.setValue(8.0)
+        self._app.spin_box_order.setValue(3)
+        self._app.slider_order.setValue(3)
         self.sig_filter_inputs_ready.emit()
 
     @Slot()
     def handle_preprocess_pipeline_changed(self) -> None:
-        pipeline_value = self._window.pipeline
+        pipeline_value = self._app.pipeline
         if pipeline_value == "custom":
-            self._window.container_custom_filter_inputs.setEnabled(True)
-            selected_filter = self._window.filter_method
+            self._app.container_custom_filter_inputs.setEnabled(True)
+            selected_filter = self._app.filter_method
             self.handle_filter_method_changed(selected_filter)
 
         elif pipeline_value == "ppg_elgendi":
-            self._window.container_custom_filter_inputs.setEnabled(False)
-            self._window.combo_box_filter_method.setValue("butterworth")
+            self._app.container_custom_filter_inputs.setEnabled(False)
+            self._app.combo_box_filter_method.setValue("butterworth")
             self._set_elgendi_cleaning_params()
         else:
             # TODO: add UI and logic for other signal cleaning pipelines
-            self._window.container_custom_filter_inputs.setEnabled(False)
+            self._app.container_custom_filter_inputs.setEnabled(False)
             msg = f"Selected pipeline {pipeline_value} not yet implemented, use either 'custom' or 'ppg_elgendi'."
-            self._window.sig_show_message.emit(msg, "info")
+            self._app.sig_show_message.emit(msg, "info")
             return

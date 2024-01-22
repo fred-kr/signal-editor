@@ -6,47 +6,14 @@ import numpy.typing as npt
 import wfdb.processing as wfproc
 from scipy import ndimage, signal
 
-from ..type_aliases import (
-    PeakDetectionInputValues,
-    PeakDetectionMethod,
-)
+from .. import type_aliases as _t
 
 MIN_DIST = 20
 
-type SmoothingKernels = Literal[
-    "barthann",
-    "bartlett",
-    "blackman",
-    "blackmanharris",
-    "bohman",
-    "boxcar",
-    "chebwin",
-    "cosine",
-    "dpss",
-    "exponential",
-    "flattop",
-    "gaussian",
-    "general_cosine",
-    "general_gaussian",
-    "general_hamming",
-    "hamming",
-    "hann",
-    "kaiser",
-    "kaiser_bessel_derived",
-    "lanczos",
-    "nuttall",
-    "parzen",
-    "taylor",
-    "triangle",
-    "tukey",
-    "boxzen",
-    "median",
-]
 
-
-def _signal_smoothing_median[T: (np.float32, np.float64)](
-    sig: npt.NDArray[T], size: int = 5
-) -> npt.NDArray[T]:
+def _signal_smoothing_median(
+    sig: npt.NDArray[np.float64], size: int = 5
+) -> npt.NDArray[np.float64]:
     if size % 2 == 0:
         size += 1
 
@@ -54,7 +21,7 @@ def _signal_smoothing_median[T: (np.float32, np.float64)](
 
 
 def _signal_smoothing(
-    sig: npt.NDArray[np.floating[Any]], kernel: SmoothingKernels, size: int = 5
+    sig: npt.NDArray[np.floating[Any]], kernel: _t.SmoothingKernels, size: int = 5
 ) -> npt.NDArray[np.float64]:
     window: npt.NDArray[np.float64] = signal.get_window(kernel, size)  # type: ignore
     w: npt.NDArray[np.float64] = window / window.sum()  # type: ignore
@@ -67,10 +34,10 @@ def _signal_smoothing(
     return smoothed[size:-size]
 
 
-def signal_smooth(
+def _signal_smooth(
     sig: npt.NDArray[np.float64],
     method: Literal["convolution", "loess"] = "convolution",
-    kernel: SmoothingKernels = "boxzen",
+    kernel: _t.SmoothingKernels = "boxzen",
     size: int = 10,
     alpha: float = 0.1,
 ) -> npt.NDArray[np.float64]:
@@ -89,9 +56,9 @@ def signal_smooth(
                 dtype=np.float64,
             )
         elif kernel == "boxzen":
-            x = ndimage.uniform_filter1d(sig, size=size, mode="nearest")
+            x = ndimage.uniform_filter1d(sig, size=size, mode="nearest")  # type: ignore
 
-            smoothed = _signal_smoothing(x, kernel="parzen", size=size)
+            smoothed = _signal_smoothing(x, kernel="parzen", size=size)  # type: ignore
         elif kernel == "median":
             smoothed = _signal_smoothing_median(sig, size=size)
         else:
@@ -100,7 +67,7 @@ def signal_smooth(
     return smoothed
 
 
-def find_ppg_peaks_elgendi(
+def _find_ppg_peaks_elgendi(
     sig: npt.NDArray[np.float64],
     sampling_rate: int,
     peakwindow: float = 0.111,
@@ -145,10 +112,10 @@ def find_ppg_peaks_elgendi(
     sqrd = sig_abs**2
 
     peakwindow_samples = int(np.rint(peakwindow * sampling_rate))
-    ma_peak = signal_smooth(sqrd, kernel="boxcar", size=peakwindow_samples)
+    ma_peak = _signal_smooth(sqrd, kernel="boxcar", size=peakwindow_samples)
 
     beatwindow_samples = int(np.rint(beatwindow * sampling_rate))
-    ma_beat = signal_smooth(sqrd, kernel="boxcar", size=beatwindow_samples)
+    ma_beat = _signal_smooth(sqrd, kernel="boxcar", size=beatwindow_samples)
 
     thr1 = ma_beat + beatoffset * np.mean(sqrd, dtype=float)
 
@@ -180,15 +147,15 @@ def find_ppg_peaks_elgendi(
     return np.array(peaks, dtype=np.int32)
 
 
-def find_local_peaks(
+def _find_local_peaks(
     sig: npt.NDArray[np.float64],
     radius: int,
 ) -> npt.NDArray[np.intp]:
     if len(sig) == 0 or np.min(sig) == np.max(sig):
         return np.empty(0, dtype=np.int32)
 
-    max_vals = ndimage.maximum_filter(sig, size=2 * radius + 1, mode="constant")
-    return np.nonzero(sig == max_vals)[0]
+    max_vals = ndimage.maximum_filter(sig, size=2 * radius + 1, mode="constant")  # type: ignore
+    return np.nonzero(sig == max_vals)[0]  # type: ignore
 
 
 def _shift_peaks(
@@ -214,7 +181,7 @@ def _shift_peaks(
     return peaks
 
 
-def adjust_peak_positions(
+def _adjust_peak_positions(
     sig: npt.NDArray[np.float32 | np.float64],
     peaks: npt.NDArray[np.int32],
     radius: int,
@@ -238,30 +205,7 @@ def adjust_peak_positions(
         raise ValueError(f"Unknown direction: {direction}")
 
 
-def combine_peak_indices(
-    localmax_inds: npt.NDArray[np.int32],
-    xqrs_inds: npt.NDArray[np.int32],
-    threshold: int,
-) -> npt.NDArray[np.int32]:
-    combined_inds = []
-    used_xqrs_inds: set[int] = set()
-
-    for localmax_ind in localmax_inds:
-        # Find the index in xqrs_inds that is within the threshold and not used
-        close_inds = np.abs(xqrs_inds - localmax_ind) <= threshold
-        if unused_close_inds := [
-            ind for ind in xqrs_inds[close_inds] if ind not in used_xqrs_inds
-        ]:
-            xqrs_ind = unused_close_inds[0]
-            combined_inds.append((localmax_ind + xqrs_ind) // 2)
-            used_xqrs_inds.add(xqrs_ind)
-
-    # Add the remaining unused xqrs_inds to combined_inds
-    combined_inds.extend(xqrs_inds[~np.isin(xqrs_inds, list(used_xqrs_inds))])
-    return np.array(combined_inds, dtype=np.int32)
-
-
-def get_comparison_fn(find_peak_fn: Callable[..., np.int_]) -> Callable[..., np.bool_]:
+def _get_comparison_fn(find_peak_fn: Callable[..., np.int_]) -> Callable[..., np.bool_]:
     if find_peak_fn == np.argmax:
         return np.less_equal
     elif find_peak_fn == np.argmin:
@@ -281,7 +225,7 @@ def _handle_close_peaks(
     if not close_inds.size:
         return peak_idx
 
-    comparison_fn = get_comparison_fn(find_peak_fn)
+    comparison_fn = _get_comparison_fn(find_peak_fn)
     to_remove = [
         ind if comparison_fn(sig[peak_idx[ind]], sig[peak_idx[ind + 1]]) else ind + 1
         for ind in close_inds
@@ -291,7 +235,7 @@ def _handle_close_peaks(
     return peak_idx
 
 
-def remove_outliers(
+def _remove_outliers(
     sig: npt.NDArray[np.float64],
     peak_idx: npt.NDArray[np.int32],
     n_std: float,
@@ -322,22 +266,20 @@ def remove_outliers(
     return _handle_close_peaks(sig, peak_idx, find_peak_fn)
 
 
-def sanitize_qrs_inds(
+def _sanitize_qrs_inds(
     sig: npt.NDArray[np.float64],
     qrs_inds: npt.NDArray[np.int32],
     n_std: float = 4.0,
 ) -> npt.NDArray[np.int32]:
     find_peak_fn = np.argmax if np.mean(sig) < np.mean(sig[qrs_inds]) else np.argmin
-    peak_idx = remove_outliers(sig, qrs_inds, n_std, find_peak_fn)
+    peak_idx = _remove_outliers(sig, qrs_inds, n_std, find_peak_fn)
     sorted_indices = np.argsort(peak_idx)
     return peak_idx[
-        sorted_indices[
-            (peak_idx[sorted_indices] > 0) & (peak_idx[sorted_indices] < sig.size)
-        ]
+        sorted_indices[(peak_idx[sorted_indices] > 0) & (peak_idx[sorted_indices] < sig.size)]
     ]
 
 
-def find_peaks_xqrs(
+def _find_peaks_xqrs(
     sig: npt.NDArray[np.float64],
     sampling_rate: int,
     radius: int,
@@ -346,36 +288,15 @@ def find_peaks_xqrs(
     xqrs_out = wfproc.XQRS(sig=sig, fs=sampling_rate)
     xqrs_out.detect()
     qrs_inds = np.array(xqrs_out.qrs_inds, dtype=np.int32)
-    peak_inds = adjust_peak_positions(
-        sig, peaks=qrs_inds, radius=radius, direction=peak_dir
-    )
-    return sanitize_qrs_inds(sig, peak_inds)
-
-
-type NKECGAlgorithms = Literal[
-    "neurokit2",
-    "promac",
-    "pantompkins",
-    "nabian",
-    "gamboa",
-    "slopesumfunction",
-    "zong",
-    "hamilton",
-    "christov",
-    "engzeemod",
-    "elgendi",
-    "kalidas",
-    "martinez",
-    "rodrigues",
-    "vgraph",
-]
+    peak_inds = _adjust_peak_positions(sig, peaks=qrs_inds, radius=radius, direction=peak_dir)
+    return _sanitize_qrs_inds(sig, peak_inds)
 
 
 def find_peaks(
     sig: npt.NDArray[np.float64],
     sampling_rate: int,
-    method: PeakDetectionMethod,
-    input_values: PeakDetectionInputValues,
+    method: _t.PeakDetectionMethod,
+    input_values: _t.PeakDetectionInputValues,
 ) -> npt.NDArray[np.int32]:
     """
     Finds peaks in a signal using the specified method.
@@ -402,11 +323,9 @@ def find_peaks(
         If the specified method is not supported.
     """
     if method == "local":
-        return find_local_peaks(
-            sig, radius=input_values.get("radius", sampling_rate // 2)
-        )
+        return _find_local_peaks(sig, radius=input_values.get("radius", sampling_rate // 2))
     elif method == "elgendi_ppg":
-        return find_ppg_peaks_elgendi(
+        return _find_ppg_peaks_elgendi(
             sig,
             sampling_rate,
             peakwindow=input_values.get("peakwindow", 0.111),
@@ -415,7 +334,7 @@ def find_peaks(
             mindelay=input_values.get("mindelay", 0.3),
         )
     elif method == "wfdb_xqrs":
-        return find_peaks_xqrs(
+        return _find_peaks_xqrs(
             sig,
             sampling_rate,
             radius=input_values.get("search_radius", sampling_rate // 2),
@@ -427,6 +346,29 @@ def find_peaks(
             sampling_rate=sampling_rate,
             method=method,
             correct_artifacts=input_values.get("correct_artifacts", False),
-        )[1]["ECG_R_Peaks"]
+        )[1]["ECG_R_Peaks"]  # type: ignore
     else:
         raise ValueError(f"Unknown peak detection method: {method}")
+
+
+# region Unused functions
+# def _combine_peak_indices(
+#     localmax_inds: npt.NDArray[np.int32],
+#     xqrs_inds: npt.NDArray[np.int32],
+#     threshold: int,
+# ) -> npt.NDArray[np.int32]:
+#     combined_inds = []
+#     used_xqrs_inds: set[int] = set()
+
+#     for localmax_ind in localmax_inds:
+#         # Find the index in xqrs_inds that is within the threshold and not used
+#         close_inds = np.abs(xqrs_inds - localmax_ind) <= threshold
+#         if unused_close_inds := [ind for ind in xqrs_inds[close_inds] if ind not in used_xqrs_inds]:
+#             xqrs_ind = unused_close_inds[0]
+#             combined_inds.append((localmax_ind + xqrs_ind) // 2)
+#             used_xqrs_inds.add(xqrs_ind)
+
+#     # Add the remaining unused xqrs_inds to combined_inds
+#     combined_inds.extend(xqrs_inds[~np.isin(xqrs_inds, list(used_xqrs_inds))])
+#     return np.array(combined_inds, dtype=np.int32)
+# endregion
