@@ -3,7 +3,11 @@ from PySide6.QtWidgets import QHeaderView, QTableView
 
 
 class TableViewHelper:
-    def __init__(self, table_view: QTableView):
+    def __init__(self, table_view: QTableView | None = None) -> None:
+        if table_view is not None:
+            self.table_view = table_view
+
+    def set_table_view(self, table_view: QTableView) -> None:
         self.table_view = table_view
 
     def make_table(self, model: QAbstractTableModel) -> None:

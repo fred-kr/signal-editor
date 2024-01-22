@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>2659</width>
+    <width>2348</width>
     <height>1219</height>
    </rect>
   </property>
@@ -181,22 +181,7 @@ hr { height: 1px; border-width: 0; }
 li.unchecked::marker { content: &quot;\2610&quot;; }
 li.checked::marker { content: &quot;\2612&quot;; }
 &lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Requirements&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;European Data Format (.edf)&lt;/span&gt;&lt;/p&gt;
-&lt;ul style=&quot;margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; -qt-list-indent: 1;&quot;&gt;
-&lt;li style=&quot; margin-top:12px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Has at least 3 channels with `ch0` containing temperature, `ch1` containing heartbeat and `ch2` containing ventilation data&lt;/li&gt;
-&lt;li style=&quot; margin-top:0px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;The name of the temperature channel contains the sub-string &amp;quot;temp&amp;quot;, the name of the heartbeat channel contains the sub-string &amp;quot;hb&amp;quot; or &amp;quot;heart&amp;quot; and the name of the ventilation channel contains the sub-string &amp;quot;vent&amp;quot; (all case-insensitive)&lt;br /&gt;&lt;/li&gt;&lt;/ul&gt;
-&lt;p style=&quot; margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Feather (.feather)&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;Required column structure:&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Courier New';&quot;&gt;│ index    ┆ time_s     ┆ temperature ┆ hbr       ┆ ventilation │&lt;br /&gt;│ ---      ┆ ---        ┆ ---         ┆ ---       ┆ ---         │&lt;br /&gt;│ u32      ┆ f64        ┆ f64         ┆ f64       ┆ f64         │&lt;br /&gt;    &lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;A more general approach will (hopefully) be implemented sometime in the future.&lt;br /&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:12px; margin-bottom:4px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Data selection&lt;/span&gt;&lt;/p&gt;
-&lt;ol style=&quot;margin-top: 0px; margin-bottom: 0px; margin-left: 0px; margin-right: 0px; -qt-list-indent: 1;&quot;&gt;
-&lt;li style=&quot; margin-top:12px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Click &lt;span style=&quot; font-style:italic;&quot;&gt;Select File&lt;/span&gt; and choose a compatible data file to load&lt;/li&gt;
-&lt;li style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;The active working data can be limited by selecting a column name from the dropdown menu along with specifying the upper and lower allowed limits. The lower and upper limit are both inclusive, so setting the lower limit to 10 and the upper to 100 would result in the values 10 - 100 being loaded&lt;/li&gt;
-&lt;li style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;To work with the entire dataset, just leave the &lt;span style=&quot; font-style:italic;&quot;&gt;Specify subset&lt;/span&gt; checkbox unchecked&lt;/li&gt;
-&lt;li style=&quot; margin-top:0px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Finally, use the &lt;span style=&quot; font-style:italic;&quot;&gt;Load&lt;/span&gt; button to load the selected range of data into the program.&lt;/li&gt;&lt;/ol&gt;
-&lt;p style=&quot; margin-top:12px; margin-bottom:4px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Editing&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:12px; margin-bottom:4px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
              </property>
             </widget>
            </item>
@@ -215,55 +200,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_4">
         <item>
-         <widget class="QStackedWidget" name="stacked_hbr_vent">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="currentIndex">
-           <number>0</number>
-          </property>
-          <widget class="QWidget" name="stacked_page_hbr">
-           <layout class="QVBoxLayout" name="verticalLayout">
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QWidget" name="plot_widget_hbr" native="true"/>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="stacked_page_vent">
-           <layout class="QVBoxLayout" name="verticalLayout_3">
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QWidget" name="plot_widget_vent" native="true"/>
-            </item>
-           </layout>
-          </widget>
-         </widget>
+         <widget class="QWidget" name="container_plots" native="true"/>
         </item>
        </layout>
       </widget>
@@ -312,136 +249,21 @@ li.checked::marker { content: &quot;\2612&quot;; }
               <property name="bottomMargin">
                <number>0</number>
               </property>
-              <item row="1" column="1">
-               <widget class="FeedbackButton" name="btn_export_to_csv">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="minimumSize">
-                 <size>
-                  <width>0</width>
-                  <height>50</height>
-                 </size>
-                </property>
-                <property name="text">
-                 <string>Export to CSV</string>
-                </property>
-               </widget>
-              </item>
-              <item row="0" column="1" colspan="6">
-               <widget class="QWidget" name="container_results_output_dir" native="true">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <layout class="QGridLayout" name="gridLayout_19">
-                 <property name="leftMargin">
-                  <number>0</number>
-                 </property>
-                 <property name="topMargin">
-                  <number>0</number>
-                 </property>
-                 <property name="rightMargin">
-                  <number>0</number>
-                 </property>
-                 <property name="bottomMargin">
-                  <number>0</number>
-                 </property>
-                 <item row="1" column="1">
-                  <widget class="QLineEdit" name="line_edit_output_dir">
-                   <property name="placeholderText">
-                    <string>Specify an output directory for the exported files. By default (when left empty), use the same folder as the applications .exe file</string>
-                   </property>
-                   <property name="clearButtonEnabled">
-                    <bool>true</bool>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="1" column="0">
-                  <widget class="QPushButton" name="btn_browse_output_dir">
-                   <property name="text">
-                    <string>Browse</string>
-                   </property>
-                   <property name="icon">
-                    <iconset resource="../../resources/icons/icons.qrc">
-                     <normaloff>:/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png</iconset>
-                   </property>
-                  </widget>
-                 </item>
-                 <item row="0" column="0">
-                  <widget class="QLabel" name="label_21">
-                   <property name="text">
-                    <string>Output Directory:</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </widget>
-              </item>
-              <item row="2" column="1">
-               <widget class="FeedbackButton" name="btn_export_to_text">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="minimumSize">
-                 <size>
-                  <width>0</width>
-                  <height>50</height>
-                 </size>
-                </property>
-                <property name="text">
-                 <string>Export to Text</string>
-                </property>
-               </widget>
-              </item>
-              <item row="3" column="1">
-               <widget class="FeedbackButton" name="btn_export_to_excel">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="minimumSize">
-                 <size>
-                  <width>0</width>
-                  <height>50</height>
-                 </size>
-                </property>
-                <property name="text">
-                 <string>Export to Excel</string>
-                </property>
-               </widget>
-              </item>
-              <item row="1" column="2" rowspan="6" colspan="5">
-               <widget class="QTabWidget" name="tabs_result">
+              <item row="1" column="0" rowspan="4" colspan="3">
+               <widget class="QTabWidget" name="tab_container_result_views">
                 <property name="layoutDirection">
                  <enum>Qt::LeftToRight</enum>
                 </property>
                 <property name="currentIndex">
                  <number>0</number>
                 </property>
-                <widget class="QWidget" name="tab_results_hbr">
+                <widget class="QWidget" name="tab_focused_result" native="true">
                  <attribute name="title">
-                  <string>Heart</string>
+                  <string>Focused</string>
                  </attribute>
                  <layout class="QVBoxLayout" name="verticalLayout_6">
                   <item>
-                   <widget class="QTableView" name="table_view_results_hbr">
-                    <property name="sizePolicy">
-                     <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                      <horstretch>0</horstretch>
-                      <verstretch>0</verstretch>
-                     </sizepolicy>
-                    </property>
+                   <widget class="QTableView" name="table_view_focused_result">
                     <property name="editTriggers">
                      <set>QAbstractItemView::NoEditTriggers</set>
                     </property>
@@ -454,119 +276,35 @@ li.checked::marker { content: &quot;\2612&quot;; }
                     <property name="dragDropOverwriteMode">
                      <bool>false</bool>
                     </property>
-                    <property name="selectionMode">
-                     <enum>QAbstractItemView::NoSelection</enum>
+                    <property name="sortingEnabled">
+                     <bool>true</bool>
                     </property>
-                    <property name="cornerButtonEnabled">
-                     <bool>false</bool>
-                    </property>
-                    <attribute name="horizontalHeaderHighlightSections">
-                     <bool>false</bool>
-                    </attribute>
-                    <attribute name="verticalHeaderVisible">
-                     <bool>false</bool>
-                    </attribute>
-                    <attribute name="verticalHeaderDefaultSectionSize">
-                     <number>24</number>
-                    </attribute>
                    </widget>
                   </item>
                  </layout>
                 </widget>
-                <widget class="QWidget" name="tab_results_ventilation">
+                <widget class="QWidget" name="tab_complete_result">
                  <attribute name="title">
-                  <string>Ventilation</string>
+                  <string>Complete</string>
                  </attribute>
-                 <layout class="QVBoxLayout" name="verticalLayout_7">
-                  <item>
-                   <widget class="QTableView" name="table_view_results_ventilation">
-                    <property name="sizePolicy">
-                     <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-                      <horstretch>0</horstretch>
-                      <verstretch>0</verstretch>
-                     </sizepolicy>
-                    </property>
-                    <property name="editTriggers">
-                     <set>QAbstractItemView::NoEditTriggers</set>
-                    </property>
-                    <property name="tabKeyNavigation">
-                     <bool>false</bool>
-                    </property>
-                    <property name="showDropIndicator" stdset="0">
-                     <bool>false</bool>
-                    </property>
-                    <property name="dragDropOverwriteMode">
-                     <bool>false</bool>
-                    </property>
-                    <property name="alternatingRowColors">
-                     <bool>false</bool>
-                    </property>
-                    <property name="selectionMode">
-                     <enum>QAbstractItemView::NoSelection</enum>
-                    </property>
-                    <property name="cornerButtonEnabled">
-                     <bool>false</bool>
-                    </property>
-                    <attribute name="horizontalHeaderHighlightSections">
-                     <bool>false</bool>
-                    </attribute>
-                    <attribute name="verticalHeaderVisible">
-                     <bool>false</bool>
-                    </attribute>
-                    <attribute name="verticalHeaderDefaultSectionSize">
-                     <number>24</number>
-                    </attribute>
-                   </widget>
+                 <layout class="QGridLayout" name="gridLayout_21">
+                  <property name="leftMargin">
+                   <number>0</number>
+                  </property>
+                  <property name="topMargin">
+                   <number>0</number>
+                  </property>
+                  <property name="rightMargin">
+                   <number>0</number>
+                  </property>
+                  <property name="bottomMargin">
+                   <number>0</number>
+                  </property>
+                  <item row="0" column="0">
+                   <widget class="QWidget" name="container_complete_result" native="true"/>
                   </item>
                  </layout>
                 </widget>
-               </widget>
-              </item>
-              <item row="4" column="1">
-               <widget class="QTextBrowser" name="textBrowser">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="sizeAdjustPolicy">
-                 <enum>QAbstractScrollArea::AdjustToContents</enum>
-                </property>
-                <property name="html">
-                 <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;meta charset=&quot;utf-8&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-hr { height: 1px; border-width: 0; }
-li.unchecked::marker { content: &quot;\2610&quot;; }
-li.checked::marker { content: &quot;\2612&quot;; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Export the data shown in the table to the format specified by using one of the 'Export to' buttons.&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;Use the 'Save all information to HDF5' button to store all current results as well as used inputs, source data, etc&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                </property>
-               </widget>
-              </item>
-              <item row="5" column="1">
-               <widget class="FeedbackButton" name="btn_save_to_hdf5">
-                <property name="sizePolicy">
-                 <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-                  <horstretch>0</horstretch>
-                  <verstretch>0</verstretch>
-                 </sizepolicy>
-                </property>
-                <property name="minimumSize">
-                 <size>
-                  <width>0</width>
-                  <height>50</height>
-                 </size>
-                </property>
-                <property name="text">
-                 <string>Save all information to HDF5</string>
-                </property>
-                <property name="icon">
-                 <iconset resource="../../resources/icons/icons.qrc">
-                  <normaloff>:/material-symbols/output_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/output_FILL0_wght400_GRAD0_opsz24.png</iconset>
-                </property>
                </widget>
               </item>
              </layout>
@@ -600,7 +338,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>2659</width>
+     <width>2348</width>
      <height>22</height>
     </rect>
    </property>
@@ -688,15 +426,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <widget class="QDockWidget" name="dock_widget_sidebar">
-   <property name="minimumSize">
-    <size>
-     <width>475</width>
-     <height>1130</height>
-    </size>
-   </property>
-   <property name="toolTip">
-    <string>Sidebars can be moved by dragging the title bar</string>
-   </property>
    <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
    </property>
@@ -710,27 +439,15 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <number>1</number>
    </attribute>
    <widget class="QWidget" name="sidebar_dock_contents">
-    <layout class="QVBoxLayout" name="verticalLayout_2">
+    <layout class="QGridLayout" name="gridLayout_17">
      <property name="leftMargin">
       <number>0</number>
      </property>
      <property name="rightMargin">
       <number>0</number>
      </property>
-     <item>
+     <item row="0" column="0">
       <widget class="QStackedWidget" name="sidebar">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>350</width>
-         <height>0</height>
-        </size>
-       </property>
        <property name="frameShape">
         <enum>QFrame::StyledPanel</enum>
        </property>
@@ -746,21 +463,14 @@ li.checked::marker { content: &quot;\2612&quot;; }
            </property>
           </widget>
          </item>
-         <item row="4" column="0">
-          <spacer name="verticalSpacer_2">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
          <item row="2" column="0">
           <widget class="QLabel" name="label_3">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="text">
             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:700;&quot;&gt;Metadata&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
            </property>
@@ -769,26 +479,90 @@ li.checked::marker { content: &quot;\2612&quot;; }
            </property>
           </widget>
          </item>
-         <item row="1" column="0">
+         <item row="0" column="1" alignment="Qt::AlignRight">
+          <widget class="QPushButton" name="btn_info_data_selection">
+           <property name="icon">
+            <iconset resource="../../resources/icons/icons.qrc">
+             <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+           </property>
+           <property name="flat">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0" colspan="2">
           <widget class="QFrame" name="container_data_selection">
            <property name="frameShape">
             <enum>QFrame::StyledPanel</enum>
            </property>
            <layout class="QGridLayout" name="gridLayout_15">
-            <item row="1" column="0" colspan="2">
-             <widget class="Line" name="line">
-              <property name="orientation">
-               <enum>Qt::Horizontal</enum>
-              </property>
+            <item row="2" column="0" colspan="3">
+             <widget class="QWidget" name="container_data_required_info" native="true">
+              <layout class="QFormLayout" name="formLayout">
+               <property name="fieldGrowthPolicy">
+                <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
+               </property>
+               <item row="0" column="0">
+                <widget class="QLabel" name="label_23">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="text">
+                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Signal Column&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="QComboBox" name="combo_box_signal_column">
+                 <property name="insertPolicy">
+                  <enum>QComboBox::InsertAlphabetically</enum>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="0">
+                <widget class="QLabel" name="indexColumnLabel">
+                 <property name="text">
+                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Index Column&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="1" column="1">
+                <widget class="QComboBox" name="combo_box_index_column"/>
+               </item>
+               <item row="2" column="0">
+                <widget class="QLabel" name="sampleRateLabel">
+                 <property name="text">
+                  <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;meta charset=&quot;utf-8&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
+p, li { white-space: pre-wrap; }
+hr { height: 1px; border-width: 0; }
+li.unchecked::marker { content: &quot;\2610&quot;; }
+li.checked::marker { content: &quot;\2612&quot;; }
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;p style=&quot; margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Sample Rate &lt;/span&gt;(samples/second)&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="2" column="1">
+                <widget class="QSpinBox" name="spin_box_sample_rate">
+                 <property name="suffix">
+                  <string> Hz</string>
+                 </property>
+                 <property name="maximum">
+                  <number>9999</number>
+                 </property>
+                </widget>
+               </item>
+              </layout>
              </widget>
             </item>
-            <item row="3" column="0" colspan="2">
-             <widget class="QGroupBox" name="group_box_subset_params">
-              <property name="enabled">
-               <bool>false</bool>
-              </property>
+            <item row="0" column="0">
+             <widget class="QPushButton" name="btn_select_file">
               <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
                 <horstretch>0</horstretch>
                 <verstretch>0</verstretch>
                </sizepolicy>
@@ -799,83 +573,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
                 <bold>false</bold>
                </font>
               </property>
-              <property name="title">
-               <string>(Optional) Specify subset</string>
+              <property name="text">
+               <string>Select File</string>
               </property>
-              <property name="flat">
-               <bool>true</bool>
-              </property>
-              <property name="checkable">
-               <bool>true</bool>
-              </property>
-              <property name="checked">
-               <bool>false</bool>
-              </property>
-              <layout class="QFormLayout" name="formLayout">
-               <item row="0" column="0">
-                <widget class="QLabel" name="label_filter_column">
-                 <property name="text">
-                  <string>Filter column:</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="0" column="1">
-                <widget class="QComboBox" name="combo_box_filter_column">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="maxCount">
-                  <number>20</number>
-                 </property>
-                </widget>
-               </item>
-               <item row="1" column="0">
-                <widget class="QLabel" name="label_subset_min">
-                 <property name="text">
-                  <string>Lower limit:</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="1" column="1">
-                <widget class="QDoubleSpinBox" name="dbl_spin_box_subset_min">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="frame">
-                  <bool>true</bool>
-                 </property>
-                 <property name="correctionMode">
-                  <enum>QAbstractSpinBox::CorrectToNearestValue</enum>
-                 </property>
-                </widget>
-               </item>
-               <item row="2" column="0">
-                <widget class="QLabel" name="label_subset_max">
-                 <property name="text">
-                  <string>Upper limit:</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="2" column="1">
-                <widget class="QDoubleSpinBox" name="dbl_spin_box_subset_max">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                </widget>
-               </item>
-              </layout>
              </widget>
             </item>
-            <item row="4" column="0" colspan="2">
+            <item row="3" column="0" colspan="3">
              <widget class="FeedbackButton" name="btn_load_selection">
               <property name="enabled">
                <bool>false</bool>
@@ -898,78 +601,19 @@ li.checked::marker { content: &quot;\2612&quot;; }
                 <bold>true</bold>
                </font>
               </property>
-              <property name="layoutDirection">
-               <enum>Qt::RightToLeft</enum>
-              </property>
               <property name="text">
-               <string>Load</string>
+               <string>Load Selected</string>
               </property>
              </widget>
             </item>
-            <item row="2" column="0" colspan="2">
-             <widget class="QWidget" name="container_fs" native="true">
-              <property name="toolTip">
-               <string>Frequency with which the data was recorded in Hz (samples per second) </string>
-              </property>
-              <layout class="QFormLayout" name="formLayout_10">
-               <item row="0" column="0">
-                <widget class="QLabel" name="label_17">
-                 <property name="font">
-                  <font>
-                   <pointsize>9</pointsize>
-                   <bold>false</bold>
-                  </font>
-                 </property>
-                 <property name="toolTip">
-                  <string>Frequency at which the input data was measured in samples per second</string>
-                 </property>
-                 <property name="text">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:700; color:#ff0000;&quot;&gt;Sample Rate&lt;/span&gt;&lt;span style=&quot; font-size:10pt;&quot;&gt; (samples/second):&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="0" column="1">
-                <widget class="QSpinBox" name="spin_box_fs">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="toolTip">
-                  <string/>
-                 </property>
-                 <property name="specialValueText">
-                  <string>Try to infer</string>
-                 </property>
-                 <property name="maximum">
-                  <number>2000</number>
-                 </property>
-                </widget>
-               </item>
-              </layout>
-             </widget>
-            </item>
-            <item row="0" column="0">
-             <widget class="QPushButton" name="btn_select_file">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="font">
-               <font>
-                <pointsize>9</pointsize>
-                <bold>false</bold>
-               </font>
-              </property>
-              <property name="text">
-               <string>Select File</string>
+            <item row="1" column="0" colspan="3">
+             <widget class="Line" name="line">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
               </property>
              </widget>
             </item>
-            <item row="0" column="1">
+            <item row="0" column="1" colspan="2">
              <widget class="QLineEdit" name="line_edit_active_file">
               <property name="font">
                <font>
@@ -985,13 +629,26 @@ li.checked::marker { content: &quot;\2612&quot;; }
            </layout>
           </widget>
          </item>
-         <item row="3" column="0">
+         <item row="4" column="0" colspan="2">
+          <spacer name="verticalSpacer_2">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item row="3" column="0" colspan="2">
           <widget class="QFrame" name="container_file_info">
            <property name="enabled">
             <bool>true</bool>
            </property>
            <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
@@ -1087,76 +744,28 @@ li.checked::marker { content: &quot;\2612&quot;; }
            </layout>
           </widget>
          </item>
+         <item row="2" column="1" alignment="Qt::AlignRight">
+          <widget class="QPushButton" name="btn_info_metadata">
+           <property name="icon">
+            <iconset resource="../../resources/icons/icons.qrc">
+             <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+           </property>
+           <property name="flat">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
        <widget class="QWidget" name="sidebar_page_plots">
         <layout class="QGridLayout" name="gridLayout_6">
-         <item row="6" column="0">
-          <widget class="FeedbackButton" name="btn_detect_peaks">
-           <property name="enabled">
-            <bool>true</bool>
-           </property>
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>0</width>
-             <height>35</height>
-            </size>
-           </property>
-           <property name="font">
-            <font>
-             <pointsize>11</pointsize>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="whatsThis">
-            <string>Runs the currently selected peak detection method using the shown parameters (editable in the &quot;Peak Detection&quot; section above).</string>
-           </property>
-           <property name="locale">
-            <locale language="English" country="Germany"/>
-           </property>
-           <property name="text">
-            <string>Run peak detection</string>
-           </property>
-          </widget>
-         </item>
-         <item row="4" column="0" colspan="2">
-          <widget class="QLabel" name="label_18">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="font">
-            <font>
-             <pointsize>10</pointsize>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="text">
-            <string>Peak Detection</string>
-           </property>
-          </widget>
-         </item>
-         <item row="3" column="0" colspan="2">
+         <item row="3" column="0" colspan="3">
           <widget class="FeedbackButton" name="btn_apply_filter">
            <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
              <horstretch>0</horstretch>
              <verstretch>0</verstretch>
             </sizepolicy>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>0</width>
-             <height>35</height>
-            </size>
            </property>
            <property name="font">
             <font>
@@ -1175,45 +784,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
            </property>
           </widget>
          </item>
-         <item row="6" column="1">
-          <widget class="FeedbackButton" name="btn_compute_results">
-           <property name="enabled">
-            <bool>true</bool>
-           </property>
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>0</width>
-             <height>35</height>
-            </size>
-           </property>
-           <property name="font">
-            <font>
-             <pointsize>11</pointsize>
-             <bold>true</bold>
-            </font>
-           </property>
-           <property name="whatsThis">
-            <string>Takes the current state of the app, signal, detected peaks, etc. and produces a results table shown in the &quot;Results&quot; tab. From there, the results can be exported to various file formats.</string>
-           </property>
-           <property name="text">
-            <string>Get Results</string>
-           </property>
-          </widget>
-         </item>
-         <item row="1" column="0" colspan="2">
+         <item row="1" column="0" colspan="3">
           <widget class="QWidget" name="container_signal_filtering_sidebar" native="true">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
            <layout class="QGridLayout" name="gridLayout_2">
             <property name="leftMargin">
              <number>1</number>
@@ -1227,14 +799,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
             <property name="bottomMargin">
              <number>1</number>
             </property>
-            <item row="4" column="0" colspan="2">
+            <item row="5" column="0" colspan="2">
              <widget class="QFrame" name="container_standardize">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
               <property name="font">
                <font>
                 <bold>false</bold>
@@ -1350,45 +916,10 @@ li.checked::marker { content: &quot;\2612&quot;; }
               </layout>
              </widget>
             </item>
-            <item row="3" column="0">
-             <widget class="QLabel" name="label_16">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-                <bold>true</bold>
-               </font>
-              </property>
-              <property name="toolTip">
-               <string>Standardization is applied post-filtering</string>
-              </property>
-              <property name="text">
-               <string>Standardize</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="ComboBox" name="combo_box_preprocess_pipeline">
-              <property name="font">
-               <font>
-                <pointsize>9</pointsize>
-                <bold>false</bold>
-               </font>
-              </property>
-              <property name="toolTip">
-               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Select the pre-processing pipeline for the signal or create a custom filter&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0">
+            <item row="2" column="0">
              <widget class="QLabel" name="label_12">
               <property name="sizePolicy">
-               <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
+               <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
                 <horstretch>0</horstretch>
                 <verstretch>0</verstretch>
                </sizepolicy>
@@ -1407,26 +938,30 @@ li.checked::marker { content: &quot;\2612&quot;; }
               </property>
              </widget>
             </item>
-            <item row="0" column="0">
-             <widget class="QLabel" name="label_5">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-                <bold>true</bold>
-               </font>
+            <item row="4" column="0">
+             <widget class="QLabel" name="label_16">
+              <property name="toolTip">
+               <string>Standardization is applied post-filtering</string>
               </property>
               <property name="text">
-               <string>Pre-process</string>
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:700;&quot;&gt;Standardize&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
               </property>
              </widget>
             </item>
-            <item row="2" column="0" colspan="2">
+            <item row="2" column="1">
+             <widget class="ComboBox" name="combo_box_preprocess_pipeline">
+              <property name="font">
+               <font>
+                <pointsize>9</pointsize>
+                <bold>false</bold>
+               </font>
+              </property>
+              <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Select the pre-processing pipeline for the signal or create a custom filter&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+             </widget>
+            </item>
+            <item row="3" column="0" colspan="2">
              <widget class="QFrame" name="container_custom_filter_inputs">
               <property name="sizePolicy">
                <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -1899,195 +1434,60 @@ li.checked::marker { content: &quot;\2612&quot;; }
               </layout>
              </widget>
             </item>
-           </layout>
-          </widget>
-         </item>
-         <item row="0" column="0" colspan="2">
-          <widget class="QWidget" name="container_active_signal" native="true">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="cursor">
-            <cursorShape>ArrowCursor</cursorShape>
-           </property>
-           <layout class="QGridLayout" name="gridLayout_17">
-            <property name="leftMargin">
-             <number>1</number>
-            </property>
-            <property name="topMargin">
-             <number>1</number>
-            </property>
-            <property name="rightMargin">
-             <number>1</number>
-            </property>
-            <property name="bottomMargin">
-             <number>1</number>
-            </property>
-            <item row="0" column="1">
-             <widget class="QPushButton" name="btn_view_vent">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
+            <item row="4" column="1" alignment="Qt::AlignRight">
+             <widget class="QPushButton" name="btn_info_standardize">
+              <property name="icon">
+               <iconset resource="../../resources/icons/icons.qrc">
+                <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
               </property>
-              <property name="font">
-               <font>
-                <pointsize>13</pointsize>
-                <bold>true</bold>
-               </font>
-              </property>
-              <property name="autoFillBackground">
-               <bool>false</bool>
-              </property>
-              <property name="styleSheet">
-               <string notr="true"/>
-              </property>
-              <property name="text">
-               <string>Ventilation</string>
-              </property>
-              <property name="checkable">
+              <property name="flat">
                <bool>true</bool>
               </property>
-              <property name="autoExclusive">
-               <bool>true</bool>
-              </property>
-              <property name="autoDefault">
-               <bool>false</bool>
-              </property>
-              <attribute name="buttonGroup">
-               <string notr="true">btn_group_plot_view</string>
-              </attribute>
-             </widget>
-            </item>
-            <item row="0" column="0">
-             <widget class="QPushButton" name="btn_view_hbr">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="font">
-               <font>
-                <pointsize>13</pointsize>
-                <bold>true</bold>
-                <underline>false</underline>
-               </font>
-              </property>
-              <property name="text">
-               <string>Heart</string>
-              </property>
-              <property name="checkable">
-               <bool>true</bool>
-              </property>
-              <property name="checked">
-               <bool>true</bool>
-              </property>
-              <property name="autoExclusive">
-               <bool>true</bool>
-              </property>
-              <property name="autoDefault">
-               <bool>false</bool>
-              </property>
-              <attribute name="buttonGroup">
-               <string notr="true">btn_group_plot_view</string>
-              </attribute>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-         </item>
-         <item row="5" column="0" colspan="2">
-          <widget class="QFrame" name="container_peak_detection_sidebar">
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="frameShape">
-            <enum>QFrame::StyledPanel</enum>
-           </property>
-           <layout class="QGridLayout" name="layout_container_peak_detection_sidebar">
-            <item row="0" column="0">
-             <widget class="QWidget" name="container_peak_detection_method" native="true">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="font">
-               <font>
-                <pointsize>9</pointsize>
-                <bold>false</bold>
-               </font>
-              </property>
-              <layout class="QFormLayout" name="layout_container_peak_detection_method">
-               <property name="fieldGrowthPolicy">
-                <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
-               </property>
-               <property name="labelAlignment">
-                <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-               </property>
-               <property name="formAlignment">
-                <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-               </property>
-               <item row="0" column="0">
-                <widget class="QLabel" name="label_method">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="font">
-                  <font>
-                   <pointsize>9</pointsize>
-                   <bold>true</bold>
-                  </font>
-                 </property>
-                 <property name="text">
-                  <string>Method:</string>
-                 </property>
-                 <property name="buddy">
-                  <cstring>combo_box_peak_detection_method</cstring>
-                 </property>
-                </widget>
-               </item>
-               <item row="0" column="1">
-                <widget class="ComboBox" name="combo_box_peak_detection_method">
-                 <property name="sizePolicy">
-                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                   <horstretch>0</horstretch>
-                   <verstretch>0</verstretch>
-                  </sizepolicy>
-                 </property>
-                 <property name="font">
-                  <font>
-                   <pointsize>9</pointsize>
-                   <bold>false</bold>
-                  </font>
-                 </property>
-                 <property name="maxVisibleItems">
-                  <number>10</number>
-                 </property>
-                 <property name="maxCount">
-                  <number>50</number>
-                 </property>
-                 <property name="insertPolicy">
-                  <enum>QComboBox::NoInsert</enum>
-                 </property>
-                </widget>
-               </item>
-              </layout>
              </widget>
             </item>
             <item row="1" column="0">
+             <widget class="QLabel" name="label_5">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:700;&quot;&gt;Pre-process&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1" alignment="Qt::AlignRight">
+             <widget class="QPushButton" name="btn_info_preprocess">
+              <property name="icon">
+               <iconset resource="../../resources/icons/icons.qrc">
+                <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+              </property>
+              <property name="flat">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item row="5" column="0" colspan="3">
+          <widget class="QWidget" name="container_peak_detection_sidebar" native="true">
+           <layout class="QGridLayout" name="layout_container_peak_detection_sidebar">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item row="2" column="0" colspan="2">
              <widget class="QStackedWidget" name="stacked_peak_parameters">
               <property name="frameShape">
                <enum>QFrame::StyledPanel</enum>
@@ -2107,9 +1507,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   </property>
                   <property name="text">
                    <string>Peak Window</string>
-                  </property>
-                  <property name="buddy">
-                   <cstring>peak_elgendi_ppg_peakwindow</cstring>
                   </property>
                  </widget>
                 </item>
@@ -2152,9 +1549,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   <property name="text">
                    <string>Beat Window</string>
                   </property>
-                  <property name="buddy">
-                   <cstring>peak_elgendi_ppg_beatwindow</cstring>
-                  </property>
                  </widget>
                 </item>
                 <item row="2" column="1">
@@ -2193,9 +1587,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   <property name="text">
                    <string>Beat Offset</string>
                   </property>
-                  <property name="buddy">
-                   <cstring>peak_elgendi_ppg_beatoffset</cstring>
-                  </property>
                  </widget>
                 </item>
                 <item row="3" column="1">
@@ -2230,9 +1621,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   </property>
                   <property name="text">
                    <string>Minimum Delay</string>
-                  </property>
-                  <property name="buddy">
-                   <cstring>peak_elgendi_ppg_min_delay</cstring>
                   </property>
                  </widget>
                 </item>
@@ -2301,9 +1689,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   </property>
                   <property name="text">
                    <string>Search Radius</string>
-                  </property>
-                  <property name="buddy">
-                   <cstring>peak_local_max_radius</cstring>
                   </property>
                  </widget>
                 </item>
@@ -2384,9 +1769,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   <property name="text">
                    <string>Smoothing Window</string>
                   </property>
-                  <property name="buddy">
-                   <cstring>peak_neurokit2_smoothwindow</cstring>
-                  </property>
                  </widget>
                 </item>
                 <item row="2" column="1">
@@ -2414,9 +1796,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   </property>
                   <property name="text">
                    <string>Average Window</string>
-                  </property>
-                  <property name="buddy">
-                   <cstring>peak_neurokit2_avgwindow</cstring>
                   </property>
                  </widget>
                 </item>
@@ -2452,9 +1831,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   <property name="text">
                    <string>Grad. Thresh. Weight</string>
                   </property>
-                  <property name="buddy">
-                   <cstring>peak_neurokit2_gradthreshweight</cstring>
-                  </property>
                  </widget>
                 </item>
                 <item row="4" column="1">
@@ -2485,9 +1861,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   </property>
                   <property name="text">
                    <string>Min. Length Weight</string>
-                  </property>
-                  <property name="buddy">
-                   <cstring>peak_neurokit2_minlenweight</cstring>
                   </property>
                  </widget>
                 </item>
@@ -2520,9 +1893,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   <property name="text">
                    <string>Minimum Delay</string>
                   </property>
-                  <property name="buddy">
-                   <cstring>peak_neurokit2_mindelay</cstring>
-                  </property>
                  </widget>
                 </item>
                 <item row="6" column="1">
@@ -2553,9 +1923,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   </property>
                   <property name="text">
                    <string>Correct Artifacts</string>
-                  </property>
-                  <property name="buddy">
-                   <cstring>peak_neurokit2_correct_artifacts</cstring>
                   </property>
                  </widget>
                 </item>
@@ -2601,9 +1968,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   <property name="text">
                    <string>Threshold</string>
                   </property>
-                  <property name="buddy">
-                   <cstring>peak_promac_threshold</cstring>
-                  </property>
                  </widget>
                 </item>
                 <item row="1" column="1">
@@ -2629,9 +1993,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   <property name="text">
                    <string>QRS Complex Size</string>
                   </property>
-                  <property name="buddy">
-                   <cstring>peak_promac_gaussian_sd</cstring>
-                  </property>
                  </widget>
                 </item>
                 <item row="3" column="0">
@@ -2643,9 +2004,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   </property>
                   <property name="text">
                    <string>Correct Artifacts</string>
-                  </property>
-                  <property name="buddy">
-                   <cstring>peak_promac_correct_artifacts</cstring>
                   </property>
                  </widget>
                 </item>
@@ -2702,9 +2060,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   </property>
                   <property name="text">
                    <string>Correct Artifacts</string>
-                  </property>
-                  <property name="buddy">
-                   <cstring>peak_pantompkins_correct_artifacts</cstring>
                   </property>
                  </widget>
                 </item>
@@ -2773,9 +2128,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   <property name="text">
                    <string>Search Radius</string>
                   </property>
-                  <property name="buddy">
-                   <cstring>peak_xqrs_search_radius</cstring>
-                  </property>
                  </widget>
                 </item>
                 <item row="1" column="1">
@@ -2807,9 +2159,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                   <property name="text">
                    <string>Adjust Peaks</string>
                   </property>
-                  <property name="buddy">
-                   <cstring>peak_xqrs_peak_dir</cstring>
-                  </property>
                  </widget>
                 </item>
                 <item row="2" column="1">
@@ -2819,8 +2168,227 @@ li.checked::marker { content: &quot;\2612&quot;; }
               </widget>
              </widget>
             </item>
+            <item row="1" column="0" colspan="2">
+             <widget class="QWidget" name="container_peak_detection_method" native="true">
+              <property name="font">
+               <font>
+                <pointsize>9</pointsize>
+                <bold>false</bold>
+               </font>
+              </property>
+              <layout class="QFormLayout" name="layout_container_peak_detection_method">
+               <item row="0" column="0">
+                <widget class="QLabel" name="label_method">
+                 <property name="font">
+                  <font>
+                   <pointsize>9</pointsize>
+                   <bold>true</bold>
+                  </font>
+                 </property>
+                 <property name="text">
+                  <string>Method:</string>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="1">
+                <widget class="ComboBox" name="combo_box_peak_detection_method">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="font">
+                  <font>
+                   <pointsize>9</pointsize>
+                   <bold>false</bold>
+                  </font>
+                 </property>
+                 <property name="maxVisibleItems">
+                  <number>10</number>
+                 </property>
+                 <property name="maxCount">
+                  <number>50</number>
+                 </property>
+                 <property name="insertPolicy">
+                  <enum>QComboBox::NoInsert</enum>
+                 </property>
+                </widget>
+               </item>
+              </layout>
+             </widget>
+            </item>
+            <item row="0" column="0">
+             <widget class="QLabel" name="label_18">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:700;&quot;&gt;Peak Detection&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1" alignment="Qt::AlignRight">
+             <widget class="QPushButton" name="btn_info_peak_detect">
+              <property name="icon">
+               <iconset resource="../../resources/icons/icons.qrc">
+                <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+              </property>
+              <property name="flat">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
            </layout>
           </widget>
+         </item>
+         <item row="6" column="1">
+          <widget class="FeedbackButton" name="btn_compute_results">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>11</pointsize>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="whatsThis">
+            <string>Takes the current state of the app, signal, detected peaks, etc. and produces a results table shown in the &quot;Results&quot; tab. From there, the results can be exported to various file formats.</string>
+           </property>
+           <property name="text">
+            <string>Get Results</string>
+           </property>
+          </widget>
+         </item>
+         <item row="6" column="2">
+          <widget class="FeedbackButton" name="btn_detect_peaks">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>11</pointsize>
+             <bold>true</bold>
+            </font>
+           </property>
+           <property name="whatsThis">
+            <string>Runs the currently selected peak detection method using the shown parameters (editable in the &quot;Peak Detection&quot; section above).</string>
+           </property>
+           <property name="text">
+            <string>Run peak detection</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="sidebar_page_result">
+        <layout class="QGridLayout" name="gridLayout_22">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_21">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="text">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:700;&quot;&gt;Output Directory&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QPushButton" name="btn_export_focused">
+           <property name="text">
+            <string>Export Focused Result</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="FeedbackButton" name="btn_save_to_hdf5">
+           <property name="text">
+            <string>Export Complete Result (HDF5)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0" colspan="2">
+          <widget class="QWidget" name="container_results_output_dir" native="true">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <layout class="QGridLayout" name="gridLayout_19">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item row="1" column="0">
+             <widget class="QPushButton" name="btn_browse_output_dir">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="text">
+               <string>Browse</string>
+              </property>
+              <property name="icon">
+               <iconset resource="../../resources/icons/icons.qrc">
+                <normaloff>:/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png</iconset>
+              </property>
+             </widget>
+            </item>
+            <item row="1" column="1" colspan="2">
+             <widget class="QLineEdit" name="line_edit_output_dir">
+              <property name="placeholderText">
+               <string>Specify an output directory for the exported files. By default (when left empty), use the same folder as the applications .exe file</string>
+              </property>
+              <property name="clearButtonEnabled">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </item>
+         <item row="3" column="0" colspan="2">
+          <spacer name="verticalSpacer">
+           <property name="orientation">
+            <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>20</width>
+             <height>40</height>
+            </size>
+           </property>
+          </spacer>
          </item>
         </layout>
        </widget>
@@ -2904,6 +2472,36 @@ li.checked::marker { content: &quot;\2612&quot;; }
         </sizepolicy>
        </property>
        <layout class="QGridLayout" name="gridLayout_18">
+        <item row="0" column="1" alignment="Qt::AlignRight">
+         <widget class="QPushButton" name="btn_info_section">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="icon">
+           <iconset resource="../../resources/icons/icons.qrc">
+            <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_6">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Currently showing:</string>
+          </property>
+         </widget>
+        </item>
         <item row="2" column="1">
          <widget class="QPushButton" name="btn_section_remove">
           <property name="sizePolicy">
@@ -2924,36 +2522,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
           </property>
          </widget>
         </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_6">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="text">
-           <string>Currently showing:</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1" alignment="Qt::AlignRight">
-         <widget class="QPushButton" name="btn_section_clear">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="icon">
-           <iconset resource="../../resources/icons/icons.qrc">
-            <normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</iconset>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
         <item row="2" column="0">
          <widget class="QPushButton" name="btn_section_add">
           <property name="sizePolicy">
@@ -2965,6 +2533,68 @@ li.checked::marker { content: &quot;\2612&quot;; }
           <property name="text">
            <string>Add Section</string>
           </property>
+         </widget>
+        </item>
+        <item row="3" column="0" colspan="2">
+         <widget class="QWidget" name="container_section_confirm_cancel" native="true">
+          <layout class="QGridLayout" name="gridLayout_20">
+           <item row="2" column="0">
+            <widget class="QPushButton" name="btn_section_confirm">
+             <property name="styleSheet">
+              <string notr="true">background-color: rgba(85, 170, 127, 100);</string>
+             </property>
+             <property name="text">
+              <string>Confirm</string>
+             </property>
+             <property name="icon">
+              <iconset resource="../../resources/icons/icons.qrc">
+               <normaloff>:/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png</iconset>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>24</width>
+               <height>24</height>
+              </size>
+             </property>
+             <property name="flat">
+              <bool>false</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QPushButton" name="btn_section_cancel">
+             <property name="styleSheet">
+              <string notr="true">background-color: rgba(255, 0, 0, 100);</string>
+             </property>
+             <property name="text">
+              <string>Cancel</string>
+             </property>
+             <property name="icon">
+              <iconset resource="../../resources/icons/icons.qrc">
+               <normaloff>:/material-symbols/cancel_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/cancel_FILL0_wght400_GRAD0_opsz24.png</iconset>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>24</width>
+               <height>24</height>
+              </size>
+             </property>
+             <property name="flat">
+              <bool>false</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0" colspan="2">
+            <widget class="QLabel" name="label_24">
+             <property name="text">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:700;&quot;&gt;Selection&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+          </layout>
          </widget>
         </item>
        </layout>
@@ -3395,12 +3025,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>371</x>
-     <y>474</y>
+     <x>54</x>
+     <y>150</y>
     </hint>
     <hint type="destinationlabel">
-     <x>411</x>
-     <y>484</y>
+     <x>69</x>
+     <y>150</y>
     </hint>
    </hints>
   </connection>
@@ -3411,12 +3041,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>417</x>
-     <y>474</y>
+     <x>69</x>
+     <y>150</y>
     </hint>
     <hint type="destinationlabel">
-     <x>365</x>
-     <y>477</y>
+     <x>54</x>
+     <y>150</y>
     </hint>
    </hints>
   </connection>
@@ -3427,12 +3057,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>367</x>
-     <y>292</y>
+     <x>55</x>
+     <y>126</y>
     </hint>
     <hint type="destinationlabel">
-     <x>408</x>
-     <y>285</y>
+     <x>106</x>
+     <y>126</y>
     </hint>
    </hints>
   </connection>
@@ -3443,12 +3073,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>410</x>
-     <y>298</y>
+     <x>106</x>
+     <y>126</y>
     </hint>
     <hint type="destinationlabel">
-     <x>361</x>
-     <y>291</y>
+     <x>55</x>
+     <y>126</y>
     </hint>
    </hints>
   </connection>
@@ -3459,12 +3089,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>368</x>
-     <y>337</y>
+     <x>55</x>
+     <y>121</y>
     </hint>
     <hint type="destinationlabel">
-     <x>411</x>
-     <y>341</y>
+     <x>106</x>
+     <y>121</y>
     </hint>
    </hints>
   </connection>
@@ -3475,12 +3105,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <slot>setValue(int)</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>422</x>
-     <y>339</y>
+     <x>106</x>
+     <y>121</y>
     </hint>
     <hint type="destinationlabel">
-     <x>370</x>
-     <y>336</y>
+     <x>55</x>
+     <y>121</y>
     </hint>
    </hints>
   </connection>
@@ -3502,7 +3132,4 @@ li.checked::marker { content: &quot;\2612&quot;; }
    <bool>true</bool>
   </property>
  </designerdata>
- <buttongroups>
-  <buttongroup name="btn_group_plot_view"/>
- </buttongroups>
 </ui>

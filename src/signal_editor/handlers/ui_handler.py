@@ -1,8 +1,9 @@
 import pprint
+import typing as t
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
 
 import numpy as np
+import pdir
 import polars as pl
 import polars.selectors as ps
 import pyqtgraph as pg
@@ -13,8 +14,9 @@ from PySide6.QtCore import (
     Slot,
 )
 from PySide6.QtWidgets import (
+    QComboBox,
     QDockWidget,
-    QVBoxLayout,
+    QMenu,
 )
 
 from ..handlers.plot_handler import PlotHandler
@@ -26,9 +28,9 @@ from ..views._ui_state_maps import (
     INITIAL_STATE_MAP,
     INITIAL_STATE_METHODS_MAP,
 )
-from ..views.custom_widgets import ConfirmCancelButtons, JupyterConsoleWidget
+from ..views.custom_widgets import JupyterConsoleWidget
 
-if TYPE_CHECKING:
+if t.TYPE_CHECKING:
     from ..app import SignalEditor
 
 
@@ -59,20 +61,22 @@ class UIHandler(QObject):
         # Toolbar Plots
         self._prepare_toolbars()
 
-        # Plots
-        self._setup_active_plot_btn_grp()
-        self.create_plot_widgets()
-
         # Console
-        # self.create_console_widget()
         self.create_jupyter_console_widget()
 
     def _prepare_widgets(self) -> None:
         self._window.container_file_info.setEnabled(False)
         self._window.btn_load_selection.setEnabled(False)
         self._window.dock_widget_sections.setVisible(False)
-        self.confirm_cancel_buttons = ConfirmCancelButtons()
-        self._window.section_widgets_container.layout().addWidget(self.confirm_cancel_buttons)
+        self._window.container_section_confirm_cancel.setVisible(False)
+
+        export_menu = QMenu(self._window.btn_export_focused)
+        export_menu.addAction("CSV", lambda: self._window.export_focused_result("csv"))
+        export_menu.addAction(
+            "Text (tab-delimited)", lambda: self._window.export_focused_result("txt")
+        )
+        export_menu.addAction("Excel", lambda: self._window.export_focused_result("xlsx"))
+        self._window.btn_export_focused.setMenu(export_menu)
 
     def _prepare_inputs(self) -> None:
         # Signal Filtering
@@ -91,11 +95,6 @@ class UIHandler(QObject):
         peak_combo_box.blockSignals(False)
         peak_combo_box.currentIndexChanged.connect(stacked_peak_widget.setCurrentIndex)
 
-    def _setup_active_plot_btn_grp(self) -> None:
-        self._window.stacked_hbr_vent.setCurrentIndex(0)
-        self._window.btn_group_plot_view.setId(self._window.btn_view_hbr, 0)
-        self._window.btn_group_plot_view.setId(self._window.btn_view_vent, 1)
-
     def _connect_signals(self) -> None:
         self._window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
         self._window.combo_box_filter_method.currentTextChanged.connect(
@@ -107,9 +106,6 @@ class UIHandler(QObject):
 
         self._window.action_open_console.triggered.connect(self.show_jupyter_console_widget)
         self._window.tabs_main.currentChanged.connect(self.on_main_tab_changed)
-
-        self.confirm_cancel_buttons.confirm_button.clicked.connect(self._emit_section_confirmed)
-        self.confirm_cancel_buttons.cancel_button.clicked.connect(self._emit_section_canceled)
 
     @Slot()
     def _emit_section_confirmed(self) -> None:
@@ -129,22 +125,23 @@ class UIHandler(QObject):
             combo_box.clear()
             combo_box.setItems(value)
 
-    def update_data_selection_widgets(self, path: str) -> None:
+    @staticmethod
+    def _blocked_set_combo_box_items(combo_box: QComboBox, items: list[str]) -> None:
+        combo_box.blockSignals(True)
+        combo_box.clear()
+        combo_box.addItems(items)
+        combo_box.setCurrentIndex(0)
+        combo_box.blockSignals(False)
+
+    def update_data_select_ui(self, path: str) -> None:
         self._window.container_file_info.setEnabled(True)
-        self._window.group_box_subset_params.setEnabled(True)
         self._window.btn_load_selection.setEnabled(True)
-        available_filter_cols = self._window.data.df.select(
-            ps.contains(["index", "time", "temp"])
+        data_cols = self._window.data.df.select(
+            (~ps.contains(["index", "time", "temp"])) & (ps.float())
         ).columns
-        column_box = self._window.combo_box_filter_column
-        column_box.blockSignals(True)
-        column_box.clear()
-        column_box.addItems(available_filter_cols)
-        column_box.setCurrentIndex(0)
-        column_box.currentTextChanged.connect(self.update_subset_param_widgets)
-        if len(available_filter_cols) > 0:
-            self.update_subset_param_widgets(available_filter_cols[0])
-        column_box.blockSignals(False)
+        data_combo_box = self._window.combo_box_signal_column
+        self._blocked_set_combo_box_items(data_combo_box, data_cols)
+
         try:
             parsed_date, parsed_id, parsed_oxy = parse_file_name(Path(path).name)
             self._window.date_edit_file_info.setDate(
@@ -156,34 +153,6 @@ class UIHandler(QObject):
             self._window.date_edit_file_info.setDate(QDate.currentDate())
             self._window.line_edit_subject_id.setText("unknown")
             self._window.combo_box_oxygen_condition.setValue("unknown")
-
-    @Slot(str)
-    def update_subset_param_widgets(self, col_name: str) -> None:
-        if not col_name or col_name not in self._window.data.df.columns:
-            return
-        lower = cast(float, self._window.data.minmax_map[col_name]["min"])
-        upper = cast(float, self._window.data.minmax_map[col_name]["max"])
-        fs = self._window.data.fs
-
-        widgets = [
-            self._window.dbl_spin_box_subset_min,
-            self._window.dbl_spin_box_subset_max,
-        ]
-        for w in widgets:
-            if col_name == "index":
-                w.setDecimals(0)
-                w.setSingleStep(1)
-            elif col_name == "temperature":
-                w.setDecimals(1)
-                w.setSingleStep(0.1)
-            elif col_name == "time_s":
-                w.setDecimals(4)
-                w.setSingleStep(np.round(1 / fs, 4))
-            w.setMinimum(lower)
-            w.setMaximum(upper)
-
-        widgets[0].setValue(lower)
-        widgets[1].setValue(upper)
 
     @Slot()
     def reset_widget_state(self) -> None:
@@ -207,27 +176,15 @@ class UIHandler(QObject):
         self._window.dock_widget_sections.setVisible(is_index_one)
         self._window.dock_widget_sections.setEnabled(is_index_one)
 
-    def create_plot_widgets(self) -> None:
-        self._window.plot_widget_hbr.setLayout(QVBoxLayout())
-        self._window.plot_widget_vent.setLayout(QVBoxLayout())
-        hbr_pw = self.plot.plot_widgets["hbr"]
-        vent_pw = self.plot.plot_widgets["ventilation"]
-        hbr_rate_pw = self.plot.plot_widgets["hbr_rate"]
-        vent_rate_pw = self.plot.plot_widgets["ventilation_rate"]
-
-        self._window.plot_widget_hbr.layout().addWidget(hbr_pw)
-        self._window.plot_widget_hbr.layout().addWidget(hbr_rate_pw)
-
-        self._window.plot_widget_vent.layout().addWidget(vent_pw)
-        self._window.plot_widget_vent.layout().addWidget(vent_rate_pw)
-
     def create_jupyter_console_widget(self) -> None:
         self.jupyter_console = JupyterConsoleWidget()
+        self.jupyter_console.set_default_style("linux")
         self.jupyter_console_dock = QDockWidget("Jupyter Console")
         self.jupyter_console_dock.setWidget(self.jupyter_console)
         self.jupyter_console.kernel_manager.kernel.shell.push(
-            dict(mw=self._window, pg=pg, np=np, pl=pl, pp=pprint.pprint)
+            dict(mw=self._window, pg=pg, np=np, pl=pl, pp=pprint.pprint, pdir=pdir)
         )
+        self.jupyter_console.execute("whos()")
 
     @Slot()
     def show_jupyter_console_widget(self) -> None:

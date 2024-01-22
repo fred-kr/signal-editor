@@ -1,17 +1,16 @@
 import datetime
-from typing import TYPE_CHECKING, Any, NotRequired
+from typing import TYPE_CHECKING, Literal, TypedDict
 
+import numpy as np
 import numpy.typing as npt
-from PySide6 import QtGui
-from typing_extensions import Literal, TypedDict
+import polars as pl
 
 if TYPE_CHECKING:
     from .handlers.data_handler import DataState
     from .models.result import (
         ManualPeakEdits,
-        ProcessingParameters,
-        SelectionParameters,
     )
+    from .models.signal import SectionID, SectionIndices
 
 type SignalName = Literal["hbr", "ventilation"]
 type ScaleMethod = Literal["mad", "zscore", "None"]
@@ -44,16 +43,20 @@ type FilterMethod = Literal[
 ]
 type OxygenCondition = Literal["normoxic", "hypoxic", "unknown"]
 
+type PeakDetectionInputValues = (
+    PeakDetectionElgendiPPG
+    | PeakDetectionLocalMaxima
+    | PeakDetectionNeurokit2
+    | PeakDetectionProMAC
+    | PeakDetectionPantompkins
+    | PeakDetectionXQRS
+)
+
 
 class FileMetadata(TypedDict):
     date_recorded: datetime.datetime
     animal_id: str
     oxygen_condition: OxygenCondition
-
-
-class EDFReaderKwargs(TypedDict, total=False):
-    start: int
-    stop: int | None
 
 
 class SignalFilterParameters(TypedDict):
@@ -105,102 +108,65 @@ class PeakDetectionXQRS(TypedDict):
     peak_dir: Literal["up", "down", "both", "compare"]
 
 
-type PeakDetectionInputValues = (
-    PeakDetectionElgendiPPG
-    | PeakDetectionLocalMaxima
-    | PeakDetectionNeurokit2
-    | PeakDetectionProMAC
-    | PeakDetectionPantompkins
-    | PeakDetectionXQRS
-)
-
-
 class PeakDetectionParameters(TypedDict):
-    start_index: NotRequired[int]
-    stop_index: NotRequired[int]
     method: PeakDetectionMethod
     input_values: PeakDetectionInputValues
 
 
-class GeneralParameterOptions(TypedDict, total=False):
-    name: str
-    readonly: bool
-    removable: bool
-    visible: bool
-    disabled: bool
-    title: str
-    default: Any
-    expanded: bool
-
-
-type PGSymbols = (
-    Literal[
-        "o",  # circle
-        "s",  # square
-        "t",  # triangle pointing down
-        "d",  # diamond
-        "+",  # plus
-        "t1",  # triangle pointing up
-        "t2",  # triangle pointing right
-        "t3",  # triangle pointing left
-        "p",  # pentagon
-        "h",  # hexagon
-        "star",  # star
-        "x",  # cross
-        "arrow_up",  # arrow pointing up
-        "arrow_right",  # arrow pointing right
-        "arrow_down",  # arrow pointing down
-        "arrow_left",  # arrow pointing left
-        "crosshair",  # crosshair
-    ]
-    | QtGui.QPainterPath
-)
-
-
-class SpotItemDict(TypedDict):
-    pos: tuple[int | float, int | float]
-    size: int
-    pen: QtGui.QPen
-    brush: QtGui.QBrush
-    symbol: PGSymbols
-
-
-class SpotItemKargs(TypedDict, total=False):
-    spots: list[SpotItemDict]
-    x: npt.ArrayLike
-    y: npt.ArrayLike
-    pos: npt.ArrayLike | list[tuple[int | float, int | float]]
-    pxMode: bool
-    symbol: PGSymbols | list[PGSymbols]
-    pen: QtGui.QPen | list[QtGui.QPen]
-    brush: QtGui.QBrush | list[QtGui.QBrush]
-    size: int | list[int]
-    data: list[object]
-    hoverable: bool
-    tip: str | None
-    hoverSymbol: PGSymbols | None
-    hoverSize: int | Literal[-1]
-    hoverPen: QtGui.QPen | None
-    hoverBrush: QtGui.QBrush | None
-    useCache: bool
-    antialias: bool
-    compositionMode: QtGui.QPainter.CompositionMode
-    name: str | None
-
-
-class SignalSection(TypedDict):
-    index_start: int
-    index_stop: int
+class ProcessingParameters(TypedDict):
+    sampling_rate: int
+    filter_parameters: SignalFilterParameters | None
+    standardize_parameters: StandardizeParameters | None
+    peak_detection_parameters: PeakDetectionParameters | None
 
 
 class StateDict(TypedDict):
     active_signal: SignalName | str
     source_file_path: str
     output_dir: str
-    data_selection_params: "SelectionParameters"
     data_processing_params: "ProcessingParameters"
     file_metadata: FileMetadata
     sampling_frequency: int
-    peak_edits: "dict[SignalName | str, ManualPeakEdits]"
+    peak_edits: "dict[str, ManualPeakEdits]"
     data_state: "DataState"
     stopped_at_index: int
+
+
+class InitialState(TypedDict):
+    name: str
+    sampling_rate: int
+    data: pl.DataFrame
+
+
+class SectionIdentifier(TypedDict):
+    section_id: "SectionID"
+    included: bool
+    signal_name: str
+    absolute_start_index: int
+    absolute_stop_index: int
+    finished_processing: bool
+
+
+class SectionResultDict(TypedDict):
+    name: str
+    section_id: "SectionID"
+    absolute_bounds: "SectionIndices" | tuple[int, int]
+    data: npt.NDArray[np.void]
+    sampling_rate: int
+    peaks: npt.NDArray[np.int32]
+    rate: npt.NDArray[np.float64]
+    rate_interpolated: npt.NDArray[np.float64]
+    processing_parameters: ProcessingParameters
+
+
+class ResultDict(TypedDict):
+    identifier: dict[str, str | datetime.datetime | datetime.date | None]
+    selection_parameters: dict[str, str | int | float | None]
+    processing_parameters: dict[
+        str,
+        int | Pipeline | SignalFilterParameters | StandardizeParameters | PeakDetectionParameters,
+    ]
+    summary_statistics: dict[str, dict[str, float]]
+    focused_result: npt.NDArray[np.void]
+    manual_peak_edits: dict[str, list[int]]
+    source_data: list[dict["SectionID", SectionResultDict]]

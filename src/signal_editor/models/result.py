@@ -1,28 +1,22 @@
 import datetime
+import typing as t
 from dataclasses import dataclass, field
-from typing import Any, Iterable, TypedDict
 
 import numpy as np
 import numpy.typing as npt
 import polars as pl
 
-from ..type_aliases import (
-    PeakDetectionParameters,
-    Pipeline,
-    SignalFilterParameters,
-    SignalName,
-    StandardizeParameters,
-)
+from .. import type_aliases as _t
 from .signal import SignalData
 
 
 @dataclass(slots=True, frozen=True)
 class DescriptiveStatistics:
     _data_description: str
-    mean: np.floating[Any]
-    median: np.floating[Any]
-    std: np.floating[Any]
-    var: np.floating[Any]
+    mean: np.floating[t.Any]
+    median: np.floating[t.Any]
+    std: np.floating[t.Any]
+    var: np.floating[t.Any]
 
     def as_dict(self) -> dict[str, float]:
         return {
@@ -35,7 +29,7 @@ class DescriptiveStatistics:
 
 @dataclass(slots=True, frozen=True)
 class ResultIdentifier:
-    name: SignalName | str
+    name: str
     animal_id: str
     oxygen_condition: str
     source_file_name: str
@@ -55,39 +49,39 @@ class ResultIdentifier:
         }
 
 
-@dataclass(slots=True, frozen=True)
-class SelectionParameters:
-    filter_column: str | None
-    lower_bound: int | float
-    upper_bound: int | float
-    length_overall: int
+# @dataclass(slots=True, frozen=True)
+# class SelectionParameters:
+#     filter_column: str | None
+#     lower_bound: int | float
+#     upper_bound: int | float
+#     length_overall: int
 
-    def as_dict(self) -> dict[str, str | int | float | None]:
-        return {
-            "filter_column": self.filter_column,
-            "lower_bound": self.lower_bound,
-            "upper_bound": self.upper_bound,
-            "length_overall": self.length_overall,
-        }
+#     def as_dict(self) -> dict[str, str | int | float | None]:
+#         return {
+#             "filter_column": self.filter_column,
+#             "lower_bound": self.lower_bound,
+#             "upper_bound": self.upper_bound,
+#             "length_overall": self.length_overall,
+#         }
 
 
 @dataclass(slots=True, frozen=True)
 class ProcessingParameters:
     sampling_rate: int
-    pipeline: Pipeline
-    filter_parameters: SignalFilterParameters
-    scaling_parameters: StandardizeParameters
-    peak_detection_parameters: PeakDetectionParameters
+    pipeline: _t.Pipeline
+    filter_parameters: _t.SignalFilterParameters
+    scaling_parameters: _t.StandardizeParameters
+    peak_detection_parameters: _t.PeakDetectionParameters
 
     def as_dict(
         self,
     ) -> dict[
         str,
         int
-        | Pipeline
-        | SignalFilterParameters
-        | StandardizeParameters
-        | PeakDetectionParameters,
+        | _t.Pipeline
+        | _t.SignalFilterParameters
+        | _t.StandardizeParameters
+        | _t.PeakDetectionParameters,
     ]:
         return {
             "sampling_rate": self.sampling_rate,
@@ -213,52 +207,17 @@ def make_focused_result(
     )
 
 
-type SignalDataHDF5 = dict[
-    str, str | int | bool | npt.NDArray[np.float64] | npt.NDArray[np.int32]
-]
-
-type ResultValues = (
-    ResultIdentifier
-    | SelectionParameters
-    | ProcessingParameters
-    | SummaryStatistics
-    | FocusedResult
-    | ManualPeakEdits
-    | SignalDataHDF5
-    | dict[str, Any]
-)
-
-
-class ResultDict(TypedDict):
-    identifier: dict[str, str | datetime.datetime | datetime.date | None]
-    selection_parameters: dict[str, str | int | float | None]
-    processing_parameters: dict[
-        str,
-        int
-        | Pipeline
-        | SignalFilterParameters
-        | StandardizeParameters
-        | PeakDetectionParameters,
-    ]
-    summary_statistics: dict[str, dict[str, float]]
-    focused_result: npt.NDArray[np.void]
-    manual_peak_edits: dict[str, list[int]]
-    source_data: dict[
-        str, str | int | bool | npt.NDArray[np.float64] | npt.NDArray[np.int32] | None
-    ]
-
-
 @dataclass(slots=True, frozen=True)
 class Result:
     identifier: ResultIdentifier
-    selection_parameters: SelectionParameters
+    selection_parameters: 
     processing_parameters: ProcessingParameters
     summary_statistics: SummaryStatistics
     focused_result: FocusedResult
     manual_peak_edits: ManualPeakEdits
     source_data: SignalData
 
-    def as_dict(self) -> ResultDict:
+    def as_dict(self) -> _t.ResultDict:
         return {
             "identifier": self.identifier.as_dict(),
             "selection_parameters": self.selection_parameters.as_dict(),
@@ -271,7 +230,7 @@ class Result:
 
 
 class ResultContainer(dict[str, Result]):
-    def __init__(self, *args: Iterable[tuple[str, Result]], **kwargs: Result) -> None:
+    def __init__(self, *args: t.Iterable[tuple[str, Result]], **kwargs: Result) -> None:
         super().__init__(*args, **kwargs)
 
     def __setitem__(self, key: str, value: Result) -> None:

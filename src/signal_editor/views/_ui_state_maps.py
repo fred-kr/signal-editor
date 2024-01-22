@@ -186,10 +186,6 @@ INITIAL_STATE_MAP = {
         "model": QStandardItemModel(),
     },
     "line_edit_active_file": {"text": ""},
-    "group_box_subset_params": {
-        "enabled": False,
-        "checked": False,
-    },
     "container_file_info": {
         "enabled": True,
     },
@@ -204,15 +200,6 @@ INITIAL_STATE_MAP = {
     },
     "btn_load_selection": {
         "enabled": False,
-    },
-    "stacked_hbr_vent": {
-        "currentIndex": 0,
-    },
-    "btn_view_hbr": {
-        "checked": True,
-    },
-    "btn_view_vent": {
-        "checked": False,
     },
     "combo_box_preprocess_pipeline": {
         "value": "custom",
@@ -256,13 +243,10 @@ INITIAL_STATE_MAP = {
         "enabled": True,
     },
     "btn_compute_results": {"enabled": True},
-    "table_view_results_hbr": {
+    "table_view_focused_result": {
         "model": QStandardItemModel(),
     },
-    "table_view_results_ventilation": {
-        "model": QStandardItemModel(),
-    },
-    "tabs_result": {
+    "tab_container_result_views": {
         "currentIndex": 0,
     },
     "dock_widget_sections": {

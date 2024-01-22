@@ -12,25 +12,24 @@ from ..type_aliases import (
 )
 
 
-def mad_value[T: (pl.Expr, pl.Series)](sig: T) -> T | float | None:
-    return (sig - sig.median()).abs().median()
-
-
-def scale_mad[T: (pl.Expr, pl.Series)](sig: T, constant: float = 1.4826) -> T:
-    mad_val = mad_value(sig)
-    if mad_val is None:
-        raise ValueError("MAD value is None")
+def mad_value(sig: pl.Series) -> float:
+    mad = abs(sig - sig.median()).median()
+    if isinstance(mad, (float, int)):
+        return float(mad)
     else:
-        return (sig - sig.median()) / (mad_val * constant)
+        raise ValueError("MAD value is not a float")
+
+
+def scale_mad(sig: pl.Series, constant: float = 1.4826) -> pl.Series:
+    mad_val = mad_value(sig)
+    return (sig - sig.median()) / (mad_val * constant)
 
 
 def scale_z[T: (pl.Expr, pl.Series)](sig: T) -> T:
     return (sig - sig.mean()) / sig.std()
 
 
-def rolling_mad(
-    sig: pl.Series, window_size: int, constant: float = 1.4826
-) -> pl.Series:
+def rolling_mad(sig: pl.Series, window_size: int, constant: float = 1.4826) -> pl.Series:
     if window_size <= 0:
         raise ValueError("Window size must be greater than 0")
     deviation = sig - sig.rolling_median(window_size, min_periods=0)
@@ -48,11 +47,10 @@ def rolling_z(sig: pl.Series, window_size: int) -> pl.Series:
 
 
 def scale_signal(
-    sig: pl.Series | NDArray[np.float32 | np.float64],
+    sig: pl.Series | NDArray[np.float64],
     robust: bool = False,
     window_size: int | None = None,
     name: str | None = None,
-    # rolling_window: bool = True,
 ) -> pl.Series:
     """
     Scales a signal series using either Z-score or median absolute
@@ -92,6 +90,7 @@ def scale_signal(
     else:
         out = scale_mad(sig) if robust else scale_z(sig)
     return out.rename(name or sig.name)
+
 
 def filter_elgendi(sig: NDArray[np.float64], sampling_rate: int) -> NDArray[np.float64]:
     return np.asarray(
@@ -150,17 +149,13 @@ def auto_correct_fir_length(
         except ValueError as e:
             message = str(e)
             if "which requires" in message:
-                required_samples = int(
-                    message.split("requires")[1].split("samples")[0].strip()
-                )
+                required_samples = int(message.split("requires")[1].split("samples")[0].strip())
                 kwargs["window_size"] = required_samples
             else:
                 raise
 
 
-type FilterArgument = Literal[
-    "lowcut", "highcut", "method", "order", "window_size", "powerline"
-]
+type FilterArgument = Literal["lowcut", "highcut", "method", "order", "window_size", "powerline"]
 
 
 class FilterKeyValueMap(TypedDict, total=False):
@@ -200,9 +195,7 @@ class FilterInputs:
         self.window_size = window_size
         self.powerline = powerline
 
-    def __getitem__(
-        self, key: str
-    ) -> float | int | Literal["default"] | FilterMethod | str | None:
+    def __getitem__(self, key: str) -> float | int | Literal["default"] | FilterMethod | str | None:
         return vars(self).get(key)
 
     def __iter__(self) -> Iterator[str]:

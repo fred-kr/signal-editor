@@ -1,90 +1,50 @@
-import copy
 import re
+import typing as t
 from dataclasses import dataclass, field
-from typing import Any, Iterable, NamedTuple, TypedDict, Unpack
 
 import neurokit2 as nk
 import numpy as np
+import numpy.typing as npt
 import polars as pl
-from numpy.typing import NDArray
+import polars.selectors as ps
 from PySide6.QtCore import QObject, Signal, Slot
 
-from ..type_aliases import (
-    PeakDetectionInputValues,
-    PeakDetectionMethod,
-    PeakDetectionParameters,
-    Pipeline,
-    SignalFilterParameters,
-    SignalName,
-    StandardizeParameters,
-)
-from .filters import (
-    auto_correct_fir_length,
-    filter_custom,
-    filter_elgendi,
-    scale_signal,
-)
-from .peaks import find_peaks
+from .. import type_aliases as _t
+from . import filters as _filters
+from . import peaks as _peaks
+from . import result as _result
+
+if t.TYPE_CHECKING:
+    from .result import Result
 
 
-class InitialState(TypedDict):
-    name: str
-    sampling_rate: int
-    data: pl.DataFrame
-
-
-class SignalDataDict(TypedDict):
-    name: str
-    sampling_rate: int
-    data: NDArray[np.void]
-    original_data: NDArray[np.void]
-    rate_data: "RateData"
-    peaks: NDArray[np.int32]
-
-
-class SectionDict(TypedDict):
-    section_id: "SectionID"
-    name: str
-    data: NDArray[np.void]
-    peaks: NDArray[np.int32]
-    rate: NDArray[np.float64]
-    rate_interpolated: NDArray[np.float64]
-    filter_parameters: SignalFilterParameters | None
-    standardize_parameters: StandardizeParameters | None
-    peak_detection_parameters: PeakDetectionParameters
-
-
-def ensure_correct_order(start: int, stop: int) -> tuple[int, int]:
-    return (stop, start) if start > stop else (start, stop)
+class SectionIndices(t.NamedTuple):
+    start: int
+    stop: int
 
 
 def _is_new_section_within_existing(
-    new_limits: tuple[int, int], existing_limits: tuple[int, int]
+    new_limits: SectionIndices, existing_limits: SectionIndices
 ) -> bool:
-    return new_limits[0] > existing_limits[0] and new_limits[1] < existing_limits[1]
+    return existing_limits.start <= new_limits.start <= new_limits.stop <= existing_limits.stop
 
 
 def _is_new_section_overlapping_start(
-    new_limits: tuple[int, int], existing_limits: tuple[int, int]
+    new_limits: SectionIndices, existing_limits: SectionIndices
 ) -> bool:
-    return new_limits[0] < existing_limits[0] and new_limits[1] < existing_limits[1]
+    return new_limits.start < existing_limits.start < new_limits.stop
 
 
 def _is_new_section_overlapping_stop(
-    new_limits: tuple[int, int], existing_limits: tuple[int, int]
+    new_limits: SectionIndices, existing_limits: SectionIndices
 ) -> bool:
-    return new_limits[0] > existing_limits[0] and new_limits[1] > existing_limits[1]
+    return existing_limits.start < new_limits.start < existing_limits.stop
 
 
 def _is_new_section_enclosing_existing(
-    new_limits: tuple[int, int], existing_limits: tuple[int, int]
+    new_limits: SectionIndices, existing_limits: SectionIndices
 ) -> bool:
-    return new_limits[0] < existing_limits[0] and new_limits[1] > existing_limits[1]
-
-
-class SectionIndices(NamedTuple):
-    start: int
-    stop: int
+    return new_limits.start <= existing_limits.start and new_limits.stop >= existing_limits.stop
 
 
 @dataclass(slots=True, kw_only=True)
@@ -94,15 +54,15 @@ class RateData:
     `neurokit2.signal_rate` function.
     """
 
-    rate: NDArray[np.float64] = field(default_factory=lambda: np.empty(0, dtype=np.float64))
-    rate_interpolated: NDArray[np.float64] = field(
+    rate: npt.NDArray[np.float64] = field(default_factory=lambda: np.empty(0, dtype=np.float64))
+    rate_interpolated: npt.NDArray[np.float64] = field(
         default_factory=lambda: np.empty(0, dtype=np.float64)
     )
 
     def update(
         self,
-        rate: NDArray[np.float64] | None = None,
-        rate_interpolated: NDArray[np.float64] | None = None,
+        rate: npt.NDArray[np.float64] | None = None,
+        rate_interpolated: npt.NDArray[np.float64] | None = None,
     ) -> None:
         if rate is not None:
             self.rate = rate
@@ -121,8 +81,34 @@ class SectionID(str):
         return super().__new__(cls, value)
 
 
+@dataclass(slots=True, frozen=True)
+class SectionResult:
+    name: str
+    section_id: SectionID
+    absolute_bounds: SectionIndices
+    data: npt.NDArray[np.void]
+    sampling_rate: int
+    peaks: npt.NDArray[np.int32]
+    rate: npt.NDArray[np.float64]
+    rate_interpolated: npt.NDArray[np.float64]
+    processing_parameters: _t.ProcessingParameters
+
+    def as_dict(self) -> _t.SectionResultDict:
+        return {
+            "name": self.name,
+            "section_id": self.section_id,
+            "absolute_bounds": self.absolute_bounds,
+            "data": self.data,
+            "sampling_rate": self.sampling_rate,
+            "peaks": self.peaks,
+            "rate": self.rate,
+            "rate_interpolated": self.rate_interpolated,
+            "processing_parameters": self.processing_parameters,
+        }
+
+
 class Section:
-    _id_counters: dict[str, int] = {}
+    _id_counter: int = 0
 
     def __init__(
         self,
@@ -133,47 +119,94 @@ class Section:
         include: bool = True,
     ) -> None:
         self._is_included = include
-        self.section_id = self._generate_id(name)
-        self.data = data
+        self.section_id = self._generate_id()
+        self.data = data.with_row_index("relative_index")
         self.name = name
         self._sampling_rate = sampling_rate
         self._processed_name = f"{name}_processed"
         self._is_active = set_active
         index_col = data.get_column("index")
-        self._indices = SectionIndices(index_col[0], index_col[-1])
+        self._abs_bounds = SectionIndices(index_col[0], index_col[-1])
         self._is_finished = False
+        self._result: SectionResult | None = None
         self.rate_data = RateData()
-        self._parameters_used: dict[str, Any] = {
-            "filter": None,
-            "standardize": None,
-            "peak_detection": None,
+        self._parameters_used: _t.ProcessingParameters = {
+            "sampling_rate": self.sampling_rate,
+            "filter_parameters": None,
+            "standardize_parameters": None,
+            "peak_detection_parameters": None,
         }
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
         return (
             f"Section:\n"
-            f"\tName: {self.name}\n"
-            f"\tID: {self.section_id}\n"
-            f"\tIndices: {self._indices}\n"
-            f"\tIs active: {self._is_active}"
+            f"\tName: {self.name:20s}\n"
+            f"\tID: {self.section_id:10s}\n"
+            f"\tIndices: {self._abs_bounds:10s}\n"
+            f"\tIs active: {self._is_active:10s}\n"
         )
 
-    @classmethod
-    def _get_next_id(cls, name: str) -> int:
-        if name not in cls._id_counters:
-            cls._id_counters[name] = 0
-        cls._id_counters[name] += 1
-        return cls._id_counters[name]
+    def __len__(self) -> int:
+        return self.data.height
+
+    @staticmethod
+    def from_dict(section_dict: _t.SectionResultDict) -> "Section":
+        data = pl.DataFrame(section_dict["data"])
+        section = Section(
+            data,
+            name=section_dict["name"],
+            sampling_rate=section_dict["sampling_rate"],
+            set_active=False,
+            include=True,
+        )
+        section.set_peaks(section_dict["peaks"])
+        section.rate_data.update(
+            rate=section_dict["rate"],
+            rate_interpolated=section_dict["rate_interpolated"],
+        )
+        section._parameters_used = {
+            "sampling_rate": section_dict["sampling_rate"],
+            "filter_parameters": section_dict["processing_parameters"]["filter_parameters"],
+            "standardize_parameters": section_dict["processing_parameters"][
+                "standardize_parameters"
+            ],
+            "peak_detection_parameters": section_dict["processing_parameters"][
+                "peak_detection_parameters"
+            ],
+        }
+        return section
 
     @classmethod
-    def reset_id_counter(cls, name: str) -> None:
-        if name in cls._id_counters:
-            cls._id_counters[name] = 0
+    def get_id_counter(cls) -> int:
+        return cls._id_counter
 
-    def _generate_id(self, name: str) -> SectionID:
+    @classmethod
+    def _get_next_id(cls) -> int:
+        cls._id_counter += 1
+        return cls._id_counter
+
+    @classmethod
+    def reset_id_counter(cls) -> None:
+        cls._id_counter = 0
+
+    def _generate_id(self) -> SectionID:
         prefix = "IN" if self._is_included else "EX"
-        number = self._get_next_id(name)
+        number = self._get_next_id()
         return SectionID(f"{prefix}_{number:03d}")
+
+    def get_section_info(self) -> _t.SectionIdentifier:
+        return {
+            "section_id": self.section_id,
+            "included": self._is_included,
+            "signal_name": self.name,
+            "absolute_start_index": self.abs_start,
+            "absolute_stop_index": self.abs_stop,
+            "finished_processing": self._is_finished,
+        }
+
+    @property
+    def processing_parameters(self) -> _t.ProcessingParameters:
+        return self._parameters_used
 
     @property
     def is_included(self) -> bool:
@@ -188,93 +221,136 @@ class Section:
         self._is_active = value
 
     @property
-    def start_index(self) -> int:
-        return self._indices.start
+    def abs_start(self) -> int:
+        """
+        The index value of this section's first row in the original data.
+
+        See Also
+        --------
+        abs_stop : The index value of this section's last row in the original data.
+        rel_start : The first value in the `relative_index` column (should always be 0).
+        rel_stop : The last value in the `relative_index` column (should always be the length of the section minus 1).
+
+        """
+        return self._abs_bounds.start
 
     @property
-    def stop_index(self) -> int:
-        return self._indices.stop
+    def abs_stop(self) -> int:
+        """
+        The index value of this section's last row in the original data.
+
+        See Also
+        --------
+        abs_start
+        rel_start
+        rel_stop
+
+        """
+        return self._abs_bounds.stop
 
     @property
-    def processed_signal(self) -> NDArray[np.float64]:
+    def rel_start(self) -> int:
+        return self.data.get_column("relative_index")[0]
+
+    @property
+    def rel_stop(self) -> int:
+        return self.data.get_column("relative_index")[-1]
+
+    @property
+    def processed_signal(self) -> npt.NDArray[np.float64]:
         return self.data.get_column(self._processed_name).to_numpy()
 
     @property
     def sampling_rate(self) -> int:
         return self._sampling_rate
 
-    @sampling_rate.setter
-    def sampling_rate(self, value: int) -> None:
-        self._sampling_rate = value
+    def left_shrink(self, new_stop_index: int) -> "Section":
+        """
+        Create a new section from this section's start index (inclusive) to the given stop index (exclusive).
 
-    def resize(self, start_index: int, stop_index: int, data: pl.DataFrame | None = None) -> None:
-        start_index, stop_index = ensure_correct_order(start_index, stop_index)
-        if start_index == self.start_index and stop_index == self.stop_index:
-            return
-        if (start_index < self.start_index or stop_index > self.stop_index) and data is None:
-            raise ValueError(
-                "The `data` argument is required if the new indices are outside the current data range."
-            )
-        self._indices = SectionIndices(start_index, stop_index)
-        if data is not None:
-            self.data = data
-        else:
-            self.data = self.data.filter(pl.col("index").is_between(start_index, stop_index))
+        Before:
+            >>> 0|--------------------|len(self.data)
+        After:
+            >>> 0|------|new_stop_index
+
+        Parameters
+        ----------
+        new_stop_index : int
+            The new stop index for the section.
+        """
+        if new_stop_index > self.rel_stop:
+            raise ValueError("New stop index must be smaller than current stop index")
+
+        new_data = self.data.filter(pl.col("index") < new_stop_index)
+        return Section(new_data, self.name, self.sampling_rate, set_active=self.is_active)
+
+    def right_shrink(self, new_start_index: int) -> "Section":
+        """
+        Create a new section from the given start index (exclusive) to this section's stop index (inclusive).
+
+        Before:
+            >>> 0|--------------------|len(self.data)
+        After:
+            >>> new_start_index|------|len(self.data)
+
+        Parameters
+        ----------
+        new_start_index : int
+            The new start index for the section.
+        """
+        if new_start_index < self.rel_start:
+            raise ValueError("New start index must be larger than current start index")
+
+        new_data = self.data.filter(pl.col("index") > new_start_index)
+        return Section(new_data, self.name, self.sampling_rate, set_active=self.is_active)
 
     def filter_signal(
         self,
-        pipeline: Pipeline,
-        **kwargs: Unpack[SignalFilterParameters],
+        pipeline: _t.Pipeline,
+        **kwargs: t.Unpack[_t.SignalFilterParameters],
     ) -> None:
         method = kwargs.get("method", "None")
-        sig = self.processed_signal
-        sampling_rate = self.sampling_rate
         if pipeline == "custom":
             if method == "None":
-                filtered = sig
+                filtered = self.processed_signal
             elif method == "fir":
-                filtered = auto_correct_fir_length(sig, sampling_rate, **kwargs)
+                filtered = _filters.auto_correct_fir_length(
+                    self.processed_signal, self.sampling_rate, **kwargs
+                )
             else:
-                filtered = filter_custom(sig, sampling_rate, **kwargs)
+                filtered = _filters.filter_custom(
+                    self.processed_signal, self.sampling_rate, **kwargs
+                )
         elif pipeline == "ppg_elgendi":
-            filtered = filter_elgendi(sig, sampling_rate)
+            filtered = _filters.filter_elgendi(self.processed_signal, self.sampling_rate)
         else:
             raise ValueError(f"Unknown pipeline: {pipeline}")
-        filter_parameters_used = {
-            "pipeline": pipeline,
-            "method": method,
-            "method_parameters": kwargs,
-        }
-        self._parameters_used["filter"] = filter_parameters_used
+        filter_parameters = _t.SignalFilterParameters(**kwargs)
+        self._parameters_used["filter_parameters"] = filter_parameters
         pl_filtered = pl.Series(self._processed_name, filtered, pl.Float64)
         self.data = self.data.with_columns((pl_filtered).alias(self._processed_name))
 
     def scale_signal(self, robust: bool = False, window_size: int | None = None) -> None:
-        scaled = scale_signal(self.processed_signal, robust, window_size)
+        scaled = _filters.scale_signal(self.processed_signal, robust, window_size)
 
-        self._parameters_used["standardize"] = {
+        self._parameters_used["standardize_parameters"] = {
             "robust": robust,
             "window_size": window_size,
         }
-        self.data = self.data.with_columns(
-            pl.Series(self._processed_name, scaled, pl.Float64).alias(self._processed_name)
-        )
+        self.data = self.data.with_columns((scaled).alias(self._processed_name))
 
     def detect_peaks(
         self,
-        method: PeakDetectionMethod,
-        input_values: PeakDetectionInputValues,
+        method: _t.PeakDetectionMethod,
+        input_values: _t.PeakDetectionInputValues,
     ) -> None:
         sampling_rate = self.sampling_rate
-        peaks = find_peaks(self.processed_signal, sampling_rate, method, input_values)
-        pl_peaks = pl.Series("peaks", peaks, pl.Int32)
-        self._parameters_used["peak_detection"] = {
+        peaks = _peaks.find_peaks(self.processed_signal, sampling_rate, method, input_values)
+        self._parameters_used["peak_detection_parameters"] = {
             "method": method,
             "input_values": input_values,
         }
-        self.data = self.data.with_columns(
-            (pl.when(pl.col("index").is_in(pl_peaks)).then(True).otherwise(False)).alias("is_peak")
-        )
+        self.set_peaks(peaks)
 
     def calculate_rate(self) -> None:
         sampling_rate = self.sampling_rate
@@ -299,24 +375,23 @@ class Section:
         )
         self.rate_data = RateData(rate=rate, rate_interpolated=rate_interp)
 
-    def get_peaks(self) -> NDArray[np.int32]:
+    def get_peaks(self) -> npt.NDArray[np.int32]:
         if not self._is_included:
             return np.empty(0, dtype=np.int32)
-        return (
-            self.data.filter(pl.col("is_peak"))
-            .get_column("index")
-            .cast(pl.Int32)
-            .to_numpy(writable=True)
-        )
+        return self.data.get_column("is_peak").arg_true().cast(pl.Int32).to_numpy()
 
-    def set_peaks(self, peaks: NDArray[np.int32]) -> None:
+    def set_peaks(self, peaks: npt.NDArray[np.int32]) -> None:
         pl_peaks = pl.Series("peaks", peaks, pl.Int32)
 
         self.data = self.data.with_columns(
             pl.when(pl.col("index").is_in(pl_peaks)).then(True).otherwise(False).alias("is_peak")
         )
 
-    def get_peak_intervals(self) -> NDArray[np.int32]:
+    def get_peak_xy(self) -> tuple[npt.NDArray[np.int32], npt.NDArray[np.float64]]:
+        peaks = self.get_peaks()
+        return peaks, self.processed_signal[peaks]
+
+    def get_peak_intervals(self) -> npt.NDArray[np.int32]:
         if not self._is_included:
             return np.empty(0, dtype=np.int32)
         peaks = self.get_peaks()
@@ -325,17 +400,26 @@ class Section:
     def set_finished(self) -> None:
         self._is_finished = True
 
-    def as_dict(self) -> SectionDict:
-        return SectionDict(
-            section_id=self.section_id,
+    def get_focused_result(self) -> _result.FocusedResult:
+        return _result.FocusedResult(
+            time_s=self.data.get_column("index").to_numpy() / self.sampling_rate,
+            index=self.get_peaks(),
+            peak_intervals=self.get_peak_intervals(),
+            temperature=self.data.get_column("temperature").to_numpy(),
+            rate_bpm=self.rate_data.rate,
+        )
+
+    def as_dict(self) -> _t.SectionResultDict:
+        return _t.SectionResultDict(
             name=self.name,
+            section_id=self.section_id,
+            absolute_bounds=self._abs_bounds,
             data=self.data.to_numpy(structured=True),
+            sampling_rate=self.sampling_rate,
             peaks=self.get_peaks(),
             rate=self.rate_data.rate,
             rate_interpolated=self.rate_data.rate_interpolated,
-            filter_parameters=self._parameters_used.get("filter", None),
-            standardize_parameters=self._parameters_used.get("standardize", None),
-            peak_detection_parameters=self._parameters_used.get("peak_detection", None),
+            processing_parameters=self._parameters_used,
         )
 
 
@@ -345,42 +429,45 @@ class SectionContainer:
         self._included: dict[SectionID, Section] = {}
         self._excluded: dict[SectionID, Section] = {}
 
-    def __repr__(self) -> str:
+    def __str__(self) -> str:
+        included_str = "\n\t\t".join(str(section) for section in self._included.values())
+        excluded_str = "\n\t\t".join(str(section) for section in self._excluded.values())
+
         return (
-            f"SectionContainer:\n"
+            f"SectionContainer: {self._name}\n"
             f"\tIncluded:\n"
-            f"\t\t{self._included}\n"
+            f"\t\t{included_str}\n"
             f"\tExcluded:\n"
-            f"\t\t{self._excluded}\n"
+            f"\t\t{excluded_str}\n"
         )
 
     def get_previous_section(self, section_id: SectionID) -> Section:
-        if section_id in self._included:
-            prev_id = SectionID(f"IN_{int(section_id[3:]) - 1:03d}")
-        elif section_id in self._excluded:
-            prev_id = SectionID(f"EX_{int(section_id[3:]) - 1:03d}")
-        else:
-            raise ValueError("Section not found")
-
-        return self._included[prev_id] if prev_id in self._included else self._excluded[prev_id]
+        number = int(section_id[-3:]) - 1
+        if number <= 0:
+            return self.get_section_by_id(section_id)
+        prev_id = SectionID(f"IN_{number:03d}")
+        try:
+            return self.get_section_by_id(prev_id)
+        except ValueError:
+            raise
 
     def get_next_section(self, section_id: SectionID) -> Section:
-        if section_id in self._included:
-            next_id = SectionID(f"IN_{int(section_id[3:]) + 1:03d}")
-        elif section_id in self._excluded:
-            next_id = SectionID(f"EX_{int(section_id[3:]) + 1:03d}")
-        else:
-            raise ValueError("Section not found")
-
-        return self._included[next_id] if next_id in self._included else self._excluded[next_id]
+        number = int(section_id[3:]) + 1
+        if number > Section.get_id_counter():
+            return self.get_section_by_id(section_id)
+        next_id = SectionID(f"IN_{number:03d}")
+        try:
+            return self.get_section_by_id(next_id)
+        except ValueError:
+            raise
 
     def get_section_by_id(self, section_id: SectionID) -> Section:
-        if section_id.startswith("IN"):
+        if "IN" in section_id:
             return self._included[section_id]
-        elif section_id.startswith("EX"):
+        elif "EX" in section_id:
             return self._excluded[section_id]
         else:
-            raise ValueError("Section not found")
+            raise ValueError(f"Section '{section_id}' does not exist")
 
     def get_included(self) -> dict[SectionID, Section]:
         return self._included
@@ -400,65 +487,58 @@ class SectionContainer:
         self._included[section_id].is_active = True
 
     def add_section(self, section: Section) -> None:
-        if not section.is_included:
-            self._excluded[section.section_id] = section
-            return
-
-        new_limits = section.start_index, section.stop_index
-        right_section = None
-        for existing_section in self._included.values():
-            existing_limits = existing_section.start_index, existing_section.stop_index
-
+        new_limits = SectionIndices(section.abs_start, section.abs_stop)
+        existing_sections = list(self._included.values())
+        for existing_section in existing_sections:
+            existing_limits = SectionIndices(existing_section.abs_start, existing_section.abs_stop)
+            if new_limits.stop < existing_limits.start or new_limits.start > existing_limits.stop:
+                continue
             if _is_new_section_within_existing(new_limits, existing_limits):
-                right_section = self._handle_new_within_existing(existing_section, section)
+                self._handle_new_within_existing(existing_section, section)
+                return
             elif _is_new_section_enclosing_existing(new_limits, existing_limits):
-                self.remove_section(existing_section.section_id)
+                self._handle_new_enclosing_existing(existing_section, section)
+                return
             elif _is_new_section_overlapping_start(new_limits, existing_limits):
                 self._handle_new_overlapping_start(existing_section, section)
             elif _is_new_section_overlapping_stop(new_limits, existing_limits):
                 self._handle_new_overlapping_stop(existing_section, section)
 
-        self._included[section.section_id] = section
-        if right_section is not None:
-            self._included[right_section.section_id] = right_section
+        if section.is_included:
+            self._included[section.section_id] = section
+        else:
+            self._excluded[section.section_id] = section
 
         if section.is_active:
             self.set_active_section(section.section_id)
 
-    def _handle_new_within_existing(
-        self, existing_section: Section, new_section: Section
-    ) -> Section:
-        right_data = existing_section.data.filter(
-            pl.col("index").is_between(new_section.stop_index + 1, existing_section.stop_index)
-        )
-        right_section = Section(
-            right_data, name=self._name, sampling_rate=existing_section.sampling_rate
-        )
-        existing_section.resize(existing_section.start_index, new_section.start_index - 1)
-        return right_section
+    def _handle_new_within_existing(self, existing_section: Section, new_section: Section) -> None:
+        left_section = existing_section.left_shrink(new_section.abs_start)
+        right_section = existing_section.right_shrink(new_section.abs_stop)
+        self._included.pop(existing_section.section_id, None)
+        self._included[left_section.section_id] = left_section
+        self._included[new_section.section_id] = new_section
+        self._included[right_section.section_id] = right_section
 
     def _handle_new_overlapping_start(
         self, existing_section: Section, new_section: Section
     ) -> None:
-        adjusted_start = new_section.stop_index + 1
-        existing_section.resize(adjusted_start, existing_section.stop_index)
+        existing_updated = existing_section.right_shrink(new_section.abs_stop)
+        self._included.pop(existing_section.section_id, None)
+        self._included[new_section.section_id] = new_section
+        self._included[existing_updated.section_id] = existing_updated
 
     def _handle_new_overlapping_stop(self, existing_section: Section, new_section: Section) -> None:
-        adjusted_stop = new_section.start_index - 1
-        existing_section.resize(existing_section.start_index, adjusted_stop)
+        existing_updated = existing_section.left_shrink(new_section.abs_start)
+        self._included.pop(existing_section.section_id, None)
+        self._included[existing_updated.section_id] = existing_updated
+        self._included[new_section.section_id] = new_section
 
-    def remove_section(self, section_id: SectionID) -> None:
-        if section_id in self._included and self._included[section_id].is_active:
-            try:
-                new_active = self.get_previous_section(section_id)
-            except ValueError:
-                try:
-                    new_active = self.get_next_section(section_id)
-                except ValueError:
-                    new_active = list(self._included.values())[0]
-            self.set_active_section(new_active.section_id)
-        self._included.pop(section_id, None)
-        self._excluded.pop(section_id, None)
+    def _handle_new_enclosing_existing(
+        self, existing_section: Section, new_section: Section
+    ) -> None:
+        self._included.pop(existing_section.section_id, None)
+        self.add_section(new_section)
 
 
 class SignalData(QObject):
@@ -466,19 +546,21 @@ class SignalData(QObject):
 
     def __init__(
         self,
-        name: SignalName | str,
+        name: str,
         data: pl.DataFrame,
         sampling_rate: int,
+        parent: QObject | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(parent)
         self.name: str = name
         self.data: pl.DataFrame = data
         self.sampling_rate: int = sampling_rate
-        self._initial_state: InitialState = {
+        self._initial_state: _t.InitialState = {
             "name": self.name,
             "sampling_rate": self.sampling_rate,
             "data": self.data,
         }
+        self.result_data: "dict[str, pl.DataFrame | Result]" = {}
         self._finish_init()
 
     def _finish_init(self) -> None:
@@ -491,21 +573,19 @@ class SignalData(QObject):
 
     def _setup_data(self) -> None:
         if "index" not in self.data.columns:
-            self.data = self.data.with_row_count("index")
+            self.data = self.data.with_row_index()
         self.data = self.data.select(
-            pl.col("index", "temperature", self.name),
+            pl.col("index"),
+            ps.contains("temp"),
+            pl.col(self.name),
             pl.col(self.name).alias(self.processed_name),
             pl.repeat(False, self.data.height, dtype=pl.Boolean).alias("is_peak"),
-            pl.repeat(True, self.data.height, dtype=pl.Boolean).alias("is_included"),
-            pl.repeat(False, self.data.height, dtype=pl.Boolean).alias("is_processed"),
         )
         self._original_data = self.data.clone()
-        active_data = self.data.select(
-            "index", "temperature", self.name, self.processed_name, "is_peak"
-        )
 
+        self.add_section(0, self.data.height - 1, set_active=True, include=True)
         section = Section(
-            active_data,
+            self.data,
             name=self.name,
             set_active=True,
             include=True,
@@ -519,7 +599,7 @@ class SignalData(QObject):
         return self.sections.get_active_section()
 
     @property
-    def active_peaks(self) -> NDArray[np.int32]:
+    def active_peaks(self) -> npt.NDArray[np.int32]:
         return self.active_section.get_peaks()
 
     @property
@@ -528,15 +608,23 @@ class SignalData(QObject):
         return col[0], col[-1]
 
     @property
-    def active_region_limits(self) -> tuple[int, int]:
-        return self.active_section.start_index, self.active_section.stop_index
+    def active_abs_bounds(self) -> tuple[int, int]:
+        """
+        The start and stop row indices of the active section in the original data.
+        """
+        return self.active_section.abs_start, self.active_section.abs_stop
 
     @property
-    def default_rate(self) -> NDArray[np.float64]:
+    def default_rate(self) -> npt.NDArray[np.float64]:
+        """
+        Calculated instantaneous rate array with the same length as the amount of detected peaks.
+        """
         return self._signal_rate.rate
 
     @property
-    def interpolated_rate(self) -> NDArray[np.float64]:
+    def interpolated_rate(self) -> npt.NDArray[np.float64]:
+        """
+        Calculated instantaneous rate array interpolated to the length of the original signal."""
         return self._signal_rate.rate_interpolated
 
     def get_section_by_id(self, section_id: SectionID) -> Section:
@@ -557,7 +645,7 @@ class SignalData(QObject):
         for excluded_section in self.sections.get_excluded().values():
             self.data = self.data.filter(
                 pl.col("index")
-                .is_between(excluded_section.start_index, excluded_section.stop_index)
+                .is_between(excluded_section.abs_start, excluded_section.abs_stop)
                 .is_not()
             )
         for section in self.sections.get_included().values():
@@ -565,9 +653,9 @@ class SignalData(QObject):
             self.data.update(section_data, on="index")
 
     def add_section(
-        self, lower: int, upper: int, set_active: bool = False, include: bool = True
+        self, start: int, stop: int, set_active: bool = False, include: bool = True
     ) -> None:
-        data = self.data.filter(pl.col("index").is_between(lower, upper))
+        data = self.data.filter(pl.col("index").is_between(start, stop))
         new_section = Section(
             data,
             name=self.name,
@@ -578,16 +666,16 @@ class SignalData(QObject):
         self.sections.add_section(new_section)
         self.sig_new_section_id.emit(new_section.section_id)
 
-    def get_all_peaks(self) -> NDArray[np.int32]:
+    def get_all_peaks(self) -> npt.NDArray[np.int32]:
         self.save_section_changes()
         return self.data.filter(pl.col("is_peak")).get_column("index").cast(pl.Int32).to_numpy()
 
-    def get_active_signal(self) -> NDArray[np.float64]:
+    def get_active_signal(self) -> npt.NDArray[np.float64]:
         return self.active_section.processed_signal
 
     def get_calculated_rate(
         self, interpolated: bool | None = None
-    ) -> RateData | NDArray[np.float64]:
+    ) -> RateData | npt.NDArray[np.float64]:
         rate_mapping = {
             None: self._signal_rate,
             True: self._signal_rate.rate_interpolated,
@@ -595,11 +683,17 @@ class SignalData(QObject):
         }
         return rate_mapping.get(interpolated, self._signal_rate)
 
-    def as_dict(self) -> dict[SectionID, SectionDict]:
-        return {
-            section.section_id: section.as_dict()
-            for section in self.sections.get_included().values()
-        }
+    def as_dict(self) -> list[dict[SectionID, _t.SectionResultDict]]:
+        return [
+            {
+                section.section_id: section.as_dict()
+                for section in self.sections.get_included().values()
+            },
+            {
+                section.section_id: section.as_dict()
+                for section in self.sections.get_excluded().values()
+            },
+        ]
 
     def set_active_section(self, section_id: SectionID) -> None:
         self.sections.set_active_section(section_id)
@@ -608,14 +702,14 @@ class SignalData(QObject):
         self.name = self._initial_state["name"]
         self.sampling_rate = self._initial_state["sampling_rate"]
         self.data = self._initial_state["data"]
-        Section.reset_id_counter(name=self.name)
+        Section.reset_id_counter()
         self._finish_init()
 
     def remove_all_excluded(self) -> None:
         excluded_sections = self.sections.get_excluded()
         for section in excluded_sections.values():
             self.data = self.data.filter(
-                pl.col("index").is_between(section.start_index, section.stop_index).is_not()
+                pl.col("index").is_between(section.abs_start, section.abs_stop).is_not()
             )
 
     def restore_excluded(self) -> None:
@@ -623,7 +717,7 @@ class SignalData(QObject):
         for section in excluded_sections.values():
             self.data.update(section.data, on="index", how="outer")
 
-    def set_active_peak_indices(self, indices: Iterable[int]) -> None:
+    def set_active_peak_indices(self, indices: t.Iterable[int]) -> None:
         indices = pl.Series("peaks", indices, pl.Int32)
         self.active_section.data = self.active_section.data.with_columns(
             pl.when(pl.col("index").is_in(indices))
@@ -632,15 +726,7 @@ class SignalData(QObject):
             .alias("is_peak")
         )
 
-
-class SignalStorage(dict[str, SignalData]):
-    """
-    A container for SignalData objects.
-    """
-
-    def deepcopy(self) -> "SignalStorage":
-        return copy.deepcopy(self)
-
-    def update_sampling_rate(self, sampling_rate: int) -> None:
-        for sig in self.values():
-            sig.sampling_rate = sampling_rate
+    # TODO: Actually implement this nicely
+    def create_intermediate_result(self, section_ids: list[SectionID]) -> pl.DataFrame:
+        sections = [self.sections.get_section_by_id(section_id) for section_id in section_ids]
+        return pl.concat([section.data for section in sections])

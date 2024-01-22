@@ -7,8 +7,8 @@ import h5py
 import mne.io
 import numpy as np
 import polars as pl
+from .. import type_aliases as _t
 
-from .result import ResultDict
 
 if TYPE_CHECKING:
     from ..models.result import Result
@@ -184,7 +184,7 @@ def read_edf(
 
 def create_hdf5_groups(
     group: h5py.Group,
-    data: ResultDict,
+    data: _t.ResultDict,
 ) -> None:
     """
     Creates HDF5 groups from a dictionary.

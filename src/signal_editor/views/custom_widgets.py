@@ -17,12 +17,15 @@ class ConfirmCancelButtons(QWidget):
         self.hide()
 
     def _init_ui(self) -> None:
-        self._confirm_button = QPushButton("Confirm")
-        self._cancel_button = QPushButton("Cancel")
+        confirm_button = QPushButton("Confirm")
+        cancel_button = QPushButton("Cancel")
 
         layout = QHBoxLayout()
-        layout.addWidget(self._confirm_button)
-        layout.addWidget(self._cancel_button)
+        layout.addWidget(confirm_button)
+        layout.addWidget(cancel_button)
+
+        self._confirm_button = confirm_button
+        self._cancel_button = cancel_button
         self.setLayout(layout)
 
     @property
