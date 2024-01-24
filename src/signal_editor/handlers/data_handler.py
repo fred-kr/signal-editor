@@ -126,7 +126,7 @@ class DataHandler(QtCore.QObject):
         self._connect_qt_signals()
 
     def _connect_qt_signals(self) -> None:
-        self.sig_sfreq_changed.connect(self._app.spin_box_sample_rate.setValue)
+        self.sig_sfreq_changed.connect(self._app.update_sfreq_blocked)
 
     def _clear(self) -> None:
         self._raw_df = None
@@ -171,24 +171,28 @@ class DataHandler(QtCore.QObject):
         return self._sampling_rate
 
     def set_sfreq(self, value: int) -> None:
+        # Change sampling rate from inside the code, then update the corresponding UI widget (block signals to avoid infinite recursion)
         self._sampling_rate = value
         self.sig_sfreq_changed.emit(value)
 
+    @Slot(int)
     def update_sfreq(self, value: int) -> None:
         for section in self.sections.values():
             section.update_sfreq(value)
 
     @property
     def sections(self) -> SectionContainer:
-        if not self._sections:
-            raise RuntimeError("No signal data loaded")
         return self._sections
 
     @property
     def base_section(self) -> Section:
         try:
             return Section(
-                self.base_df, sig_name=self.sig_name, sampling_rate=self.sfreq, _is_base=True
+                self.base_df,
+                sig_name=self.sig_name,
+                sampling_rate=self.sfreq,
+                set_active=True,
+                _is_base=True,
             )
         except RuntimeError:
             self._app.sig_show_message.emit("No data to create base section from", "warning")
@@ -197,10 +201,10 @@ class DataHandler(QtCore.QObject):
     @property
     def cas(self) -> Section:
         """Shorthand for the currently active section (cas = current active section)."""
-        section = next((section for section in self.sections.values() if section.is_active), None)
-        if section is None:
-            section = self.base_section
-        return section
+        return next(
+            (section for section in self.sections.values() if section.is_active),
+            self.base_section,
+        )
 
     @property
     def cas_proc_data(self) -> pl.Series:
@@ -320,6 +324,7 @@ class DataHandler(QtCore.QObject):
         )
 
         self._raw_df = df
+        self.set_sfreq(int(sfreq))
         self.sig_new_raw.emit()
 
     def create_base_df(self, sig_name: str) -> None:
@@ -339,9 +344,12 @@ class DataHandler(QtCore.QObject):
             .collect()
             .rechunk()
         )
+
         self._app.sig_show_message.emit(
             f"Created base df with columns: {self._base_df.columns}", "debug"
         )
+        base_section = self.base_section
+        self._sections[base_section.section_id] = base_section
 
     @Slot()
     def reset(self) -> None:

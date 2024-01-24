@@ -191,6 +191,10 @@ class Section:
         return SectionIndices(sect_index[0], sect_index[-1])
 
     @property
+    def raw_data(self) -> pl.Series:
+        return self.data.get_column(self.sig_name)
+    
+    @property
     def proc_data(self) -> pl.Series:
         return self.data.get_column(self._proc_sig_name)
 
@@ -269,11 +273,11 @@ class Section:
         method = kwargs.get("method", "None")
         if pipeline == "custom":
             if method == "None":
-                filtered = self.proc_data
+                filtered = self.raw_data.to_numpy()
             else:
-                filtered = filter_signal(self.proc_data.to_numpy(), self.sfreq, **kwargs)
+                filtered = filter_signal(self.raw_data.to_numpy(), self.sfreq, **kwargs)
         elif pipeline == "ppg_elgendi":
-            filtered = filter_elgendi(self.proc_data.to_numpy(), self.sfreq)
+            filtered = filter_elgendi(self.raw_data.to_numpy(), self.sfreq)
         else:
             raise ValueError(f"Unknown pipeline: {pipeline}")
         filter_parameters = _t.SignalFilterParameters(**kwargs)

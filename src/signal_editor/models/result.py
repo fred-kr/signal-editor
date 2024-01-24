@@ -1,4 +1,5 @@
 import datetime
+import typing as t
 
 import attrs
 import numpy as np
@@ -6,7 +7,9 @@ import numpy.typing as npt
 import polars as pl
 
 from .. import type_aliases as _t
-from .section import SectionID, SectionResult
+
+if t.TYPE_CHECKING:
+    from .section import SectionID, SectionResult
 
 
 @attrs.define(slots=True, frozen=True)
@@ -75,10 +78,10 @@ class FocusedResult:
 class CompleteResult:
     identifier: ResultIdentifier = attrs.field()
     base_df_with_changes: pl.DataFrame = attrs.field()
-    complete_section_results: dict[SectionID, SectionResult] = attrs.field()
-    focused_section_results: dict[SectionID, FocusedResult] = attrs.field()
-    peak_interval_stats: dict[SectionID, dict[str, float]] = attrs.field()
-    rate_stats: dict[SectionID, dict[str, float]] = attrs.field()
+    complete_section_results: dict["SectionID", "SectionResult"] = attrs.field()
+    focused_section_results: dict["SectionID", FocusedResult] = attrs.field()
+    peak_interval_stats: dict["SectionID", dict[str, float]] = attrs.field()
+    rate_stats: dict["SectionID", dict[str, float]] = attrs.field()
 
     def as_dict(self) -> _t.CompleteResultDict:
         return {

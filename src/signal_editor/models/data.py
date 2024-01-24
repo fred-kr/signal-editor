@@ -11,10 +11,6 @@ from PySide6.QtWidgets import QWidget
 
 
 class CompactDFModel(QAbstractTableModel):
-    """
-    A
-    """
-
     def __init__(
         self,
         df_head: pl.DataFrame,
@@ -23,8 +19,7 @@ class CompactDFModel(QAbstractTableModel):
     ) -> None:
         super().__init__(parent)
         self._columns = [
-            (col, str(dtype))
-            for col, dtype in zip(df_head.columns, df_head.dtypes, strict=True)
+            (col, str(dtype)) for col, dtype in zip(df_head.columns, df_head.dtypes, strict=True)
         ]
         self._data = (
             df_head.to_numpy().tolist()
@@ -32,14 +27,10 @@ class CompactDFModel(QAbstractTableModel):
             + df_tail.to_numpy().tolist()
         )
 
-    def rowCount(
-        self, parent: QModelIndex | QPersistentModelIndex | None = None
-    ) -> int:
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
         return len(self._data)
 
-    def columnCount(
-        self, parent: QModelIndex | QPersistentModelIndex | None = None
-    ) -> int:
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
         return len(self._columns)
 
     def data(
@@ -102,14 +93,10 @@ class PolarsModel(QAbstractTableModel):
         super().__init__(parent)
         self._dataframe = dataframe
 
-    def rowCount(
-        self, parent: QModelIndex | QPersistentModelIndex | None = None
-    ) -> int:
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
         return self._dataframe.shape[0]
 
-    def columnCount(
-        self, parent: QModelIndex | QPersistentModelIndex | None = None
-    ) -> int:
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
         return self._dataframe.shape[1]
 
     def headerData(
@@ -166,14 +153,10 @@ class DescriptiveStatsModel(QAbstractTableModel):
         QAbstractTableModel.__init__(self, parent)
         self._dataframe = dataframe.shrink_to_fit(in_place=True)
 
-    def rowCount(
-        self, parent: QModelIndex | QPersistentModelIndex | None = None
-    ) -> int:
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
         return self._dataframe.shape[0]
 
-    def columnCount(
-        self, parent: QModelIndex | QPersistentModelIndex | None = None
-    ) -> int:
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
         return self._dataframe.shape[1]
 
     def headerData(
@@ -205,15 +188,12 @@ class DescriptiveStatsModel(QAbstractTableModel):
         if role == Qt.ItemDataRole.DisplayRole:
             col_name = self._dataframe.columns[column]
             info_data = self._dataframe[row, column]
-            if (
-                self._dataframe.get_column(col_name).dtype != pl.Float64
-                or info_data > 100
-            ):
-                return (
-                    str(info_data)
-                    if isinstance(info_data, str)
-                    else f"{int(info_data):_}"
-                )
+            if self._dataframe.get_column(col_name).dtype != pl.Float64 or info_data > 100:
+                if isinstance(info_data, str):
+                    return info_data
+                elif isinstance(info_data, (int, float)):
+                    return f"{int(info_data):_}"
+                return str(info_data or "")
             return f"{info_data:.4g}"
 
         return None

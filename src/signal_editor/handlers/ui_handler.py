@@ -55,7 +55,7 @@ class UIHandler(QObject):
         self._prepare_widgets()
 
         # Statusbar
-        self._app.statusbar.showMessage("Idle")
+        self._app.statusbar.showMessage("Ready")
 
         # Toolbar Plots
         self._prepare_toolbars()
@@ -67,7 +67,8 @@ class UIHandler(QObject):
         self._app.container_file_info.setEnabled(False)
         self._app.btn_load_selection.setEnabled(False)
         self._app.dock_widget_sections.setVisible(False)
-        self._app.container_section_confirm_cancel.setVisible(False)
+        self._app.container_section_confirm_cancel.setEnabled(True)
+        self._app.container_section_confirm_cancel.hide()
 
         export_menu = QMenu(self._app.btn_export_focused)
         export_menu.addAction("CSV", lambda: self._app.export_focused_result("csv"))
@@ -167,7 +168,7 @@ class UIHandler(QObject):
                 getattr(mw, widget_name).__getattribute__(mapping[attribute])(value)
 
         self.plot.reset_plots()
-        mw.statusbar.showMessage("Idle")
+        mw.statusbar.showMessage("Ready")
 
     @Slot(int)
     def on_main_tab_changed(self, index: int) -> None:
@@ -186,7 +187,7 @@ class UIHandler(QObject):
         self.jupyter_console.kernel_manager.kernel.shell.push(
             dict(mw=self._app, pg=pg, np=np, pl=pl, pp=pprint.pprint, pdir=pdir)
         )
-        self.jupyter_console.execute("whos()")
+        self.jupyter_console.execute("whos")
 
     @Slot()
     def show_jupyter_console_widget(self) -> None:
@@ -194,6 +195,7 @@ class UIHandler(QObject):
             self.jupyter_console_dock.close()
         else:
             self.jupyter_console_dock.show()
+            self.jupyter_console_dock.resize(900, 600)
 
     @Slot(str)
     def handle_filter_method_changed(self, text: str) -> None:

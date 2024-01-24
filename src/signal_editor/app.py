@@ -48,7 +48,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     sig_show_message = Signal(str, str)
     sig_data_restored = Signal()
     sig_section_added = Signal(int, int)
-    sig_update_view_range = Signal(int, float, float)
+    sig_update_view_range = Signal(int)
 
     def __init__(self) -> None:
         super().__init__()
@@ -160,13 +160,14 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
         self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected_scatter)
         self.action_reset_view.triggered.connect(self._emit_data_range_info)
+
         self.sig_update_view_range.connect(self.plot.reset_view_range)
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
 
         # Button Actions
         self.btn_apply_filter.clicked.connect(self.process_signal)
-        self.btn_browse_output_dir.clicked.connect(self.select_output_location)
         self.btn_compute_results.clicked.connect(self.update_results)
+        self.btn_browse_output_dir.clicked.connect(self.select_output_location)
         self.btn_detect_peaks.clicked.connect(self.detect_peaks)
         self.btn_load_selection.clicked.connect(self.handle_load_data)
         self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
@@ -188,6 +189,9 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.sig_section_added.connect(self.plot.mark_section)
         self.data.sig_cas_changed.connect(self.handle_draw_signal)
         self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
+
+        self.btn_section_confirm.clicked.connect(self._on_section_confirmed)
+        self.btn_section_cancel.clicked.connect(self._on_section_canceled)
 
         # UI Handler Signals
         self.ui.sig_section_confirmed.connect(self._on_section_confirmed)
@@ -235,8 +239,13 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     @Slot()
     def _emit_data_range_info(self) -> None:
         data = self.data.cas_proc_data.to_numpy()
-        len_data, min_data, max_data = data.shape[0], data.min(), data.max()
-        self.sig_update_view_range.emit(len_data, min_data, max_data)
+        self.sig_update_view_range.emit(len(data))
+
+    @Slot(int)
+    def update_sfreq_blocked(self, value: int) -> None:
+        self.spin_box_sample_rate.blockSignals(True)
+        self.spin_box_sample_rate.setValue(value)
+        self.spin_box_sample_rate.blockSignals(False)
 
     def read_hdf5(self, file_path: str | Path) -> None:
         with h5py.File(file_path, "r") as f:
@@ -371,12 +380,12 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.file_info.setFile(path)
             self.line_edit_active_file.setText(Path(path).name)
             self.config.data_dir = self.file_info.dir().path()
+            self.data.read_file(path)
 
     @Slot()
     def handle_load_data(self) -> None:
         self.btn_load_selection.processing("Loading data...")
         self.statusbar.showMessage(f"Loading data from file: {self.file_info.canonicalFilePath()}")
-        self.data.read_file(self.file_info.canonicalFilePath())
 
         signal_col = self.sig_name
         if signal_col not in self.data.raw_df.columns:
@@ -439,7 +448,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     def handle_draw_rate(self) -> None:
         self.plot.draw_rate(self.data.cas.rate_interp, self.sig_name)
 
-    @Slot(str, list[int])
+    @Slot(str, list)
     def handle_scatter_clicked(
         self, action: t.Literal["add", "remove"], indices: list[int]
     ) -> None:
@@ -511,8 +520,8 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             msg = "Action 'Save state' cancelled by user."
             self.sig_show_message.emit(msg, "warning")
 
-    @Slot()
-    def restore_state(self, file_path: str | Path | None = None) -> None:
+    @Slot(bool)
+    def restore_state(self, checked: bool = False, file_path: str | Path | None = None) -> None:
         if not file_path:
             file_path, _ = QFileDialog.getOpenFileName(
                 self,

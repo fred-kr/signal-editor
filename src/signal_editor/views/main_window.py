@@ -160,26 +160,12 @@ class Ui_MainWindow(object):
         icon18.addFile(u":/material-symbols/upload_file_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
         self.action_load_state.setIcon(icon18)
         self.action_load_state.setMenuRole(QAction.NoRole)
-        self.action_remove_selected_data = QAction(MainWindow)
-        self.action_remove_selected_data.setObjectName(u"action_remove_selected_data")
-        icon19 = QIcon()
-        icon19.addFile(u":/material-symbols/variable_remove_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.action_remove_selected_data.setIcon(icon19)
-        self.action_remove_selected_data.setMenuRole(QAction.ApplicationSpecificRole)
-        self.action_toggle_region_selector = QAction(MainWindow)
-        self.action_toggle_region_selector.setObjectName(u"action_toggle_region_selector")
-        self.action_toggle_region_selector.setIcon(icon12)
-        self.action_toggle_region_selector.setMenuRole(QAction.NoRole)
         self.action_save_to_hdf5 = QAction(MainWindow)
         self.action_save_to_hdf5.setObjectName(u"action_save_to_hdf5")
-        icon20 = QIcon()
-        icon20.addFile(u":/material-symbols/save_as_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.action_save_to_hdf5.setIcon(icon20)
+        icon19 = QIcon()
+        icon19.addFile(u":/material-symbols/save_as_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.action_save_to_hdf5.setIcon(icon19)
         self.action_save_to_hdf5.setMenuRole(QAction.NoRole)
-        self.action_remove_marked_areas = QAction(MainWindow)
-        self.action_remove_marked_areas.setObjectName(u"action_remove_marked_areas")
-        self.action_remove_marked_areas.setIcon(icon16)
-        self.action_remove_marked_areas.setMenuRole(QAction.NoRole)
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self._2 = QHBoxLayout(self.centralwidget)
@@ -265,9 +251,9 @@ class Ui_MainWindow(object):
 
         self.gridLayout_4.addWidget(self.container_text_info, 1, 1, 1, 1)
 
-        icon21 = QIcon()
-        icon21.addFile(u":/material-symbols/dataset_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.tabs_main.addTab(self.tab_data, icon21, "")
+        icon20 = QIcon()
+        icon20.addFile(u":/material-symbols/dataset_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.tabs_main.addTab(self.tab_data, icon20, "")
         self.tab_plots = QWidget()
         self.tab_plots.setObjectName(u"tab_plots")
         self.verticalLayout_4 = QVBoxLayout(self.tab_plots)
@@ -279,9 +265,9 @@ class Ui_MainWindow(object):
 
         self.verticalLayout_4.addWidget(self.container_plots)
 
-        icon22 = QIcon()
-        icon22.addFile(u":/material-symbols/earthquake_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.tabs_main.addTab(self.tab_plots, icon22, "")
+        icon21 = QIcon()
+        icon21.addFile(u":/material-symbols/earthquake_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.tabs_main.addTab(self.tab_plots, icon21, "")
         self.tab_results = QWidget()
         self.tab_results.setObjectName(u"tab_results")
         sizePolicy2.setHeightForWidth(self.tab_results.sizePolicy().hasHeightForWidth())
@@ -347,9 +333,9 @@ class Ui_MainWindow(object):
 
         self.gridLayout_12.addWidget(self.container_results, 4, 0, 2, 2)
 
-        icon23 = QIcon()
-        icon23.addFile(u":/material-symbols/table_chart_view_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.tabs_main.addTab(self.tab_results, icon23, "")
+        icon22 = QIcon()
+        icon22.addFile(u":/material-symbols/table_chart_view_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.tabs_main.addTab(self.tab_results, icon22, "")
         self.tab_analysis = QWidget()
         self.tab_analysis.setObjectName(u"tab_analysis")
         self.gridLayout_16 = QGridLayout(self.tab_analysis)
@@ -461,26 +447,16 @@ class Ui_MainWindow(object):
 
         self.formLayout.setWidget(0, QFormLayout.FieldRole, self.combo_box_signal_column)
 
-        self.indexColumnLabel = QLabel(self.container_data_required_info)
-        self.indexColumnLabel.setObjectName(u"indexColumnLabel")
-
-        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.indexColumnLabel)
-
-        self.combo_box_index_column = QComboBox(self.container_data_required_info)
-        self.combo_box_index_column.setObjectName(u"combo_box_index_column")
-
-        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.combo_box_index_column)
-
         self.sampleRateLabel = QLabel(self.container_data_required_info)
         self.sampleRateLabel.setObjectName(u"sampleRateLabel")
 
-        self.formLayout.setWidget(2, QFormLayout.LabelRole, self.sampleRateLabel)
+        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.sampleRateLabel)
 
         self.spin_box_sample_rate = QSpinBox(self.container_data_required_info)
         self.spin_box_sample_rate.setObjectName(u"spin_box_sample_rate")
         self.spin_box_sample_rate.setMaximum(9999)
 
-        self.formLayout.setWidget(2, QFormLayout.FieldRole, self.spin_box_sample_rate)
+        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.spin_box_sample_rate)
 
 
         self.gridLayout_15.addWidget(self.container_data_required_info, 2, 0, 1, 3)
@@ -555,13 +531,11 @@ class Ui_MainWindow(object):
         self.date_edit_file_info = QDateEdit(self.container_file_info)
         self.date_edit_file_info.setObjectName(u"date_edit_file_info")
         self.date_edit_file_info.setWrapping(False)
-        self.date_edit_file_info.setButtonSymbols(QAbstractSpinBox.UpDownArrows)
         self.date_edit_file_info.setTime(QTime(1, 0, 0))
         self.date_edit_file_info.setMinimumDateTime(QDateTime(QDate(1970, 1, 1), QTime(1, 0, 0)))
         self.date_edit_file_info.setMinimumDate(QDate(1970, 1, 1))
         self.date_edit_file_info.setCalendarPopup(True)
         self.date_edit_file_info.setTimeSpec(Qt.LocalTime)
-        self.date_edit_file_info.setDate(QDate(2017, 7, 1))
 
         self.formLayout_4.setWidget(0, QFormLayout.FieldRole, self.date_edit_file_info)
 
@@ -1390,7 +1364,7 @@ class Ui_MainWindow(object):
         self.btn_detect_peaks.setSizePolicy(sizePolicy2)
         self.btn_detect_peaks.setFont(font2)
 
-        self.gridLayout_6.addWidget(self.btn_detect_peaks, 6, 2, 1, 1)
+        self.gridLayout_6.addWidget(self.btn_detect_peaks, 6, 0, 1, 1)
 
         self.sidebar.addWidget(self.sidebar_page_plots)
         self.sidebar_page_result = QWidget()
@@ -1429,9 +1403,9 @@ class Ui_MainWindow(object):
         self.btn_browse_output_dir.setObjectName(u"btn_browse_output_dir")
         sizePolicy5.setHeightForWidth(self.btn_browse_output_dir.sizePolicy().hasHeightForWidth())
         self.btn_browse_output_dir.setSizePolicy(sizePolicy5)
-        icon24 = QIcon()
-        icon24.addFile(u":/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.btn_browse_output_dir.setIcon(icon24)
+        icon23 = QIcon()
+        icon23.addFile(u":/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.btn_browse_output_dir.setIcon(icon23)
 
         self.gridLayout_19.addWidget(self.btn_browse_output_dir, 1, 0, 1, 1)
 
@@ -1450,7 +1424,7 @@ class Ui_MainWindow(object):
 
         self.sidebar.addWidget(self.sidebar_page_result)
 
-        self.gridLayout_17.addWidget(self.sidebar, 0, 0, 1, 1)
+        self.gridLayout_17.addWidget(self.sidebar, 0, 0, 1, 1, Qt.AlignTop)
 
         self.dock_widget_sidebar.setWidget(self.sidebar_dock_contents)
         MainWindow.addDockWidget(Qt.LeftDockWidgetArea, self.dock_widget_sidebar)
@@ -1523,6 +1497,7 @@ class Ui_MainWindow(object):
 
         self.container_section_confirm_cancel = QWidget(self.section_widgets_container)
         self.container_section_confirm_cancel.setObjectName(u"container_section_confirm_cancel")
+        self.container_section_confirm_cancel.setEnabled(False)
         self.gridLayout_20 = QGridLayout(self.container_section_confirm_cancel)
         self.gridLayout_20.setSpacing(4)
         self.gridLayout_20.setContentsMargins(7, 7, 7, 7)
@@ -1530,30 +1505,30 @@ class Ui_MainWindow(object):
         self.btn_section_confirm = QPushButton(self.container_section_confirm_cancel)
         self.btn_section_confirm.setObjectName(u"btn_section_confirm")
         self.btn_section_confirm.setStyleSheet(u"background-color: rgba(85, 170, 127, 100);")
-        icon25 = QIcon()
-        icon25.addFile(u":/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.btn_section_confirm.setIcon(icon25)
+        icon24 = QIcon()
+        icon24.addFile(u":/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.btn_section_confirm.setIcon(icon24)
         self.btn_section_confirm.setIconSize(QSize(24, 24))
         self.btn_section_confirm.setFlat(False)
 
-        self.gridLayout_20.addWidget(self.btn_section_confirm, 2, 0, 1, 1)
+        self.gridLayout_20.addWidget(self.btn_section_confirm, 1, 0, 1, 1)
 
         self.btn_section_cancel = QPushButton(self.container_section_confirm_cancel)
         self.btn_section_cancel.setObjectName(u"btn_section_cancel")
         self.btn_section_cancel.setStyleSheet(u"background-color: rgba(255, 0, 0, 100);")
-        icon26 = QIcon()
-        icon26.addFile(u":/material-symbols/cancel_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.btn_section_cancel.setIcon(icon26)
+        icon25 = QIcon()
+        icon25.addFile(u":/material-symbols/cancel_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.btn_section_cancel.setIcon(icon25)
         self.btn_section_cancel.setIconSize(QSize(24, 24))
         self.btn_section_cancel.setFlat(False)
 
-        self.gridLayout_20.addWidget(self.btn_section_cancel, 2, 1, 1, 1)
+        self.gridLayout_20.addWidget(self.btn_section_cancel, 1, 1, 1, 1)
 
         self.label_24 = QLabel(self.container_section_confirm_cancel)
         self.label_24.setObjectName(u"label_24")
         self.label_24.setAlignment(Qt.AlignCenter)
 
-        self.gridLayout_20.addWidget(self.label_24, 1, 0, 1, 2)
+        self.gridLayout_20.addWidget(self.label_24, 0, 0, 1, 2)
 
 
         self.gridLayout_18.addWidget(self.container_section_confirm_cancel, 3, 0, 1, 2)
@@ -1707,33 +1682,12 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(tooltip)
         self.action_load_state.setToolTip(QCoreApplication.translate("MainWindow", u"Load a state snapshot file", None))
 #endif // QT_CONFIG(tooltip)
-        self.action_remove_selected_data.setText(QCoreApplication.translate("MainWindow", u"Remove Selected Section", None))
-#if QT_CONFIG(tooltip)
-        self.action_remove_selected_data.setToolTip(QCoreApplication.translate("MainWindow", u"Removes the data between the left and right selection bounds (red rectangle)", None))
-#endif // QT_CONFIG(tooltip)
-#if QT_CONFIG(shortcut)
-        self.action_remove_selected_data.setShortcut(QCoreApplication.translate("MainWindow", u"Alt+D", None))
-#endif // QT_CONFIG(shortcut)
-        self.action_toggle_region_selector.setText(QCoreApplication.translate("MainWindow", u"Toggle Region Selector", None))
-#if QT_CONFIG(tooltip)
-        self.action_toggle_region_selector.setToolTip(QCoreApplication.translate("MainWindow", u"Toggles visibility of visual region that allows limiting the data on which to run the peak detection", None))
-#endif // QT_CONFIG(tooltip)
-#if QT_CONFIG(shortcut)
-        self.action_toggle_region_selector.setShortcut(QCoreApplication.translate("MainWindow", u"Alt+F", None))
-#endif // QT_CONFIG(shortcut)
         self.action_save_to_hdf5.setText(QCoreApplication.translate("MainWindow", u"Save to HDF5", None))
 #if QT_CONFIG(tooltip)
         self.action_save_to_hdf5.setToolTip(QCoreApplication.translate("MainWindow", u"Store results as a HDF5 file", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(shortcut)
         self.action_save_to_hdf5.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+S", None))
-#endif // QT_CONFIG(shortcut)
-        self.action_remove_marked_areas.setText(QCoreApplication.translate("MainWindow", u"Remove Marked Areas", None))
-#if QT_CONFIG(tooltip)
-        self.action_remove_marked_areas.setToolTip(QCoreApplication.translate("MainWindow", u"Remove the sections marked red from the data set", None))
-#endif // QT_CONFIG(tooltip)
-#if QT_CONFIG(shortcut)
-        self.action_remove_marked_areas.setShortcut(QCoreApplication.translate("MainWindow", u"Del", None))
 #endif // QT_CONFIG(shortcut)
         self.label_19.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:14pt; font-weight:700;\">Info</span></p></body></html>", None))
         self.text_info_loading_data.setHtml(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
@@ -1759,7 +1713,6 @@ class Ui_MainWindow(object):
         self.label_4.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:10pt; font-weight:700;\">Data Selection</span></p></body></html>", None))
         self.label_3.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:10pt; font-weight:700;\">Metadata</span></p></body></html>", None))
         self.label_23.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-weight:700;\">Signal Column</span></p></body></html>", None))
-        self.indexColumnLabel.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-weight:700;\">Index Column</span></p></body></html>", None))
         self.sampleRateLabel.setText(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"

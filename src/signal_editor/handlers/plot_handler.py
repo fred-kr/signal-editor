@@ -40,7 +40,7 @@ class PlotHandler(QObject):
     Handles plot creation and interactions.
     """
 
-    sig_peaks_edited = Signal(str, list[int])
+    sig_peaks_edited = Signal(str, list)
 
     def __init__(self, app: "SignalEditor", parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -93,6 +93,7 @@ class PlotHandler(QObject):
     @property
     def is_selecting_region(self) -> bool:
         return isinstance(self._selector, pg.LinearRegionItem)
+
     # endregion
 
     def get_manual_edits(self) -> dict[str, ManualPeakEdits]:
@@ -144,7 +145,7 @@ class PlotHandler(QObject):
         main_plot_item.setLabels(title=main_plot_title, left=main_left_label, bottom=bottom_label)
         rate_plot_item.setLabels(title=rate_plot_title, left=rate_left_label, bottom=bottom_label)
 
-    @Slot(QPointF)
+    @Slot(object)
     def _on_mouse_moved(self, pos: QPointF) -> None:
         if not hasattr(self._app, "data"):
             return
@@ -160,20 +161,20 @@ class PlotHandler(QObject):
         temp_text = f"<span style='color: crimson; font-size: 12pt; font-weight: bold;'>Temperature: {temp_val:.1f} °C</span>"
         self._temperature_label.setText(temp_text)
 
-    @Slot(int, float, float)
-    def reset_view_range(self, len_data: int, min_data: float, max_data: float) -> None:
+    @Slot(int)
+    def reset_view_range(self, len_data: int) -> None:
         for vb in self.view_boxes:
-            vb.setRange(xRange=(0, len_data), yRange=(min_data, max_data), disableAutoRange=False)
-            
-    def update_view_limits(self, len_data: int, min_data: float, max_data: float) -> None:
+            vb.setRange(xRange=(0, len_data), disableAutoRange=False)
+
+    def update_view_limits(self, len_data: int) -> None:
         for vb in self.view_boxes:
             vb.setLimits(
                 xMin=-0.25 * len_data,
                 xMax=1.25 * len_data,
-                maxYRange=np.abs(max_data - min_data) * 1.25,
-                minYRange=0.1,
+                maxYRange=1e4,
+                minYRange=0.5,
             )
-        self.reset_view_range(len_data, min_data, max_data)
+        self.reset_view_range(len_data)
 
     @Slot()
     def reset_plots(self) -> None:
@@ -190,7 +191,9 @@ class PlotHandler(QObject):
 
         self._setup_plot_items()
 
-    def show_section_selector(self, section_type: Literal["included", "excluded"], bounds: tuple[int, int]) -> None:
+    def show_section_selector(
+        self, section_type: Literal["included", "excluded"], bounds: tuple[int, int]
+    ) -> None:
         section_style = SECTION_STYLES[section_type]
         span = abs(bounds[1] - bounds[0])
         initial_limits = (0, span / 3)
@@ -215,8 +218,9 @@ class PlotHandler(QObject):
     def remove_section_selector(self) -> None:
         if selector := self._selector:
             self._pw_main.removeItem(selector)
-        self._selector = None
-        del self._selector_type
+            self._selector = None
+            if hasattr(self, "_selector_type"):
+                del self._selector_type
 
     def draw_signal(self, sig: NDArray[np.float64], name: str, pen_color: str = "crimson") -> None:
         signal_item = pg.PlotDataItem(
@@ -237,7 +241,7 @@ class PlotHandler(QObject):
         self._pw_main.addItem(signal_item)
         signal_item.sigClicked.connect(self.add_scatter)
         self._signal_item = signal_item
-        self.update_view_limits(len(sig), sig.min(), sig.max())
+        self.update_view_limits(len(sig))
 
     def draw_peaks(
         self,
@@ -332,7 +336,7 @@ class PlotHandler(QObject):
             peak_edit_x = int(spot_item.pos().x())
 
             self.sig_peaks_edited.emit("remove", [peak_edit_x])
-            
+
     @Slot(object, object)
     def add_scatter(self, sender: pg.PlotCurveItem, ev: "mouseEvents.MouseClickEvent") -> None:
         ev.accept()

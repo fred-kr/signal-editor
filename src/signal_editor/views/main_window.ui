@@ -257,7 +257,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                 <property name="currentIndex">
                  <number>0</number>
                 </property>
-                <widget class="QWidget" name="tab_focused_result" native="true">
+                <widget class="QWidget" name="tab_focused_result">
                  <attribute name="title">
                   <string>Focused</string>
                  </attribute>
@@ -446,7 +446,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
      <property name="rightMargin">
       <number>0</number>
      </property>
-     <item row="0" column="0">
+     <item row="0" column="0" alignment="Qt::AlignTop">
       <widget class="QStackedWidget" name="sidebar">
        <property name="frameShape">
         <enum>QFrame::StyledPanel</enum>
@@ -523,16 +523,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                 </widget>
                </item>
                <item row="1" column="0">
-                <widget class="QLabel" name="indexColumnLabel">
-                 <property name="text">
-                  <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700;&quot;&gt;Index Column&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                 </property>
-                </widget>
-               </item>
-               <item row="1" column="1">
-                <widget class="QComboBox" name="combo_box_index_column"/>
-               </item>
-               <item row="2" column="0">
                 <widget class="QLabel" name="sampleRateLabel">
                  <property name="text">
                   <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
@@ -546,7 +536,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                  </property>
                 </widget>
                </item>
-               <item row="2" column="1">
+               <item row="1" column="1">
                 <widget class="QSpinBox" name="spin_box_sample_rate">
                  <property name="suffix">
                   <string> Hz</string>
@@ -672,9 +662,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
               <property name="wrapping">
                <bool>false</bool>
               </property>
-              <property name="buttonSymbols">
-               <enum>QAbstractSpinBox::UpDownArrows</enum>
-              </property>
               <property name="time">
                <time>
                 <hour>1</hour>
@@ -707,13 +694,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
               </property>
               <property name="timeSpec">
                <enum>Qt::LocalTime</enum>
-              </property>
-              <property name="date">
-               <date>
-                <year>2017</year>
-                <month>7</month>
-                <day>1</day>
-               </date>
               </property>
              </widget>
             </item>
@@ -2270,7 +2250,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
            </property>
           </widget>
          </item>
-         <item row="6" column="2">
+         <item row="6" column="0">
           <widget class="FeedbackButton" name="btn_detect_peaks">
            <property name="enabled">
             <bool>true</bool>
@@ -2537,8 +2517,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
         </item>
         <item row="3" column="0" colspan="2">
          <widget class="QWidget" name="container_section_confirm_cancel" native="true">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
           <layout class="QGridLayout" name="gridLayout_20">
-           <item row="2" column="0">
+           <item row="1" column="0">
             <widget class="QPushButton" name="btn_section_confirm">
              <property name="styleSheet">
               <string notr="true">background-color: rgba(85, 170, 127, 100);</string>
@@ -2561,7 +2544,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
              </property>
             </widget>
            </item>
-           <item row="2" column="1">
+           <item row="1" column="1">
             <widget class="QPushButton" name="btn_section_cancel">
              <property name="styleSheet">
               <string notr="true">background-color: rgba(255, 0, 0, 100);</string>
@@ -2584,7 +2567,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
              </property>
             </widget>
            </item>
-           <item row="1" column="0" colspan="2">
+           <item row="0" column="0" colspan="2">
             <widget class="QLabel" name="label_24">
              <property name="text">
               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:700;&quot;&gt;Selection&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
@@ -2912,42 +2895,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_remove_selected_data">
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/variable_remove_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/variable_remove_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Remove Selected Section</string>
-   </property>
-   <property name="toolTip">
-    <string>Removes the data between the left and right selection bounds (red rectangle)</string>
-   </property>
-   <property name="shortcut">
-    <string>Alt+D</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::ApplicationSpecificRole</enum>
-   </property>
-  </action>
-  <action name="action_toggle_region_selector">
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Toggle Region Selector</string>
-   </property>
-   <property name="toolTip">
-    <string>Toggles visibility of visual region that allows limiting the data on which to run the peak detection</string>
-   </property>
-   <property name="shortcut">
-    <string>Alt+F</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
   <action name="action_save_to_hdf5">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
@@ -2961,24 +2908,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="shortcut">
     <string>Ctrl+S</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
-  <action name="action_remove_marked_areas">
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Remove Marked Areas</string>
-   </property>
-   <property name="toolTip">
-    <string>Remove the sections marked red from the data set</string>
-   </property>
-   <property name="shortcut">
-    <string>Del</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
