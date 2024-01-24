@@ -2,18 +2,17 @@ import cProfile
 import os
 import pickle
 import sys
+import typing as t
 from datetime import datetime
 from pathlib import Path
-import typing as t
 
 import h5py
 import numpy as np
-import pyqtgraph as pg
 import polars as pl
+import pyqtgraph as pg
 from loguru import logger
 from PySide6.QtCore import (
     QByteArray,
-    QDate,
     QFileInfo,
     QProcess,
     QSettings,
@@ -24,7 +23,6 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
-    QInputDialog,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -37,10 +35,9 @@ from .handlers.helpers.table_view_helper import TableViewHelper
 from .handlers.plot_handler import PlotHandler
 from .handlers.style_handler import ThemeSwitcher
 from .handlers.ui_handler import UIHandler
-from .models import data as _data
-from .models import io as _io
-from .models import result as _result
-from .models.section import SectionID
+from .models.data import CompactDFModel, DescriptiveStatsModel, PolarsModel
+from .models.io import write_hdf5
+from .models.result import CompleteResult
 from .views.main_window import Ui_MainWindow
 
 
@@ -78,6 +75,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         if os.environ.get("DEV_MODE", "0") == "1":
             self._add_profiler()
         self.data.set_sfreq(int(self.config.config.get("Defaults", "SampleRate", fallback=-1)))
+        self._result: CompleteResult | None = None
         self._setup_section_widgets()
 
     # region Dev
@@ -182,11 +180,11 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.sig_data_loaded.connect(lambda: self.tabs_main.setCurrentIndex(1))
         self.sig_data_loaded.connect(self.handle_draw_signal)
         self.sig_data_loaded.connect(self.handle_table_view_data)
-        self.sig_data_restored.connect(self.refresh_app_state)
-        
+        self.sig_data_restored.connect(self.refresh_app)
+
         self.sig_peaks_detected.connect(self.handle_draw_rate)
         self.sig_peaks_detected.connect(self.handle_draw_peaks)
-        
+
         self.sig_section_added.connect(self.plot.mark_section)
         self.data.sig_cas_changed.connect(self.handle_draw_signal)
         self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
@@ -203,7 +201,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.combo_box_oxygen_condition.currentTextChanged.connect(self.data.set_oxy_condition)
 
         self.sig_show_message.connect(self.show_message)
-        
+
     @Slot()
     def _new_included_section(self) -> None:
         current_limits = self.data.bounds
@@ -260,14 +258,18 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def save_to_hdf5(self) -> None:
-        out_location = Path.joinpath(self.config.output_dir, self.config.make_complete_result_name(self.sig_name, self.file_info.completeBaseName()))
+        out_location = Path.joinpath(
+            self.config.output_dir,
+            self.config.make_complete_result_name(self.sig_name, self.file_info.completeBaseName()),
+        )
         if file_path := QFileDialog.getSaveFileName(
             self,
             "Save to HDF5",
             out_location.as_posix(),
             "HDF5 Files (*.hdf5 *.h5)",
         )[0]:
-            _io.write_hdf5(file_path, self.make_results())
+            complete_results = self.data.get_complete_result()
+            write_hdf5(file_path, complete_results)
 
     @Slot()
     def update_results(self) -> None:
@@ -277,7 +279,8 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             )
             self.sig_show_message.emit(msg, "info")
             return
-        self.make_results()
+        self.statusbar.showMessage("Computing results...")
+        self._result = self.data.get_complete_result()
 
     @Slot(str)
     def export_focused_result(self, output_format: t.Literal["csv", "xlsx", "txt"]) -> None:
@@ -346,11 +349,11 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         df_tail = data.tail(n_rows)
         df_description = data.describe(percentiles=None)
 
-        model = _data.CompactDFModel(df_head=df_head, df_tail=df_tail)
+        model = CompactDFModel(df_head=df_head, df_tail=df_tail)
         raw_data_table = TableViewHelper(self.table_data_preview)
         raw_data_table.make_table(model)
 
-        info = _data.DescriptiveStatsModel(df_description)
+        info = DescriptiveStatsModel(df_description)
         info_table = TableViewHelper(self.table_data_info)
         info_table.make_table(info)
 
@@ -403,7 +406,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             )
             if self.scale_method != "None":
                 self.data.cas.scale_data(**standardize_params)
-                
+
             self.handle_draw_signal()
         btn.success()
         self.statusbar.showMessage("Filtering finished.", 3000)
@@ -431,13 +434,15 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             peaks_x, peaks_y = self.data.cas.get_peak_xy()
             self.plot.draw_peaks(peaks_x, peaks_y, self.sig_name)
         self.btn_detect_peaks.success()
-            
+
     @Slot()
     def handle_draw_rate(self) -> None:
         self.plot.draw_rate(self.data.cas.rate_interp, self.sig_name)
 
     @Slot(str, list[int])
-    def handle_scatter_clicked(self, action: t.Literal["add", "remove"], indices: list[int]) -> None:
+    def handle_scatter_clicked(
+        self, action: t.Literal["add", "remove"], indices: list[int]
+    ) -> None:
         scatter_item = self.plot.scatter_item
         if scatter_item is None:
             return
@@ -486,34 +491,18 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def save_state(self) -> None:
-        stopped_at_index, ok = QInputDialog.getInt(
-            self,
-            "Save State",
-            "Data is clean up to (and including) index:",
-            0,
-            0,
-            self.data.sig_data.active_section.data.height - 1,
-            1,
-        )
-        if not ok:
-            return
+        snapshot_name = self.config.make_app_state_name(datetime.now())
         if file_path := QFileDialog.getSaveFileName(
             self,
-            "Save State",
-            f"{self.output_dir.as_posix()}/snapshot_at_{stopped_at_index}_{self.file_info.completeBaseName()}",
-            "Pickle Files (*.pkl)",
+            caption="Save State",
+            dir=Path.joinpath(self.config.output_dir, snapshot_name).as_posix(),
+            filter="Pickle Files (*.pkl)",
         )[0]:
             state_dict = _t.StateDict(
-                active_signal=self.sig_name,
+                signal_name=self.sig_name,
                 source_file_path=self.file_info.filePath(),
-                output_dir=self.output_dir.as_posix(),
-                data_selection_params=self.get_section_identifier(),
-                data_processing_params=self.get_processing_info(),
-                file_metadata=self.get_file_metadata(),
-                sampling_frequency=self.data.fs,
-                peak_edits=self.plot.peak_edits,  # FIXME: update to new data structure
+                output_dir=self.config.output_dir.as_posix(),
                 data_state=self.data.get_state(),
-                stopped_at_index=stopped_at_index,
             )
 
             with open(file_path, "wb") as f:
@@ -527,9 +516,9 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         if not file_path:
             file_path, _ = QFileDialog.getOpenFileName(
                 self,
-                "Restore State",
-                self.output_dir.as_posix(),
-                "Pickle Files (*.pkl);;_result.Result Files (*.hdf5 *.h5);;All Files (*.pkl *.hdf5 *.h5)",
+                caption="Restore State",
+                dir=self.config.output_dir.as_posix(),
+                filter="Pickle Files (*.pkl);;Result Files (*.hdf5 *.h5);;All Files (*.pkl *.hdf5 *.h5)",
             )
         if not file_path:
             return
@@ -549,119 +538,99 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             #     msg = f"Failed to restore state: {e}"
             #     self.sig_show_message.emit(msg, "warning")
 
-    def restore_input_values(
+    def restore_processing_parameters(
         self,
-        selection_params: _result.SelectionParameters,
-        processing_params: _result.ProcessingParameters,
-        file_metadata: _t.FileMetadata,
+        processing_params: _t.ProcessingParameters,
     ) -> None:
-        self.combo_box_filter_column.setCurrentText(selection_params.filter_column or "")
-        self.dbl_spin_box_subset_min.setValue(selection_params.lower_bound)
-        self.dbl_spin_box_subset_max.setValue(selection_params.upper_bound)
+        self.spin_box_sample_rate.setValue(processing_params["sampling_rate"])
+        self.combo_box_preprocess_pipeline.setValue(processing_params["pipeline"])
 
-        self.spin_box_fs.setValue(processing_params.sampling_rate)
-
-        self.combo_box_preprocess_pipeline.setValue(processing_params.pipeline)
-
-        self.dbl_spin_box_lowcut.setValue(processing_params.filter_parameters["lowcut"] or 0.5)
-        self.dbl_spin_box_highcut.setValue(processing_params.filter_parameters["highcut"] or 8.0)
-        self.spin_box_order.setValue(processing_params.filter_parameters["order"])
-        if processing_params.filter_parameters["window_size"] == "default":
-            filter_window = int(np.round(processing_params.sampling_rate / 3))
+        filt_params = processing_params["filter_parameters"]
+        if filt_params is not None:
+            lowcut = filt_params.get("lowcut") or 0.5
+            highcut = filt_params.get("highcut") or 8.0
+            order = filt_params.get("order") or 2
+            window_size = filt_params.get("window_size") or "default"
+            powerline = filt_params.get("powerline") or 50.0
+        else:
+            lowcut, highcut, order, window_size, powerline = 0.5, 8.0, 2, "default", 50.0
+        self.dbl_spin_box_lowcut.setValue(lowcut)
+        self.dbl_spin_box_highcut.setValue(highcut)
+        self.spin_box_order.setValue(order)
+        if window_size == "default":
+            filter_window = int(np.round(processing_params["sampling_rate"] / 3))
             if filter_window % 2 == 0:
                 filter_window += 1
         else:
-            filter_window = processing_params.filter_parameters["window_size"]
+            filter_window = window_size
         self.spin_box_window_size.setValue(filter_window)
-        self.dbl_spin_box_powerline.setValue(processing_params.filter_parameters["powerline"])
+        self.dbl_spin_box_powerline.setValue(powerline)
 
-        method = "mad" if processing_params.scaling_parameters["robust"] else "zscore"
+        standardize_params = processing_params["standardize_parameters"]
+        if standardize_params is not None:
+            robust = standardize_params.get("robust") or False
+            scale_window_size = standardize_params.get("window_size") or None
+            method = "mad" if robust else "zscore"
+        else:
+            robust, scale_window_size = False, None
+            method = "None"
         self.combo_box_scale_method.setValue(method)
-
-        if processing_params.scaling_parameters["window_size"] is None:
+        if scale_window_size is None:
             self.container_scale_window_inputs.setChecked(False)
             value = self.spin_box_scale_window_size.minimum()
         else:
             self.container_scale_window_inputs.setChecked(True)
-            value = processing_params.scaling_parameters["window_size"]
+            value = scale_window_size
         self.spin_box_scale_window_size.setValue(value)
 
-        self.combo_box_peak_detection_method.setValue(
-            processing_params.peak_detection_parameters["method"]
-        )
-
-        # FIXME: update restoration of peak detection parameters to work with new UI
-
-        # self.stacked_peak_parameters.setCurrentIndex(self.combo_box_peak_detection_method.currentIndex())
-        # for name, value in processing_params.peak_detection_parameters.get(
-        #     "input_values", {}
-        # ).items():
-        #     self.ui
-
-        self.date_edit_file_info.setDate(
-            QDate(
-                file_metadata["date_recorded"].year,
-                file_metadata["date_recorded"].month,
-                file_metadata["date_recorded"].day,
+        peak_detection_params = processing_params["peak_detection_parameters"]
+        if peak_detection_params is not None:
+            peak_method = peak_detection_params.get("method") or "elgendi_ppg"
+            input_values = peak_detection_params.get("input_values") or _t.PeakDetectionElgendiPPG(
+                peakwindow=0.111,
+                beatwindow=0.667,
+                beatoffset=0.02,
+                mindelay=0.3,
             )
-        )
-        self.line_edit_subject_id.setText(file_metadata["animal_id"])
-        self.combo_box_oxygen_condition.setValue(file_metadata["oxygen_condition"])
+        else:
+            peak_method = "elgendi_ppg"
+            input_values = _t.PeakDetectionElgendiPPG(
+                peakwindow=0.111,
+                beatwindow=0.667,
+                beatoffset=0.02,
+                mindelay=0.3,
+            )
 
-        self.btn_apply_filter.setEnabled(True)
-        self.btn_detect_peaks.setEnabled(True)
-        self.btn_compute_results.setEnabled(True)
+        params = _t.PeakDetectionParameters(method=peak_method, input_values=input_values)
+        self.ui.set_peak_detection_parameters(params)
 
     def restore_from_pickle(self, file_path: str | Path) -> None:
         with open(file_path, "rb") as f:
             state: _t.StateDict = pickle.load(f)
 
-        self.data.restore_state(state["working_data"])
-        # self.plot.restore_state(state["peak_edits"])
-        # self.plot.last_edit_index = state["stopped_at_index"]
+        self.data.restore_state(state["data_state"])
 
-        self.spin_box_fs.setValue(state["sampling_frequency"])
         self.file_info.setFile(state["source_file_path"])
 
-        self.output_dir = Path(state["output_dir"])
+        self.config.output_dir = Path(state["output_dir"])
         self.line_edit_output_dir.setText(state["output_dir"])
-        self.data_dir = Path(state["source_file_path"]).parent
+        self.config.data_dir = Path(state["source_file_path"]).parent
 
-        self.ui.update_data_select_ui(path=state["source_file_path"])
+        self.ui.update_data_select_ui()
         self.line_edit_active_file.setText(self.file_info.fileName())
 
-        self.restore_input_values(
-            state["data_selection_params"],
-            state["data_processing_params"],
-            state["file_metadata"],
-        )
-
-        self.stopped_at_index = state["stopped_at_index"]
+        self.restore_processing_parameters(self.data.cas.processing_parameters)
 
         self.sig_data_restored.emit()
 
     @Slot()
-    def refresh_app_state(self) -> None:
+    def refresh_app(self) -> None:
         self.handle_table_view_data()
-        for s_name in self.data.sigs:
-            processed_name = self.data.sigs[s_name].processed_name
-            if processed_name not in self.data.sigs[s_name].data.columns:
-                self.plot.draw_signal(
-                    self.data.sigs[s_name].active_section.data.get_column(s_name).to_numpy(),
-                    s_name,
-                )
-                continue
-            processed_signal = self.data.sigs[s_name].get_active_signal()
-            rate = self.data.sigs[s_name].interpolated_rate
-            peaks = self.data.sigs[s_name].get_all_peaks()
-            peaks_y = processed_signal[peaks]
-            self.plot.draw_signal(processed_signal, s_name)
-            self.plot.draw_peaks(peaks, peaks_y, s_name)
-            self.plot.draw_rate(rate, s_name)
-            self._make_table(
-                getattr(self, f"table_view_results_{s_name}"),
-                _data.PolarsModel(self.data.focused_results[s_name].to_polars()),
-            )
+        self.handle_draw_signal()
+        self.handle_draw_peaks()
+        self.handle_draw_rate()
+        result_table = TableViewHelper(self.table_view_focused_result)
+        result_table.make_table(PolarsModel(self.data.cas.get_focused_result().to_polars()))
 
 
 def main(dev_mode: bool = False, antialias: bool = False) -> None:

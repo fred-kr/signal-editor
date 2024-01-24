@@ -1,71 +1,36 @@
 import datetime
-import typing as t
-from dataclasses import dataclass, field
 
+import attrs
 import numpy as np
 import numpy.typing as npt
 import polars as pl
 
-from ..handlers.data_handler import DataState
-
 from .. import type_aliases as _t
+from .section import SectionID, SectionResult
 
 
-@dataclass(slots=True, frozen=True)
-class DescriptiveStatistics:
-    _data_description: str
-    mean: np.floating[t.Any]
-    median: np.floating[t.Any]
-    std: np.floating[t.Any]
-    var: np.floating[t.Any]
-
-    def as_dict(self) -> dict[str, float]:
-        return {
-            "mean": self.mean.round(2).astype(float),
-            "median": self.median.round(2).astype(float),
-            "std": self.std.round(2).astype(float),
-            "var": self.var.round(2).astype(float),
-        }
-
-
-@dataclass(slots=True, frozen=True)
+@attrs.define(slots=True, frozen=True)
 class ResultIdentifier:
-    name: str
-    animal_id: str
-    oxygen_condition: str
-    source_file_name: str
-    date_recorded: datetime.datetime | None
-    result_file_name: str
-    creation_date: datetime.datetime
+    signal_name: str = attrs.field()
+    source_file_name: str = attrs.field()
+    date_recorded: datetime.date = attrs.field()
+    animal_id: str = attrs.field()
+    oxygen_condition: _t.OxygenCondition = attrs.field()
 
-    def as_dict(self) -> dict[str, str | datetime.datetime | datetime.date | None]:
+    def as_dict(self) -> _t.ResultIdentifierDict:
         return {
-            "name": self.name,
+            "signal_name": self.signal_name,
             "animal_id": self.animal_id,
             "oxygen_condition": self.oxygen_condition,
             "source_file_name": self.source_file_name,
             "date_recorded": self.date_recorded,
-            "result_file_name": self.result_file_name,
-            "creation_date": self.creation_date,
         }
 
 
-@dataclass(slots=True, frozen=True)
-class SummaryStatistics:
-    peak_intervals: DescriptiveStatistics
-    signal_rate: DescriptiveStatistics
-
-    def as_dict(self) -> dict[str, dict[str, float]]:
-        return {
-            "peak_intervals": self.peak_intervals.as_dict(),
-            "signal_rate": self.signal_rate.as_dict(),
-        }
-
-
-@dataclass(slots=True)
+@attrs.define(slots=True)
 class ManualPeakEdits:
-    added: list[int] = field(default_factory=list)
-    removed: list[int] = field(default_factory=list)
+    added: list[int] = attrs.field(factory=list)
+    removed: list[int] = attrs.field(factory=list)
 
     def new_added(self, index: int) -> None:
         self.added.append(index)
@@ -77,20 +42,24 @@ class ManualPeakEdits:
         self.added = sorted(set(self.added))
         self.removed = sorted(set(self.removed))
 
-    def as_dict(self) -> dict[str, list[int]]:
+    def as_dict(self) -> _t.ManualPeakEditsDict:
         return {
             "added": self.added,
             "removed": self.removed,
         }
 
 
-@dataclass(slots=True, frozen=True)
+def _to_uint_array(array: npt.NDArray[np.int_]) -> npt.NDArray[np.uint32]:
+    return array.astype(np.uint32)
+
+
+@attrs.define(slots=True, frozen=True)
 class FocusedResult:
-    time_s: npt.NDArray[np.float64]
-    index: npt.NDArray[np.uint32]
-    peak_intervals: npt.NDArray[np.int32 | np.uint32]
-    temperature: npt.NDArray[np.float64]
-    rate_bpm: npt.NDArray[np.float64]
+    time_s: npt.NDArray[np.float64] = attrs.field()
+    index: npt.NDArray[np.uint32] = attrs.field()
+    peak_intervals: npt.NDArray[np.uint32] = attrs.field(converter=_to_uint_array)
+    temperature: npt.NDArray[np.float64] = attrs.field()
+    rate_bpm: npt.NDArray[np.float64] = attrs.field()
 
     def to_polars(self) -> pl.DataFrame:
         data = {attr: getattr(self, attr) for attr in self.__slots__}
@@ -102,21 +71,26 @@ class FocusedResult:
         return np.array(list(zip(*values, strict=True)), dtype=dt)
 
 
-@dataclass(slots=True, frozen=True)
-class Result:
-    identifier: ResultIdentifier
-    processing_parameters: _t.ProcessingParameters
-    summary_statistics: SummaryStatistics
-    focused_result: FocusedResult
-    manual_peak_edits: ManualPeakEdits
-    source_data: DataState
+@attrs.define(slots=True, frozen=True)
+class CompleteResult:
+    identifier: ResultIdentifier = attrs.field()
+    base_df_with_changes: pl.DataFrame = attrs.field()
+    complete_section_results: dict[SectionID, SectionResult] = attrs.field()
+    focused_section_results: dict[SectionID, FocusedResult] = attrs.field()
+    peak_interval_stats: dict[SectionID, dict[str, float]] = attrs.field()
+    rate_stats: dict[SectionID, dict[str, float]] = attrs.field()
 
-    def as_dict(self) -> _t.ResultDict:
+    def as_dict(self) -> _t.CompleteResultDict:
         return {
             "identifier": self.identifier.as_dict(),
-            "processing_parameters": self.processing_parameters,
-            "summary_statistics": self.summary_statistics.as_dict(),
-            "focused_result": self.focused_result.to_structured_array(),
-            "manual_peak_edits": self.manual_peak_edits.as_dict(),
-            "source_data": self.source_data.as_dict(),
+            "base_df_with_changes": self.base_df_with_changes.to_numpy(structured=True),
+            "complete_section_results": {
+                s_id: s_res.as_dict() for s_id, s_res in self.complete_section_results.items()
+            },
+            "focused_section_results": {
+                s_id: s_res.to_structured_array()
+                for s_id, s_res in self.focused_section_results.items()
+            },
+            "peak_interval_stats": self.peak_interval_stats,
+            "rate_stats": self.rate_stats,
         }

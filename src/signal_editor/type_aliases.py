@@ -3,13 +3,9 @@ import typing as t
 
 import numpy as np
 import numpy.typing as npt
-import polars as pl
 
 if t.TYPE_CHECKING:
     from .handlers.data_handler import DataState
-    from .models.result import (
-        ManualPeakEdits,
-    )
     from .models.section import SectionID, SectionIndices
 
 
@@ -164,27 +160,17 @@ class PeakDetectionParameters(t.TypedDict):
 
 class ProcessingParameters(t.TypedDict):
     sampling_rate: int
+    pipeline: Pipeline | None
     filter_parameters: SignalFilterParameters | None
     standardize_parameters: StandardizeParameters | None
     peak_detection_parameters: PeakDetectionParameters | None
 
 
 class StateDict(t.TypedDict):
-    active_signal: SignalName | str
+    signal_name: str
     source_file_path: str
     output_dir: str
-    data_processing_params: "ProcessingParameters"
-    file_metadata: FileMetadata
-    sampling_frequency: int
-    peak_edits: "dict[str, ManualPeakEdits]"
     data_state: "DataState"
-    stopped_at_index: int
-
-
-class InitialState(t.TypedDict):
-    name: str
-    sampling_rate: int
-    data: pl.DataFrame
 
 
 class SectionIdentifier(t.TypedDict):
@@ -194,6 +180,11 @@ class SectionIdentifier(t.TypedDict):
     sampling_rate: int
 
 
+class ManualPeakEditsDict(t.TypedDict):
+    added: list[int]
+    removed: list[int]
+
+
 class SectionResultDict(t.TypedDict):
     sig_name: str
     section_id: "SectionID"
@@ -201,16 +192,25 @@ class SectionResultDict(t.TypedDict):
     sampling_rate: int
     data: npt.NDArray[np.void]
     peaks: npt.NDArray[np.uint32]
+    peak_edits: ManualPeakEditsDict
     rate: npt.NDArray[np.float64]
     rate_interpolated: npt.NDArray[np.float64]
     processing_parameters: ProcessingParameters
     focused_result: npt.NDArray[np.void]
 
 
-class ResultDict(t.TypedDict):
-    identifier: dict[str, str | datetime.datetime | datetime.date | None]
-    processing_parameters: ProcessingParameters
-    summary_statistics: dict[str, dict[str, float]]
-    focused_result: npt.NDArray[np.void]
-    manual_peak_edits: dict[str, list[int]]
-    source_data: dict[str, t.Any]
+class ResultIdentifierDict(t.TypedDict):
+    signal_name: str
+    source_file_name: str
+    date_recorded: datetime.date
+    animal_id: str
+    oxygen_condition: OxygenCondition
+
+
+class CompleteResultDict(t.TypedDict):
+    identifier: ResultIdentifierDict
+    base_df_with_changes: npt.NDArray[np.void]
+    complete_section_results: dict["SectionID", SectionResultDict]
+    focused_section_results: dict["SectionID", npt.NDArray[np.void]]
+    peak_interval_stats: dict["SectionID", dict[str, float]]
+    rate_stats: dict["SectionID", dict[str, float]]

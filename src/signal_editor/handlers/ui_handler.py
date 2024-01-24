@@ -311,3 +311,41 @@ class UIHandler(QObject):
                 vals[key] = round(val, 3)
 
         return _t.PeakDetectionParameters(method=method, input_values=vals)
+
+    def set_peak_detection_parameters(self, params: _t.PeakDetectionParameters) -> None:
+        # sourcery skip: extract-method
+        method = params["method"]
+        self._app.combo_box_peak_detection_method.setValue(method)
+
+        vals = params["input_values"]
+
+        match method:
+            case "elgendi_ppg":
+                vals = t.cast(_t.PeakDetectionElgendiPPG, vals)
+                self._app.peak_elgendi_ppg_peakwindow.setValue(vals["peakwindow"])
+                self._app.peak_elgendi_ppg_beatwindow.setValue(vals["beatwindow"])
+                self._app.peak_elgendi_ppg_beatoffset.setValue(vals["beatoffset"])
+                self._app.peak_elgendi_ppg_min_delay.setValue(vals["mindelay"])
+            case "local":
+                vals = t.cast(_t.PeakDetectionLocalMaxima, vals)
+                self._app.peak_local_max_radius.setValue(vals["radius"])
+            case "neurokit2":
+                vals = t.cast(_t.PeakDetectionNeurokit2, vals)
+                self._app.peak_neurokit2_smoothwindow.setValue(vals["smoothwindow"])
+                self._app.peak_neurokit2_avgwindow.setValue(vals["avgwindow"])
+                self._app.peak_neurokit2_gradthreshweight.setValue(vals["gradthreshweight"])
+                self._app.peak_neurokit2_minlenweight.setValue(vals["minlenweight"])
+                self._app.peak_neurokit2_mindelay.setValue(vals["mindelay"])
+                self._app.peak_neurokit2_correct_artifacts.setChecked(vals["correct_artifacts"])
+            case "promac":
+                vals = t.cast(_t.PeakDetectionProMAC, vals)
+                self._app.peak_promac_threshold.setValue(vals["threshold"])
+                self._app.peak_promac_gaussian_sd.setValue(vals["gaussian_sd"])
+                self._app.peak_promac_correct_artifacts.setChecked(vals["correct_artifacts"])
+            case "pantompkins":
+                vals = t.cast(_t.PeakDetectionPantompkins, vals)
+                self._app.peak_pantompkins_correct_artifacts.setChecked(vals["correct_artifacts"])
+            case "wfdb_xqrs":
+                vals = t.cast(_t.PeakDetectionXQRS, vals)
+                self._app.peak_xqrs_search_radius.setValue(vals["search_radius"])
+                self._app.peak_xqrs_peak_dir.setValue(vals["peak_dir"])

@@ -58,6 +58,7 @@ class SectionResult:
     data: npt.NDArray[np.void] = attrs.field(converter=_to_structured_array)
     sampling_rate: int = attrs.field(converter=int)
     peaks: npt.NDArray[np.uint32] = attrs.field(converter=_to_index_array)
+    peak_edits: ManualPeakEdits = attrs.field()
     rate: npt.NDArray[np.float64] = attrs.field(converter=_to_float_array)
     rate_interpolated: npt.NDArray[np.float64] = attrs.field(converter=_to_float_array)
     processing_parameters: _t.ProcessingParameters = attrs.field()
@@ -71,6 +72,7 @@ class SectionResult:
             "data": self.data,
             "sampling_rate": self.sampling_rate,
             "peaks": self.peaks,
+            "peak_edits": self.peak_edits.as_dict(),
             "rate": self.rate,
             "rate_interpolated": self.rate_interpolated,
             "processing_parameters": self.processing_parameters,
@@ -105,6 +107,7 @@ class Section:
         self._rate_interp = np.empty(0, dtype=np.float64)
         self._parameters_used = _t.ProcessingParameters(
             sampling_rate=self.sfreq,
+            pipeline=None,
             filter_parameters=None,
             standardize_parameters=None,
             peak_detection_parameters=None,
@@ -274,6 +277,7 @@ class Section:
         else:
             raise ValueError(f"Unknown pipeline: {pipeline}")
         filter_parameters = _t.SignalFilterParameters(**kwargs)
+        self._parameters_used["pipeline"] = pipeline
         self._parameters_used["filter_parameters"] = filter_parameters
         pl_filtered = pl.Series(self._proc_sig_name, filtered, pl.Float64)
         self.data = self.data.with_columns((pl_filtered).alias(self._proc_sig_name))
@@ -342,6 +346,14 @@ class Section:
             .otherwise(pl.col("is_peak"))
             .alias("is_peak")
         )
+        if action == "add":
+            self._peak_edits.added.extend(peaks)
+        else:
+            self._peak_edits.removed.extend(peaks)
+
+    def get_peak_edits(self) -> ManualPeakEdits:
+        self._peak_edits.sort_and_deduplicate()
+        return self._peak_edits
 
     def get_section_info(self) -> _t.SectionIdentifier:
         return _t.SectionIdentifier(
@@ -377,6 +389,7 @@ class Section:
             data=self.data,
             sampling_rate=self.sfreq,
             peaks=self.peaks,
+            peak_edits=self.get_peak_edits(),
             rate=self.rate,
             rate_interpolated=self.rate_interp,
             processing_parameters=self.processing_parameters,

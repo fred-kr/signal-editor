@@ -5,8 +5,6 @@ from datetime import date
 from pathlib import Path
 
 import attrs
-import numpy as np
-import numpy.typing as npt
 import polars as pl
 import polars.selectors as ps
 from PySide6 import QtCore, QtWidgets
@@ -14,11 +12,12 @@ from PySide6.QtCore import Signal, Slot
 
 from .. import type_aliases as _t
 from ..models.io import read_edf
-from ..models.result import DescriptiveStatistics, FocusedResult
-from ..models.section import Section, SectionContainer, SectionID, SectionIndices, SectionResult
+from ..models.result import CompleteResult, ResultIdentifier
+from ..models.section import Section, SectionContainer, SectionID, SectionIndices
 
 if t.TYPE_CHECKING:
     from ..app import SignalEditor
+    from ..models.result import FocusedResult, SectionResult
 
 
 def parse_file_name(
@@ -40,7 +39,7 @@ def parse_file_name(
 
     Returns
     -------
-    tuple[date, str, str]
+    tuple[date, str, _t.OxygenCondition]
         The date, id, and oxygen condition parsed from the file name, or 'unknown' if
         the respective pattern was not found.
     """
@@ -89,18 +88,6 @@ def infer_sampling_rate(
     closed = "left" if df.get_column(time_col)[0] == 0 else "both"
     lower = df.get_column(time_col)[0]
     return df.filter(pl.col(time_col).is_between(lower, target, closed=closed)).height
-
-
-def get_array_stats(
-    array: npt.NDArray[np.intp | np.uintp | np.float_], description: str
-) -> DescriptiveStatistics:
-    return DescriptiveStatistics(
-        description,
-        mean=np.mean(array),
-        median=np.median(array),
-        std=np.std(array),
-        var=np.var(array),
-    )
 
 
 @attrs.define
@@ -373,12 +360,12 @@ class DataHandler(QtCore.QObject):
             self.base_df.lazy().filter(~(pl.col("index").is_between(start, stop))).collect()
         )
 
-    def get_section_results(self) -> dict[SectionID, SectionResult]:
+    def get_section_results(self) -> dict[SectionID, "SectionResult"]:
         return {
             section.section_id: section.get_complete_result() for section in self.sections.values()
         }
 
-    def get_focused_results(self) -> dict[SectionID, FocusedResult]:
+    def get_focused_results(self) -> dict[SectionID, "FocusedResult"]:
         return {
             section.section_id: section.get_focused_result() for section in self.sections.values()
         }
@@ -424,3 +411,26 @@ class DataHandler(QtCore.QObject):
         for section in self.sections.values():
             section.set_active(section.section_id == section_id)
         self.sig_cas_changed.emit()
+
+    def get_result_identifier(self) -> ResultIdentifier:
+        return ResultIdentifier(
+            signal_name=self.sig_name,
+            source_file_name=self._app.file_info.fileName(),
+            date_recorded=self.metadata["date_recorded"],
+            animal_id=self.metadata["animal_id"],
+            oxygen_condition=self.metadata["oxygen_condition"],
+        )
+
+    def get_complete_result(self) -> CompleteResult:
+        return CompleteResult(
+            identifier=self.get_result_identifier(),
+            base_df_with_changes=self.base_df,
+            complete_section_results=self.get_section_results(),
+            focused_section_results=self.get_focused_results(),
+            peak_interval_stats={
+                section_id: section.interval_stats for section_id, section in self.sections.items()
+            },
+            rate_stats={
+                section_id: section.rate_stats for section_id, section in self.sections.items()
+            },
+        )

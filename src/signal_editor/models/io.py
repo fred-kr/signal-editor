@@ -10,7 +10,7 @@ import polars as pl
 from .. import type_aliases as _t
 
 if TYPE_CHECKING:
-    from ..models.result import Result
+    from ..models.result import CompleteResult
 
 
 def read_edf(
@@ -74,7 +74,7 @@ def read_edf(
 
 def create_hdf5_groups(
     group: h5py.Group,
-    data: _t.ResultDict,
+    data: _t.CompleteResultDict,
 ) -> None:
     """
     Creates HDF5 groups from a dictionary.
@@ -102,7 +102,7 @@ def create_hdf5_groups(
             create_hdf5_groups(subgroup, value)
 
 
-def write_hdf5(file_path: str | Path, result: "Result") -> None:
+def write_hdf5(file_path: str | Path, result: "CompleteResult") -> None:
     file_path = Path(file_path).resolve().as_posix()
 
     with h5py.File(file_path, "a") as f:
