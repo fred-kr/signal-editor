@@ -9,6 +9,6 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--antialias", action="store_true")
     args = parser.parse_args()
 
-    os.environ["PYQTGRAPH_QT_LIB"] = "PySide6"  # Set environment variable
+    os.environ["PYQTGRAPH_QT_LIB"] = "PySide6"
 
     main(args.dev, args.antialias)

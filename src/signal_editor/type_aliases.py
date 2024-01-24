@@ -1,21 +1,21 @@
 import datetime
-from typing import TYPE_CHECKING, Literal, TypedDict
+import typing as t
 
 import numpy as np
 import numpy.typing as npt
 import polars as pl
 
-if TYPE_CHECKING:
+if t.TYPE_CHECKING:
     from .handlers.data_handler import DataState
     from .models.result import (
         ManualPeakEdits,
     )
-    from .models.signal import SectionID, SectionIndices
+    from .models.section import SectionID, SectionIndices
 
 
-type SignalName = Literal["hbr", "ventilation"]
-type ScaleMethod = Literal["mad", "zscore", "None"]
-type Pipeline = Literal[
+type SignalName = t.Literal["hbr", "ventilation"]
+type ScaleMethod = t.Literal["mad", "zscore", "None"]
+type Pipeline = t.Literal[
     "custom",
     "ppg_elgendi",
     "ecg_neurokit2",
@@ -25,16 +25,16 @@ type Pipeline = Literal[
     "ecg_elgendi2010",
     "ecg_engzeemod2012",
 ]
-type PeakDetectionMethod = Literal[
+type PeakDetectionMethod = t.Literal[
     "elgendi_ppg", "local", "neurokit2", "promac", "wfdb_xqrs", "pantompkins"
 ]
-type WFDBPeakDirection = Literal[
+type WFDBPeakDirection = t.Literal[
     "up",
     "down",
     "both",
     "compare",
 ]
-type FilterMethod = Literal[
+type FilterMethod = t.Literal[
     "butterworth",
     "butterworth_ba",
     "savgol",
@@ -42,7 +42,7 @@ type FilterMethod = Literal[
     "bessel",
     "None",
 ]
-type OxygenCondition = Literal["normoxic", "hypoxic", "unknown"]
+type OxygenCondition = t.Literal["normoxic", "hypoxic", "unknown"]
 
 type PeakDetectionInputValues = (
     PeakDetectionElgendiPPG
@@ -53,7 +53,7 @@ type PeakDetectionInputValues = (
     | PeakDetectionXQRS
 )
 
-type SmoothingKernels = Literal[
+type SmoothingKernels = t.Literal[
     "barthann",
     "bartlett",
     "blackman",
@@ -83,7 +83,7 @@ type SmoothingKernels = Literal[
     "median",
 ]
 
-type NKECGAlgorithms = Literal[
+type NKECGAlgorithms = t.Literal[
     "neurokit2",
     "promac",
     "pantompkins",
@@ -102,38 +102,38 @@ type NKECGAlgorithms = Literal[
 ]
 
 
-class FileMetadata(TypedDict):
+class FileMetadata(t.TypedDict):
     date_recorded: datetime.date
     animal_id: str
     oxygen_condition: OxygenCondition
 
 
-class SignalFilterParameters(TypedDict):
+class SignalFilterParameters(t.TypedDict):
     lowcut: float | None
     highcut: float | None
     method: FilterMethod
     order: int
-    window_size: int | Literal["default"]
+    window_size: int | t.Literal["default"]
     powerline: int | float
 
 
-class StandardizeParameters(TypedDict):
+class StandardizeParameters(t.TypedDict):
     robust: bool
     window_size: int | None
 
 
-class PeakDetectionElgendiPPG(TypedDict):
+class PeakDetectionElgendiPPG(t.TypedDict):
     peakwindow: float
     beatwindow: float
     beatoffset: float
     mindelay: float
 
 
-class PeakDetectionLocalMaxima(TypedDict):
+class PeakDetectionLocalMaxima(t.TypedDict):
     radius: int
 
 
-class PeakDetectionNeurokit2(TypedDict):
+class PeakDetectionNeurokit2(t.TypedDict):
     smoothwindow: float
     avgwindow: float
     gradthreshweight: float
@@ -142,34 +142,34 @@ class PeakDetectionNeurokit2(TypedDict):
     correct_artifacts: bool
 
 
-class PeakDetectionProMAC(TypedDict):
+class PeakDetectionProMAC(t.TypedDict):
     threshold: float
     gaussian_sd: int
     correct_artifacts: bool
 
 
-class PeakDetectionPantompkins(TypedDict):
+class PeakDetectionPantompkins(t.TypedDict):
     correct_artifacts: bool
 
 
-class PeakDetectionXQRS(TypedDict):
+class PeakDetectionXQRS(t.TypedDict):
     search_radius: int
-    peak_dir: Literal["up", "down", "both", "compare"]
+    peak_dir: t.Literal["up", "down", "both", "compare"]
 
 
-class PeakDetectionParameters(TypedDict):
+class PeakDetectionParameters(t.TypedDict):
     method: PeakDetectionMethod
     input_values: PeakDetectionInputValues
 
 
-class ProcessingParameters(TypedDict):
+class ProcessingParameters(t.TypedDict):
     sampling_rate: int
     filter_parameters: SignalFilterParameters | None
     standardize_parameters: StandardizeParameters | None
     peak_detection_parameters: PeakDetectionParameters | None
 
 
-class StateDict(TypedDict):
+class StateDict(t.TypedDict):
     active_signal: SignalName | str
     source_file_path: str
     output_dir: str
@@ -181,37 +181,36 @@ class StateDict(TypedDict):
     stopped_at_index: int
 
 
-class InitialState(TypedDict):
+class InitialState(t.TypedDict):
     name: str
     sampling_rate: int
     data: pl.DataFrame
 
 
-class SectionIdentifier(TypedDict):
+class SectionIdentifier(t.TypedDict):
+    sig_name: str
     section_id: "SectionID"
-    included: bool
-    signal_name: str
-    absolute_start_index: int
-    absolute_stop_index: int
-    finished_processing: bool
-
-
-class SectionResultDict(TypedDict):
-    name: str
-    section_id: "SectionID"
-    absolute_bounds: "SectionIndices" | tuple[int, int]
-    data: npt.NDArray[np.void]
+    absolute_bounds: "SectionIndices"
     sampling_rate: int
+
+
+class SectionResultDict(t.TypedDict):
+    sig_name: str
+    section_id: "SectionID"
+    absolute_bounds: "SectionIndices"
+    sampling_rate: int
+    data: npt.NDArray[np.void]
     peaks: npt.NDArray[np.uint32]
     rate: npt.NDArray[np.float64]
     rate_interpolated: npt.NDArray[np.float64]
     processing_parameters: ProcessingParameters
+    focused_result: npt.NDArray[np.void]
 
 
-class ResultDict(TypedDict):
+class ResultDict(t.TypedDict):
     identifier: dict[str, str | datetime.datetime | datetime.date | None]
     processing_parameters: ProcessingParameters
     summary_statistics: dict[str, dict[str, float]]
     focused_result: npt.NDArray[np.void]
     manual_peak_edits: dict[str, list[int]]
-    source_data: list[dict["SectionID", SectionResultDict]]
+    source_data: dict[str, t.Any]

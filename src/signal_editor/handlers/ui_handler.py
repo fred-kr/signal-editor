@@ -1,6 +1,5 @@
 import pprint
 import typing as t
-from pathlib import Path
 
 import numpy as np
 import pdir
@@ -19,8 +18,8 @@ from PySide6.QtWidgets import (
     QMenu,
 )
 
+from .. import type_aliases as _t
 from ..handlers.plot_handler import PlotHandler
-from ..models.io import parse_file_name
 from ..views._ui_state_maps import (
     COMBO_BOX_ITEMS,
     FILTER_INPUT_STATES,
@@ -133,10 +132,11 @@ class UIHandler(QObject):
         combo_box.setCurrentIndex(0)
         combo_box.blockSignals(False)
 
-    def update_data_select_ui(self, path: str) -> None:
+    @Slot()
+    def update_data_select_ui(self) -> None:
         self._app.container_file_info.setEnabled(True)
         self._app.btn_load_selection.setEnabled(True)
-        data_cols = self._app.data.df.select(
+        data_cols = self._app.data.raw_df.select(
             (~ps.contains(["index", "time", "temp"])) & (ps.float())
         ).columns
         data_combo_box = self._app.combo_box_signal_column
@@ -144,12 +144,13 @@ class UIHandler(QObject):
 
         try:
             metadata = self._app.data.metadata
-            parsed_date, parsed_id, parsed_oxy = parse_file_name(Path(path).name)
+            meas_date = metadata["date_recorded"]
+
             self._app.date_edit_file_info.setDate(
-                QDate(parsed_date.year, parsed_date.month, parsed_date.day)
+                QDate(meas_date.year, meas_date.month, meas_date.day)
             )
-            self._app.line_edit_subject_id.setText(parsed_id)
-            self._app.combo_box_oxygen_condition.setValue(parsed_oxy)
+            self._app.line_edit_subject_id.setText(metadata["animal_id"])
+            self._app.combo_box_oxygen_condition.setValue(metadata["oxygen_condition"])
         except Exception:
             self._app.date_edit_file_info.setDate(QDate.currentDate())
             self._app.line_edit_subject_id.setText("unknown")
@@ -231,3 +232,82 @@ class UIHandler(QObject):
             msg = f"Selected pipeline {pipeline_value} not yet implemented, use either 'custom' or 'ppg_elgendi'."
             self._app.sig_show_message.emit(msg, "info")
             return
+
+    def get_filter_parameters(self) -> _t.SignalFilterParameters:
+        method = self._app.filter_method
+
+        filter_params = _t.SignalFilterParameters(
+            lowcut=None,
+            highcut=None,
+            method=method,
+            order=2,
+            window_size="default",
+            powerline=50,
+        )
+        if method != "None":
+            filter_widgets = {
+                "lowcut": self._app.dbl_spin_box_lowcut,
+                "highcut": self._app.dbl_spin_box_highcut,
+                "order": self._app.spin_box_order,
+                "window_size": self._app.spin_box_window_size,
+                "powerline": self._app.dbl_spin_box_powerline,
+            }
+            for param, widget in filter_widgets.items():
+                if widget.isEnabled():
+                    filter_params[param] = widget.value()
+
+        return filter_params
+
+    def get_standardize_parameters(self) -> _t.StandardizeParameters:
+        method = self._app.scale_method
+        robust = method == "mad"
+        if self._app.container_scale_window_inputs.isChecked():
+            window_size = self._app.spin_box_scale_window_size.value()
+        else:
+            window_size = None
+
+        return _t.StandardizeParameters(robust=robust, window_size=window_size)
+
+    def get_peak_detection_parameters(self) -> _t.PeakDetectionParameters:
+        method = self._app.peak_detection_method
+
+        match method:
+            case "elgendi_ppg":
+                vals = _t.PeakDetectionElgendiPPG(
+                    peakwindow=self._app.peak_elgendi_ppg_peakwindow.value(),
+                    beatwindow=self._app.peak_elgendi_ppg_beatwindow.value(),
+                    beatoffset=self._app.peak_elgendi_ppg_beatoffset.value(),
+                    mindelay=self._app.peak_elgendi_ppg_min_delay.value(),
+                )
+            case "local":
+                vals = _t.PeakDetectionLocalMaxima(radius=self._app.peak_local_max_radius.value())
+            case "neurokit2":
+                vals = _t.PeakDetectionNeurokit2(
+                    smoothwindow=self._app.peak_neurokit2_smoothwindow.value(),
+                    avgwindow=self._app.peak_neurokit2_avgwindow.value(),
+                    gradthreshweight=self._app.peak_neurokit2_gradthreshweight.value(),
+                    minlenweight=self._app.peak_neurokit2_minlenweight.value(),
+                    mindelay=self._app.peak_neurokit2_mindelay.value(),
+                    correct_artifacts=self._app.peak_neurokit2_correct_artifacts.isChecked(),
+                )
+            case "promac":
+                vals = _t.PeakDetectionProMAC(
+                    threshold=self._app.peak_promac_threshold.value(),
+                    gaussian_sd=self._app.peak_promac_gaussian_sd.value(),
+                    correct_artifacts=self._app.peak_promac_correct_artifacts.isChecked(),
+                )
+            case "pantompkins":
+                vals = _t.PeakDetectionPantompkins(
+                    correct_artifacts=self._app.peak_pantompkins_correct_artifacts.isChecked(),
+                )
+            case "wfdb_xqrs":
+                vals = _t.PeakDetectionXQRS(
+                    search_radius=self._app.peak_xqrs_search_radius.value(),
+                    peak_dir=self._app.xqrs_peak_direction,
+                )
+
+        for key, val in vals.items():
+            if isinstance(val, float):
+                vals[key] = round(val, 3)
+
+        return _t.PeakDetectionParameters(method=method, input_values=vals)

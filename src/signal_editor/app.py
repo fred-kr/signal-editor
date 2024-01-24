@@ -4,11 +4,12 @@ import pickle
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Literal, cast
+import typing as t
 
 import h5py
 import numpy as np
 import pyqtgraph as pg
+import polars as pl
 from loguru import logger
 from PySide6.QtCore import (
     QByteArray,
@@ -32,24 +33,24 @@ from PySide6.QtWidgets import (
 from . import type_aliases as _t
 from .handlers.config_handler import ConfigHandler
 from .handlers.data_handler import DataHandler
-from .handlers.helpers import table_view_helper
+from .handlers.helpers.table_view_helper import TableViewHelper
 from .handlers.plot_handler import PlotHandler
 from .handlers.style_handler import ThemeSwitcher
 from .handlers.ui_handler import UIHandler
 from .models import data as _data
 from .models import io as _io
 from .models import result as _result
-from .models.signal import SectionID
+from .models.section import SectionID
 from .views.main_window import Ui_MainWindow
 
 
 class SignalEditor(QMainWindow, Ui_MainWindow):
-    sig_data_filtered = Signal(str)
     sig_data_loaded = Signal()
-    sig_new_peak_data = Signal(str)
+    sig_data_processed = Signal()
+    sig_peaks_detected = Signal()
     sig_show_message = Signal(str, str)
     sig_data_restored = Signal()
-    sig_active_section_changed = Signal(str)
+    sig_section_added = Signal(int, int)
     sig_update_view_range = Signal(int, float, float)
 
     def __init__(self) -> None:
@@ -74,8 +75,9 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         else:
             self.theme_switcher.set_style("dark")
         self._add_style_toggle()
-        self._add_profiler()
-        self.data.fs = int(self.config.config.get("Defaults", "SampleRate", fallback=-1))
+        if os.environ.get("DEV_MODE", "0") == "1":
+            self._add_profiler()
+        self.data.set_sfreq(int(self.config.config.get("Defaults", "SampleRate", fallback=-1)))
         self._setup_section_widgets()
 
     # region Dev
@@ -83,56 +85,52 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.menubar.addAction("Start Profiler", self._start_profiler)
         self.menubar.addAction("Stop Profiler", self._stop_profiler)
 
+    @Slot()
+    def _start_profiler(self):
+        self.profiler = cProfile.Profile()
+        self.profiler.enable()
+        self.statusbar.showMessage("Profiler started.")
+        logger.debug(f"Started profiling at: {datetime.now()}")
+
+    @Slot()
+    def _stop_profiler(self):
+        self.profiler.disable()
+        self.statusbar.showMessage("Profiler stopped.")
+        self.profiler.dump_stats(
+            f"./logs/profiler_{int(datetime.timestamp(datetime.now()))}.pstats"
+        )
+
     # endregion
 
     # region Properties
-    @property
-    def output_dir(self) -> Path:
-        return self.config.output_dir
-
-    @output_dir.setter
-    def output_dir(self, value: Path | str) -> None:
-        self.config.output_dir = Path(value)
 
     @property
-    def app_dir(self) -> Path:
-        return self.config.app_dir
-
-    @property
-    def data_dir(self) -> Path:
-        return self.config.data_dir
-
-    @data_dir.setter
-    def data_dir(self, value: Path | str) -> None:
-        self.config.data_dir = Path(value)
-
-    @property
-    def signal_name(self) -> _t.SignalName | str:
+    def sig_name(self) -> str:
         return self.combo_box_signal_column.currentText()
 
     @property
-    def active_section_id(self) -> SectionID:
-        return SectionID(self.combo_box_section_select.currentText())
+    def proc_sig_name(self) -> str:
+        return f"{self.sig_name}_processed"
 
     @property
     def scale_method(self) -> _t.ScaleMethod:
-        return cast(_t.ScaleMethod, self.combo_box_scale_method.value())
+        return t.cast(_t.ScaleMethod, self.combo_box_scale_method.value())
 
     @property
     def pipeline(self) -> _t.Pipeline:
-        return cast(_t.Pipeline, self.combo_box_preprocess_pipeline.value())
+        return t.cast(_t.Pipeline, self.combo_box_preprocess_pipeline.value())
 
     @property
     def filter_method(self) -> _t.FilterMethod:
-        return cast(_t.FilterMethod, self.combo_box_filter_method.value())
+        return t.cast(_t.FilterMethod, self.combo_box_filter_method.value())
 
     @property
     def peak_detection_method(self) -> _t.PeakDetectionMethod:
-        return cast(_t.PeakDetectionMethod, self.combo_box_peak_detection_method.value())
+        return t.cast(_t.PeakDetectionMethod, self.combo_box_peak_detection_method.value())
 
     @property
     def xqrs_peak_direction(self) -> _t.WFDBPeakDirection:
-        return cast(_t.WFDBPeakDirection, self.peak_xqrs_peak_dir.value())
+        return t.cast(_t.WFDBPeakDirection, self.peak_xqrs_peak_dir.value())
 
     # endregion
 
@@ -142,7 +140,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     def _setup_section_widgets(self) -> None:
         self.combo_box_section_select.blockSignals(True)
-        self.combo_box_section_select.addItem("IN_001")
+        self.combo_box_section_select.addItem(f"SEC_{self.sig_name}_000")
         self.combo_box_section_select.blockSignals(False)
         add_section_menu = QMenu(self.btn_section_add)
         add_section_menu.addAction("Included", self._new_included_section)
@@ -159,8 +157,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.action_load_state.triggered.connect(self.restore_state)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_select_file.triggered.connect(self.select_data_file)
-        self.action_next_section.triggered.connect(self._on_next_section)
-        self.action_previous_section.triggered.connect(self._on_previous_section)
 
         # Plotting Related Actions
         self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
@@ -170,11 +166,11 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
 
         # Button Actions
-        self.btn_apply_filter.clicked.connect(self.handle_apply_filter)
+        self.btn_apply_filter.clicked.connect(self.process_signal)
         self.btn_browse_output_dir.clicked.connect(self.select_output_location)
         self.btn_compute_results.clicked.connect(self.update_results)
-        self.btn_detect_peaks.clicked.connect(self.handle_peak_detection)
-        self.btn_load_selection.clicked.connect(self.handle_load_selection)
+        self.btn_detect_peaks.clicked.connect(self.detect_peaks)
+        self.btn_load_selection.clicked.connect(self.handle_load_data)
         self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
         self.btn_select_file.clicked.connect(self.select_data_file)
 
@@ -182,74 +178,65 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.btn_export_focused.clicked.connect(self.export_focused_result)
 
         # Data Related Signals
-        self.sig_data_filtered.connect(self.handle_table_view_data)
+        self.sig_data_processed.connect(self.handle_table_view_data)
         self.sig_data_loaded.connect(lambda: self.tabs_main.setCurrentIndex(1))
-        self.sig_data_loaded.connect(self.handle_plot_draw)
+        self.sig_data_loaded.connect(self.handle_draw_signal)
         self.sig_data_loaded.connect(self.handle_table_view_data)
         self.sig_data_restored.connect(self.refresh_app_state)
-        self.sig_new_peak_data.connect(self.handle_draw_results)
-        self.sig_show_message.connect(self.show_message)
-        self.sig_active_section_changed.connect(self._on_section_changed)
+        
+        self.sig_peaks_detected.connect(self.handle_draw_rate)
+        self.sig_peaks_detected.connect(self.handle_draw_peaks)
+        
+        self.sig_section_added.connect(self.plot.mark_section)
+        self.data.sig_cas_changed.connect(self.handle_draw_signal)
+        self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
 
         # UI Handler Signals
         self.ui.sig_section_confirmed.connect(self._on_section_confirmed)
         self.ui.sig_section_canceled.connect(self._on_section_canceled)
 
         # Widget specific Signals
-        self.spin_box_sample_rate.valueChanged.connect(self.data.update_fs)
-        self.combo_box_section_select.currentTextChanged.connect(self._on_section_changed)
+        self.spin_box_sample_rate.valueChanged.connect(self.data.update_sfreq)
+        self.combo_box_section_select.currentTextChanged.connect(self.data.set_cas)
+        self.date_edit_file_info.dateChanged.connect(self.data.set_date)
+        self.line_edit_subject_id.textChanged.connect(self.data.set_animal_id)
+        self.combo_box_oxygen_condition.currentTextChanged.connect(self.data.set_oxy_condition)
 
+        self.sig_show_message.connect(self.show_message)
+        
     @Slot()
     def _new_included_section(self) -> None:
-        current_limits = self.data.sig_data.active_bounds
+        current_limits = self.data.bounds
         self.container_section_confirm_cancel.show()
         self.plot.show_section_selector("included", current_limits)
 
     @Slot()
     def _new_excluded_section(self) -> None:
-        current_limits = self.data.sig_data.active_bounds
+        current_limits = self.data.bounds
         self.container_section_confirm_cancel.show()
         self.plot.show_section_selector("excluded", current_limits)
 
     @Slot()
     def _on_section_confirmed(self) -> None:
-        active_region = self.plot.region_selector
-        if active_region is None:
+        lin_reg = self.plot.region_selector
+        if lin_reg is None:
             return
-        lower, upper = active_region.getRegion()
+        lower, upper = lin_reg.getRegion()
         lower, upper = int(lower), int(upper)
-        self.data.sig_data.add_section(lower, upper, set_active=True)
-        self.combo_box_section_select.addItem(self.data.active_section.section_id)
-        self.combo_box_section_select.setCurrentText(self.data.active_section.section_id)
+        new_sect = self.data.new_section(lower, upper)
+        self.combo_box_section_select.addItem(new_sect.section_id)
+        self.combo_box_section_select.setCurrentText(new_sect.section_id)
         self.container_section_confirm_cancel.hide()
-        self.sig_active_section_changed.emit(self.data.active_section.section_id)
+        self.sig_section_added.emit(lower, upper)
 
     @Slot()
     def _on_section_canceled(self) -> None:
         self.container_section_confirm_cancel.hide()
-        self.plot.hide_section_selector()
-
-    @Slot(str)
-    def _on_section_changed(self, section_id: SectionID) -> None:
-        self.plot.hide_section_selector()
-        self.data.sig_data.set_active_section(section_id)
-        self.handle_plot_draw()
-
-    @Slot()
-    def _on_next_section(self) -> None:
-        self.data.sig_data.next_section(self.active_section_id)
-
-    @Slot()
-    def _on_previous_section(self) -> None:
-        self.data.sig_data.previous_section(self.active_section_id)
-
-    @Slot()
-    def remove_excluded_regions(self) -> None:
-        self.data.sig_data.remove_all_excluded()
+        self.plot.remove_section_selector()
 
     @Slot()
     def _emit_data_range_info(self) -> None:
-        data = self.data.sig_data.get_active_signal_data()
+        data = self.data.cas_proc_data.to_numpy()
         len_data, min_data, max_data = data.shape[0], data.min(), data.max()
         self.sig_update_view_range.emit(len_data, min_data, max_data)
 
@@ -273,40 +260,38 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def save_to_hdf5(self) -> None:
-        default_out = (
-            f"{self.output_dir.as_posix()}/{self.file_info.completeBaseName()}_results.hdf5"
-        )
+        out_location = Path.joinpath(self.config.output_dir, self.config.make_complete_result_name(self.sig_name, self.file_info.completeBaseName()))
         if file_path := QFileDialog.getSaveFileName(
             self,
             "Save to HDF5",
-            default_out,
+            out_location.as_posix(),
             "HDF5 Files (*.hdf5 *.h5)",
         )[0]:
-            _io.write_hdf5(file_path, self.make_results(self.signal_name))
+            _io.write_hdf5(file_path, self.make_results())
 
     @Slot()
     def update_results(self) -> None:
-        if len(self.data.sig_data.active_peaks) == 0:
-            msg = f"No peaks detected for signal '{self.signal_name}'. Please run peak detection first."
+        if len(self.data.cas.peaks) == 0:
+            msg = (
+                f"No peaks detected for signal '{self.sig_name}'. Please run peak detection first."
+            )
             self.sig_show_message.emit(msg, "info")
             return
-        self.make_results(self.signal_name)
+        self.make_results()
 
     @Slot(str)
-    def export_focused_result(self, output_format: Literal["csv", "xlsx", "txt"]) -> None:
-        if not self.data.sig_data:
-            msg = "No results to export. Please compute results first."
-            self.sig_show_message.emit(msg, "warning")
-            return
-
+    def export_focused_result(self, output_format: t.Literal["csv", "xlsx", "txt"]) -> None:
         result_file_name = self.config.make_focused_result_name(
-            self.signal_name, self.file_info.baseName()
+            self.sig_name, self.file_info.completeBaseName()
         )
-        result_location = self.output_dir / result_file_name
+        result_location = Path.joinpath(self.config.output_dir, result_file_name)
 
-        result_df = (
-            self.data.sig_data.get_section(self.active_section_id).get_focused_result().to_polars()
-        )
+        results = self.data.get_focused_results()
+        result_dfs: list[pl.DataFrame] = []
+        for section_id, focused_result in results.items():
+            fr_df = focused_result.to_polars().with_columns(pl.lit(section_id).alias("section_id"))
+            result_dfs.append(fr_df)
+        result_df = pl.concat(result_dfs)
 
         try:
             if output_format == "csv":
@@ -322,14 +307,17 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot(str, str)
     def show_message(
-        self, text: str, level: Literal["info", "warning", "critical", "error"]
+        self, text: str, level: t.Literal["debug", "info", "warning", "critical", "error"]
     ) -> None:
         icon_map = {
+            "debug": QMessageBox.Icon.NoIcon,
             "info": QMessageBox.Icon.Information,
             "warning": QMessageBox.Icon.Warning,
             "critical": QMessageBox.Icon.Critical,
             "error": QMessageBox.Icon.Critical,
         }
+        if level == "debug" and os.environ.get("DEV_MODE", "0") == "0":
+            return
         msg_box = QMessageBox(icon_map[level], "Notice", text)
         msg_box.exec()
 
@@ -341,7 +329,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         if path := QFileDialog.getExistingDirectory(
             self,
             caption="Select Output Directory",
-            dir=self.output_dir.as_posix(),
+            dir=self.config.output_dir.as_posix(),
             options=QFileDialog.Option.ShowDirsOnly,
         ):
             self.line_edit_output_dir.setText(path)
@@ -352,19 +340,18 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         """
         Update the data preview table and the data info table with the current data.
         """
-        # Get top and bottom parts of the data and its description
-        data = self.data.df
+        data = self.data.cas.data
         n_rows = 10
         df_head = data.head(n_rows)
         df_tail = data.tail(n_rows)
         df_description = data.describe(percentiles=None)
 
         model = _data.CompactDFModel(df_head=df_head, df_tail=df_tail)
-        raw_data_table = table_view_helper.TableViewHelper(self.table_data_preview)
+        raw_data_table = TableViewHelper(self.table_data_preview)
         raw_data_table.make_table(model)
 
         info = _data.DescriptiveStatsModel(df_description)
-        info_table = table_view_helper.TableViewHelper(self.table_data_info)
+        info_table = TableViewHelper(self.table_data_info)
         info_table.make_table(info)
 
     @Slot()
@@ -380,135 +367,82 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.ui.reset_widget_state()
             self.file_info.setFile(path)
             self.line_edit_active_file.setText(Path(path).name)
-            self.data.read(path)
-            self.ui.update_data_select_ui(path)
-
             self.config.data_dir = self.file_info.dir().path()
 
     @Slot()
-    def handle_load_selection(self) -> None:
+    def handle_load_data(self) -> None:
         self.btn_load_selection.processing("Loading data...")
+        self.statusbar.showMessage(f"Loading data from file: {self.file_info.canonicalFilePath()}")
+        self.data.read_file(self.file_info.canonicalFilePath())
 
-        try:
-            self.data.df.shrink_to_fit(in_place=True)
-            signal_col = self.signal_name
-            if signal_col not in self.data.df.columns:
-                msg = f"Signal column '{signal_col}' not found in data."
-                self.btn_load_selection.feedback(False, "Error", msg)
-                self.sig_show_message.emit(msg, "error")
-                return
-
-            if "index" in self.data.df.columns:
-                self.data.df.drop_in_place("index")
-
-            self.data.df = self.data.df.with_row_index()
-
-            self.data.new_sig_data(signal_col)
-            self.btn_load_selection.feedback(True, "Success", "Data loaded successfully.")
-            self.sig_data_loaded.emit()
-        except Exception as e:
-            msg = f"Failed to load data: {e}"
-            self.btn_load_selection.feedback(False, "Error", msg)
+        signal_col = self.sig_name
+        if signal_col not in self.data.raw_df.columns:
+            msg = f"Selected column '{signal_col}' not found in data. Detected columns are: '{', '.join(self.data.raw_df.columns)}'"
+            self.btn_load_selection.failure("Error", msg)
             self.sig_show_message.emit(msg, "error")
-            logger.error(msg)
-            self.statusbar.showMessage("Error loading data.")
+            self.statusbar.showMessage("Selected signal column not found in data.", 3000)
+            return
+        self.data.create_base_df(signal_col)
+
+        self.sig_data_loaded.emit()
+        self.btn_load_selection.success()
+        self.statusbar.showMessage("Data loaded.", 3000)
 
     @Slot()
-    def handle_plot_draw(self) -> None:
-        with pg.BusyCursor():
-            data = self.data.sig_data.get_active_signal_data()
-            len_data, min_data, max_data = data.shape[0], data.min(), data.max()
-            self.plot.draw_signal(data, self.signal_name)
-            self.plot.update_view_limits(len_data, min_data, max_data)
-            self.sig_update_view_range.emit(len_data, min_data, max_data)
-
-    @Slot()
-    def handle_apply_filter(self) -> None:
-        self.statusbar.showMessage("Applying filter...")
+    def process_signal(self) -> None:
+        self.statusbar.showMessage("Filtering data...")
         btn = self.btn_apply_filter
         btn.processing("Working...")
         with pg.BusyCursor():
-            filter_params = self.get_filter_values()
-            standardize_params = self.get_standardization_values()
+            filter_params = self.ui.get_filter_parameters()
+            standardize_params = self.ui.get_standardize_parameters()
 
-            pipeline = self.pipeline
-
-            signal_name = self.signal_name
-
-            self.data.run_preprocessing(
-                name=signal_name,
-                pipeline=pipeline,
-                filter_params=filter_params,
-                standardize_params=standardize_params,
+            self.data.cas.filter_data(
+                self.pipeline,
+                **filter_params,
             )
-            self.handle_plot_draw()
-        btn.success("Done")
-        self.statusbar.showMessage("Signal filtered successfully.", 3000)
-        self.sig_data_filtered.emit(signal_name)
+            if self.scale_method != "None":
+                self.data.cas.scale_data(**standardize_params)
+                
+            self.handle_draw_signal()
+        btn.success()
+        self.statusbar.showMessage("Filtering finished.", 3000)
+        self.sig_data_processed.emit()
 
     @Slot()
-    def handle_peak_detection(self) -> None:
-        btn = self.btn_detect_peaks
-        btn.processing("Working...")
+    def detect_peaks(self) -> None:
+        self.btn_detect_peaks.processing("Working...")
         self.statusbar.showMessage("Detecting peaks...")
         with pg.BusyCursor():
-            peak_params = self.get_peak_detection_values()
-            name = self.signal_name
-            active_section = self.data.active_section
-            if active_section.data.shape[0] == 0:
-                msg = "Signal needs to be filtered before peak detection can be performed."
-                self.sig_show_message.emit(msg, "info")
-                return
-
-            self.data.run_peak_detection(
-                name=name,
-                peak_parameters=peak_params,
-            )
-            peaks, peaks_y = active_section.get_peak_xy()
-
-            self.plot.draw_peaks(
-                x_values=peaks,
-                y_values=peaks_y,
-                name=name,
-            )
-        btn.success("Done")
+            peak_params = self.ui.get_peak_detection_parameters()
+            self.data.cas.detect_peaks(**peak_params)
+        self.sig_peaks_detected.emit()
         self.statusbar.showMessage("Peak detection finished.", 3000)
-        section_id = active_section.section_id
-        self.sig_new_peak_data.emit(section_id)
 
-    @Slot(str)
-    def handle_draw_results(self, section_id: SectionID) -> None:
-        active_section = self.data.sig_data.get_section(section_id)
-        active_section.calculate_rate()
-        rate_interp = active_section.rate_data.rate_interpolated
+    @Slot()
+    def handle_draw_signal(self) -> None:
+        with pg.BusyCursor():
+            data = self.data.cas_proc_data.to_numpy()
+            self.plot.draw_signal(data, self.sig_name)
 
-        self.plot.draw_rate(
-            rate_interp,
-            name=self.signal_name,
-        )
+    @Slot()
+    def handle_draw_peaks(self) -> None:
+        with pg.BusyCursor():
+            peaks_x, peaks_y = self.data.cas.get_peak_xy()
+            self.plot.draw_peaks(peaks_x, peaks_y, self.sig_name)
+        self.btn_detect_peaks.success()
+            
+    @Slot()
+    def handle_draw_rate(self) -> None:
+        self.plot.draw_rate(self.data.cas.rate_interp, self.sig_name)
 
-    # def _sync_peak_indices(self, section_id: SectionID) -> None:
-    #     scatter_item = self.plot.scatter_item
-    #     if scatter_item is None:
-    #         return
-    #     plot_peaks = scatter_item.data["x"].astype(np.int32)
-    #     data_peaks = self.data.active_section.peaks
-    #     plot_peaks.sort()
-    #     data_peaks.sort()
-
-    #     if not np.array_equal(plot_peaks, data_peaks):
-    #         self.data.sig_data.get_section_by_id(section_id).set_peaks(plot_peaks)
-
-    @Slot(str)
-    def handle_scatter_clicked(self, section_id: SectionID) -> None:
+    @Slot(str, list[int])
+    def handle_scatter_clicked(self, action: t.Literal["add", "remove"], indices: list[int]) -> None:
         scatter_item = self.plot.scatter_item
         if scatter_item is None:
             return
-        plot_peaks = scatter_item.data["x"].astype(np.int32)
-        plot_peaks.sort()
-        self.data.sig_data.get_section(section_id).set_peaks(plot_peaks)
-        # self.data.sig_data.active_section.calculate_rate()
-        self.sig_new_peak_data.emit(section_id)
+        self.data.cas.update_peaks(action, indices)
+        self.sig_peaks_detected.emit()
 
     @Slot(QCloseEvent)
     def closeEvent(self, event: QCloseEvent) -> None:
@@ -547,196 +481,8 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.config.output_dir = Path(output_dir)
 
         self.config.style = self.theme_switcher.active_style
-        self.config.sample_rate = self.data.fs
+        self.config.sample_rate = self.data.sfreq
         self.config.write_config()
-
-    @Slot()
-    def _start_profiler(self):
-        self.profiler = cProfile.Profile()
-        self.profiler.enable()
-        self.statusbar.showMessage("Profiler started.")
-        logger.debug(f"Started profiling at: {datetime.now()}")
-
-    @Slot()
-    def _stop_profiler(self):
-        self.profiler.disable()
-        self.statusbar.showMessage("Profiler stopped.")
-        self.profiler.dump_stats(
-            f"./logs/profiler_{int(datetime.timestamp(datetime.now()))}.pstats"
-        )
-
-    def get_identifier(self) -> _result.ResultIdentifier:
-        metadata = self.get_file_metadata()
-        result_file_name = self.config.make_complete_result_name(
-            self.signal_name, self.file_info.baseName()
-        )
-        return _result.ResultIdentifier(
-            name=self.signal_name,
-            animal_id=metadata["animal_id"],
-            oxygen_condition=metadata["oxygen_condition"],
-            source_file_name=self.file_info.fileName(),
-            date_recorded=metadata["date_recorded"],
-            result_file_name=result_file_name,
-            creation_date=datetime.now(),
-        )
-
-    def get_section_identifier(self, section_id: SectionID) -> _t.SectionIdentifier:
-        return self.data.sig_data.get_section(section_id).get_section_info()
-
-    def get_file_metadata(self) -> _t.FileMetadata:
-        date_recorded = cast(datetime, self.date_edit_file_info.date().toPython())
-        animal_id = self.line_edit_subject_id.text()
-        oxygen_condition = cast(_t.OxygenCondition, self.combo_box_oxygen_condition.value())
-        return _t.FileMetadata(
-            date_recorded=date_recorded,
-            animal_id=animal_id,
-            oxygen_condition=oxygen_condition,
-        )
-
-    def get_processing_parameters(self, section_id: SectionID) -> _t.ProcessingParameters:
-        return self.data.sig_data.get_section(section_id).processing_parameters
-
-    def get_filter_values(self) -> _t.SignalFilterParameters:
-        method = self.filter_method
-
-        filter_params = _t.SignalFilterParameters(
-            lowcut=None,
-            highcut=None,
-            method=method,
-            order=2,
-            window_size="default",
-            powerline=50,
-        )
-        if filter_params["method"] != "None":
-            filter_widgets = {
-                "lowcut": self.dbl_spin_box_lowcut,
-                "highcut": self.dbl_spin_box_highcut,
-                "order": self.spin_box_order,
-                "window_size": self.spin_box_window_size,
-                "powerline": self.dbl_spin_box_powerline,
-            }
-            for param, widget in filter_widgets.items():
-                if widget.isEnabled():
-                    filter_params[param] = widget.value()
-
-        return filter_params
-
-    def get_standardization_values(self) -> _t.StandardizeParameters:
-        method = self.scale_method
-        robust = method.lower() == "mad"
-        if self.container_scale_window_inputs.isChecked():
-            window_size = self.spin_box_scale_window_size.value()
-        else:
-            window_size = None
-        return _t.StandardizeParameters(robust=robust, window_size=window_size)
-
-    def get_peak_detection_values(self) -> _t.PeakDetectionParameters:
-        method = self.peak_detection_method
-        start_index = self.data.active_section.sect_start
-        stop_index = self.data.active_section.sect_stop
-
-        if method == "elgendi_ppg":
-            vals = _t.PeakDetectionElgendiPPG(
-                peakwindow=self.peak_elgendi_ppg_peakwindow.value(),
-                beatwindow=self.peak_elgendi_ppg_beatwindow.value(),
-                beatoffset=self.peak_elgendi_ppg_beatoffset.value(),
-                mindelay=self.peak_elgendi_ppg_min_delay.value(),
-            )
-        elif method == "local":
-            vals = _t.PeakDetectionLocalMaxima(radius=self.peak_local_max_radius.value())
-        elif method == "neurokit2":
-            vals = _t.PeakDetectionNeurokit2(
-                smoothwindow=self.peak_neurokit2_smoothwindow.value(),
-                avgwindow=self.peak_neurokit2_avgwindow.value(),
-                gradthreshweight=self.peak_neurokit2_gradthreshweight.value(),
-                minlenweight=self.peak_neurokit2_minlenweight.value(),
-                mindelay=self.peak_neurokit2_mindelay.value(),
-                correct_artifacts=self.peak_neurokit2_correct_artifacts.isChecked(),
-            )
-        elif method == "promac":
-            vals = _t.PeakDetectionProMAC(
-                threshold=self.peak_promac_threshold.value(),
-                gaussian_sd=self.peak_promac_gaussian_sd.value(),
-                correct_artifacts=self.peak_promac_correct_artifacts.isChecked(),
-            )
-        elif method == "wfdb_xqrs":
-            vals = _t.PeakDetectionXQRS(
-                search_radius=self.peak_xqrs_search_radius.value(),
-                peak_dir=self.xqrs_peak_direction,
-            )
-        elif method == "pantompkins":
-            vals = _t.PeakDetectionPantompkins(
-                correct_artifacts=self.peak_pantompkins_correct_artifacts.isChecked(),
-            )
-        else:
-            raise ValueError(f"Unknown peak detection method: {method}")
-
-        for key, val in vals.items():
-            if isinstance(val, float):
-                vals[key] = np.round(val, 2)
-
-        return _t.PeakDetectionParameters(
-            start_index=start_index,
-            stop_index=stop_index,
-            method=method,
-            input_values=vals,
-        )
-
-    def get_processing_info(self) -> _result.ProcessingParameters:
-        filter_params = self.get_filter_values()
-        standardization_params = self.get_standardization_values()
-        peak_detection_params = self.get_peak_detection_values()
-        return _result.ProcessingParameters(
-            sampling_rate=self.data.fs,
-            pipeline=self.pipeline,
-            filter_parameters=filter_params,
-            scaling_parameters=standardization_params,
-            peak_detection_parameters=peak_detection_params,
-        )
-
-    def get_descriptive_stats(self, result_name: str) -> _result.SummaryStatistics:
-        return self.data.get_descriptive_stats(result_name)
-
-    def make_results(self) -> _result.Result:
-        name = self.signal_name
-        btn = self.btn_compute_results
-        btn.processing("Working...")
-        with pg.BusyCursor():
-            focused_result_df = self.data.get_focused_result_df(name)
-            results = self._assemble_result_data(name)
-        btn.success("Done")
-
-        result_table = self.table_view_focused_result
-        helper_result_table = table_view_helper.TableViewHelper(result_table)
-        helper_result_table.make_table(_data.PolarsModel(focused_result_df))
-        self.tabs_main.setCurrentIndex(2)
-        self.result = results
-        return results
-
-    # FIXME: needs to be updated for new data structure
-    def _assemble_result_data(self, result_name: str) -> _result.Result:
-        result_name = self.signal_name
-        identifier = self.get_identifier()
-        section_infos = {}
-        for section_id, section in self.data.sig_data.sections.get_included().items():
-            section_identifier = section.get_section_info()
-            section_infos[section_id] = section_identifier
-
-        processing_info = self.get_processing_info()
-
-        focused_result = self.data.focused_results[result_name]
-        statistics = self.data.get_descriptive_stats(result_name)
-        manual_edits = self.plot.get_manual_edits()
-        source_data = self.data.sig_data
-        return _result.Result(
-            identifier=identifier,
-            selection_parameters=data_info,
-            processing_parameters=processing_info,
-            summary_statistics=statistics,
-            focused_result=focused_result,
-            manual_peak_edits=manual_edits,
-            source_data=source_data,
-        )
 
     @Slot()
     def save_state(self) -> None:
@@ -758,7 +504,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             "Pickle Files (*.pkl)",
         )[0]:
             state_dict = _t.StateDict(
-                active_signal=self.signal_name,
+                active_signal=self.sig_name,
                 source_file_path=self.file_info.filePath(),
                 output_dir=self.output_dir.as_posix(),
                 data_selection_params=self.get_section_identifier(),
@@ -921,9 +667,10 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 def main(dev_mode: bool = False, antialias: bool = False) -> None:
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"
-    os.environ[
-        "LOGURU_FORMAT"
-    ] = "<magenta>{time:YYYY-MM-DD HH:mm:ss.SSS}</magenta> | <level>{level: <8}</level> | <yellow>{message}</yellow> | <blue>{name}</blue>.<cyan>{function}()</cyan>, l: <green>{line}</green>\n\n <red>{exception.type}: {exception.value}</red>\n\n{exception.traceback}"
+        os.environ["DEV_MODE"] = "1"
+    else:
+        os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=false"
+        os.environ["DEV_MODE"] = "0"
 
     pg.setConfigOptions(
         useOpenGL=True,
@@ -934,9 +681,6 @@ def main(dev_mode: bool = False, antialias: bool = False) -> None:
     )
     logger.add(
         "./logs/debug.log",
-        format=(
-            "{time:YYYY-MM-DD at HH:mm:ss.SSS} | [{level}]: {message} | module: {name} in {function}, line: {line}"
-        ),
         level="DEBUG",
     )
     app = QApplication(sys.argv)

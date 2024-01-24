@@ -40,7 +40,7 @@ class PlotHandler(QObject):
     Handles plot creation and interactions.
     """
 
-    sig_peaks_edited = Signal(str)
+    sig_peaks_edited = Signal(str, list[int])
 
     def __init__(self, app: "SignalEditor", parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -51,14 +51,13 @@ class PlotHandler(QObject):
         self._setup_plot_widgets()
         self._setup_plot_items()
         self._selector: pg.LinearRegionItem | None = None
-        self._label_low: pg.InfLineLabel | None = None
-        self._label_high: pg.InfLineLabel | None = None
 
         self._signal_item: pg.PlotDataItem | None = None
         self._scatter_item: CustomScatterPlotItem | None = None
         self._rate_item: pg.PlotDataItem | None = None
         self._rate_mean_item: pg.InfiniteLine | None = None
 
+    # region Properties
     @property
     def region_selector(self) -> pg.LinearRegionItem | None:
         return self._selector
@@ -90,6 +89,11 @@ class PlotHandler(QObject):
     @property
     def view_boxes(self) -> tuple[CustomViewBox, pg.ViewBox]:
         return self._pw_main.getPlotItem().getViewBox(), self._pw_rate.getPlotItem().getViewBox()
+
+    @property
+    def is_selecting_region(self) -> bool:
+        return isinstance(self._selector, pg.LinearRegionItem)
+    # endregion
 
     def get_manual_edits(self) -> dict[str, ManualPeakEdits]:
         return self._manual_peak_edits
@@ -145,7 +149,7 @@ class PlotHandler(QObject):
         if not hasattr(self._app, "data"):
             return
         try:
-            temp_col = self._app.data.active_section.data.get_column("temperature")
+            temp_col = self._app.data.cas.data.get_column("temperature")
         except Exception:
             return
         pos_data_coords = self._pw_main.plotItem.vb.mapSceneToView(pos)
@@ -169,6 +173,7 @@ class PlotHandler(QObject):
                 maxYRange=np.abs(max_data - min_data) * 1.25,
                 minYRange=0.1,
             )
+        self.reset_view_range(len_data, min_data, max_data)
 
     @Slot()
     def reset_plots(self) -> None:
@@ -185,15 +190,11 @@ class PlotHandler(QObject):
 
         self._setup_plot_items()
 
-    def show_section_selector(
-        self, section_type: Literal["included", "excluded"] | str, bounds: tuple[int, int]
-    ) -> None:
+    def show_section_selector(self, section_type: Literal["included", "excluded"], bounds: tuple[int, int]) -> None:
         section_style = SECTION_STYLES[section_type]
         span = abs(bounds[1] - bounds[0])
         initial_limits = (0, span / 3)
-        if selector := self._selector:
-            self._pw_main.removeItem(selector)
-            self._selector = None
+        self.remove_section_selector()
 
         selector = pg.LinearRegionItem(
             values=initial_limits,
@@ -204,18 +205,18 @@ class PlotHandler(QObject):
             hoverPen=section_style["hoverPen"],
         )
         selector.setZValue(1e3)
-        self._label_low = pg.InfLineLabel(selector.lines[0], text="{value:0.0f}", position=0.95)
-        self._label_high = pg.InfLineLabel(selector.lines[1], text="{value:0.0f}", position=0.95)
         for line in selector.lines:
-            line.addMarker(">|<", position=0.5, size=15)
+            line.addMarker("<|>", position=0.5, size=12)
 
         self._pw_main.addItem(selector)
         self._selector = selector
+        self._selector_type = section_type
 
-    def hide_section_selector(self) -> None:
+    def remove_section_selector(self) -> None:
         if selector := self._selector:
             self._pw_main.removeItem(selector)
-            self._selector = None
+        self._selector = None
+        del self._selector_type
 
     def draw_signal(self, sig: NDArray[np.float64], name: str, pen_color: str = "crimson") -> None:
         signal_item = pg.PlotDataItem(
@@ -236,10 +237,11 @@ class PlotHandler(QObject):
         self._pw_main.addItem(signal_item)
         signal_item.sigClicked.connect(self.add_scatter)
         self._signal_item = signal_item
+        self.update_view_limits(len(sig), sig.min(), sig.max())
 
     def draw_peaks(
         self,
-        x_values: NDArray[np.int32],
+        x_values: NDArray[np.uint32],
         y_values: NDArray[np.float64],
         name: str,
         **kwargs: str | tuple[int, ...],
@@ -328,18 +330,13 @@ class PlotHandler(QObject):
             new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)
             scatter_plot.setData(x=new_points_x, y=new_points_y)
             peak_edit_x = int(spot_item.pos().x())
-            section_name = self._app.combo_box_section_select.currentText()
 
-            self.sig_peaks_edited.emit(section_name)
-            if section_name not in self._manual_peak_edits:
-                self._manual_peak_edits[section_name] = ManualPeakEdits()
-            self._manual_peak_edits[section_name].removed.append(peak_edit_x)
-
+            self.sig_peaks_edited.emit("remove", [peak_edit_x])
+            
     @Slot(object, object)
     def add_scatter(self, sender: pg.PlotCurveItem, ev: "mouseEvents.MouseClickEvent") -> None:
         ev.accept()
         click_x = int(ev.pos().x())
-        section_name = self._app.combo_box_section_select.currentText()
 
         signal_item = self._signal_item
         scatter_item = self._scatter_item
@@ -374,10 +371,7 @@ class PlotHandler(QObject):
 
         x_new, y_new = x_data[use_index], use_val
         scatter_item.addPoints(x=x_new, y=y_new)
-        self.sig_peaks_edited.emit(section_name)
-        if section_name not in self._manual_peak_edits:
-            self._manual_peak_edits[section_name] = ManualPeakEdits()
-        self._manual_peak_edits[section_name].added.append(int(x_new))
+        self.sig_peaks_edited.emit("add", [int(x_new)])
 
     @Slot()
     def remove_selected_scatter(self) -> None:
@@ -405,11 +399,7 @@ class PlotHandler(QObject):
             return
 
         scatter_item.setData(x=np.delete(scatter_x, to_remove), y=np.delete(scatter_y, to_remove))
-        section_name = self._app.combo_box_section_select.currentText()
-        self.sig_peaks_edited.emit(section_name)
-        if section_name not in self._manual_peak_edits:
-            self._manual_peak_edits[section_name] = ManualPeakEdits()
-        self._manual_peak_edits[section_name].removed.extend(scatter_x[to_remove].astype(int))
+        self.sig_peaks_edited.emit("remove", list(scatter_x[to_remove].astype(int)))
         vb.selection_box = None
 
     @Slot()
@@ -420,12 +410,6 @@ class PlotHandler(QObject):
         vb.selection_box.setVisible(not vb.selection_box.isVisible())
         vb.selection_box.setEnabled(not vb.selection_box.isEnabled())
 
-    def _mark_included_region(self, lower: int, upper: int) -> None:
-        self._mark_region(lower, upper, 0, 255, 0)
-
-    def _mark_excluded_region(self, lower: int, upper: int) -> None:
-        self._mark_region(lower, upper, 255, 0, 0)
-
     def _mark_region(self, lower: int, upper: int, r: int, g: int, b: int) -> None:
         static_region = pg.LinearRegionItem(
             values=(lower, upper),
@@ -434,3 +418,23 @@ class PlotHandler(QObject):
             movable=False,
         )
         self._pw_main.getPlotItem().getViewBox().addItem(static_region)
+
+    @Slot(int, int)
+    def mark_section(self, lower: int, upper: int) -> None:
+        if not hasattr(self, "_selector_type"):
+            return
+        section_type = self._selector_type
+        if section_type == "included":
+            r, g, b = 0, 200, 100
+        elif section_type == "excluded":
+            r, g, b = 200, 0, 100
+        else:
+            return
+        marked_region = pg.LinearRegionItem(
+            values=(lower, upper),
+            brush=(r, g, b, 50),
+            pen=dict(color=(r, g, b, 255), width=2),
+            movable=False,
+        )
+        self._pw_main.addItem(marked_region)
+        self.remove_section_selector()

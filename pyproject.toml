@@ -41,6 +41,7 @@ rich = "^13.7.0"
 devtools = "^0.12.2"
 qtconsole = "^5.5.1"
 pdir2 = "^1.1.0"
+attrs = "^23.2.0"
 
 [tool.mypy]
 python_version = "3.12"

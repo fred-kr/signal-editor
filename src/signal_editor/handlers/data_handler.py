@@ -1,29 +1,25 @@
-import typing as t
-from dataclasses import dataclass, field
-from pathlib import Path
-from datetime import date, datetime
+import datetime
 import re
-from PySide6 import QtWidgets
+import typing as t
+from datetime import date
+from pathlib import Path
 
+import attrs
 import numpy as np
+import numpy.typing as npt
 import polars as pl
-from loguru import logger
-from numpy.typing import NDArray
-from PySide6.QtCore import QObject, Signal, Slot
-from PySide6.QtWidgets import QInputDialog, QWidget
+import polars.selectors as ps
+from PySide6 import QtCore, QtWidgets
+from PySide6.QtCore import Signal, Slot
 
 from .. import type_aliases as _t
 from ..models.io import read_edf
-from ..models.result import (
-    DescriptiveStatistics,
-    FocusedResult,
-    SummaryStatistics,
-)
-from ..models.signal import SignalData
-from ..models.section import Section, SectionID, SectionContainer
+from ..models.result import DescriptiveStatistics, FocusedResult
+from ..models.section import Section, SectionContainer, SectionID, SectionIndices, SectionResult
 
 if t.TYPE_CHECKING:
     from ..app import SignalEditor
+
 
 def parse_file_name(
     file_name: str,
@@ -58,7 +54,7 @@ def parse_file_name(
         oxy_condition = "unknown"
 
     if not date_match:
-        date_ddmmyyyy = datetime.now()
+        date_ddmmyyyy = date.today()
     else:
         date_ddmmyyyy = date(
             year=int(date_match[0][4:8], base=10),
@@ -96,7 +92,7 @@ def infer_sampling_rate(
 
 
 def get_array_stats(
-    array: NDArray[np.intp | np.uintp | np.float_], description: str
+    array: npt.NDArray[np.intp | np.uintp | np.float_], description: str
 ) -> DescriptiveStatistics:
     return DescriptiveStatistics(
         description,
@@ -107,228 +103,53 @@ def get_array_stats(
     )
 
 
-@dataclass(slots=True)
+@attrs.define
 class DataState:
-    df: pl.DataFrame
-    sig_data: SignalData = field(init=False)
-    focused_results: dict[str, FocusedResult] = field(init=False)
+    raw_df: pl.DataFrame | None = attrs.field(default=None)
+    base_df: pl.DataFrame | None = attrs.field(default=None)
+    sections: SectionContainer = attrs.field(default=SectionContainer)
+    sampling_rate: int = attrs.field(default=-1)
+    metadata: _t.FileMetadata | None = attrs.field(default=None)
+
+    def as_dict(self) -> dict[str, t.Any]:
+        return {
+            "raw_df": self.raw_df,
+            "base_df": self.base_df,
+            "sections": self.sections,
+            "sampling_rate": self.sampling_rate,
+            "metadata": self.metadata,
+        }
 
 
-class DataHandler(QObject):
-    def __init__(self, app: "SignalEditor") -> None:
-        super().__init__()
-        self._app = app
-        self.df: pl.DataFrame = pl.DataFrame()
-        self._sig: SignalData | None = None
-        self.focused_results: dict[str, FocusedResult] = {}
-        self._sampling_rate: int = -1
-        self.minmax_map = {}
-
-    @property
-    def fs(self) -> int:
-        return self._sampling_rate
-
-    @fs.setter
-    def fs(self, value: int | float) -> None:
-        value = int(value)
-        self._sampling_rate = value
-        self._app.spin_box_sample_rate.blockSignals(True)
-        self._app.spin_box_sample_rate.setValue(value)
-        self._app.spin_box_sample_rate.blockSignals(False)
-
-    @Slot(int)
-    def update_fs(self, value: int) -> None:
-        self.fs = value
-        if self._sig is not None:
-            self._sig.sampling_rate = value
-
-    @property
-    def sig_data(self) -> SignalData:
-        if self._sig is None:
-            raise RuntimeError("No signal data loaded")
-        return self._sig
-
-    @sig_data.setter
-    def sig_data(self, value: SignalData) -> None:
-        self._sig = value
-
-    @property
-    def active_section(self) -> Section:
-        """Easy access to the currently active section."""
-        return self.sig_data.sections.get_active_section()
-
-    def read(self, path: str | Path) -> None:
-        path = Path(path)
-        suffix = path.suffix
-        if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx", ".pkl"}:
-            info_msg = (
-                "Currently only .csv, .txt, .xlsx, .feather, .pkl and .edf files are supported"
-            )
-            self._app.sig_show_message.emit(info_msg, "info")
-            return
-
-        if suffix == ".pkl":
-            self._app.restore_state(path)
-            return
-        elif suffix == ".csv":
-            df = pl.read_csv(path)
-        elif suffix == ".edf":
-            lf, self.meas_date, self.fs = read_edf(path.as_posix())
-            df = lf.collect()
-        elif suffix == ".feather":
-            df = pl.read_ipc(path, use_pyarrow=True)
-        elif suffix == ".txt":
-            df = pl.read_csv(path, separator="\t")
-        elif suffix == ".xlsx":
-            df = pl.read_excel(path)
-        else:
-            raise NotImplementedError(f"File type `{suffix}` not supported")
-
-        if suffix != ".edf":
-            fs = infer_sampling_rate(df)
-
-            if fs == -1:
-                fs, ok = QInputDialog.getInt(
-                    self._app,
-                    "Sampling rate",
-                    "Enter sampling rate (samples per second): ",
-                    200,
-                    1,
-                    10000,
-                    1,
-                )
-                if ok:
-                    self.fs = fs
-                else:
-                    self._sampling_rate_unavailable()
-                    return
-
-        self.df = df
-
-    def _sampling_rate_unavailable(self) -> None:
-        self.df = pl.DataFrame()
-        self.fs = -1
-        self.minmax_map = {}
-        self.meas_date = None
-        msg = "Sampling rate not set, no data loaded."
-        self._app.sig_show_message.emit(msg, "warning")
-        return
-
-    def new_sig_data(self, name: str) -> None:
-        if name not in self.df.columns:
-            logger.debug(f"Column '{name}' doesn't exist in the current data frame")
-            self._app.sig_show_message.emit(f"Column '{name}' doesn't exist", "warning")
-            return
-        self._sig = SignalData(name=name, data=self.df, sampling_rate=self.fs)
-
-    def run_preprocessing(
-        self,
-        pipeline: _t.Pipeline,
-        filter_params: _t.SignalFilterParameters,
-        standardize_params: _t.StandardizeParameters,
-    ) -> None:
-        self.active_section.filter_data(pipeline=pipeline, **filter_params)
-
-        standardize = self._app.scale_method
-        if standardize == "None":
-            return
-        self.active_section.scale_data(**standardize_params)
-
-    def run_peak_detection(self, peak_parameters: _t.PeakDetectionParameters) -> None:
-        self.active_section.detect_peaks(**peak_parameters)
-        self.run_rate_calculation()
-
-    def run_rate_calculation(self) -> None:
-        self.active_section.calculate_rate()
-
-    def get_descriptive_stats(self) -> SummaryStatistics:
-        intervals = np.ediff1d(self.active_section.peaks, to_begin=[0])
-        rate = self.active_section.rate
-
-        interval_stats = get_array_stats(intervals, "peak_intervals")
-        rate_stats = get_array_stats(rate, "rate")
-
-        return SummaryStatistics(
-            peak_intervals=interval_stats,
-            signal_rate=rate_stats,
-        )
-
-    def compute_result_df(self, name: str, section_id: SectionID | None = None) -> None:
-        sig = self.sig_data
-        # section_dict = sig.as_dict()
-        # TODO: refactor result creation to work with new section structure
-        if section_id is None:
-            section_id = sig.active_section.section_id
-        sec = sig.get_section(section_id)
-        peaks = sec.peaks
-        diffs = sec.get_peak_intervals()
-        rate = sig.default_rate
-        indices = sec.data.get_column("index").gather(peaks)
-        time_s = (indices * (1 / self.fs)).round(4)
-        temperature = sec.data.get_column("temperature").gather(peaks).round(1)
-        focused_result = make_focused_result(
-            time_s=time_s,
-            index=indices,
-            peak_intervals=diffs,
-            temperature=temperature,
-            rate_bpm=rate,
-        )
-        self.focused_results[name] = focused_result
-
-    def get_focused_result_df(self, name: str, compute: bool = True) -> pl.DataFrame:
-        if compute or name not in self.focused_results:
-            self.compute_result_df(name)
-        return self.focused_results[name].to_polars()
-
-    def get_state(self) -> DataState:
-        state = DataState(df=self.df.clone())
-        state.sig_data = self.sig_data
-        state.focused_results = self.focused_results
-        return state
-
-    def restore_state(self, state: DataState) -> None:
-        self.restore_df(state.df)
-        self.sig_data = state.sig_data
-        self.focused_results = state.focused_results
-
-    def restore_df(self, df: pl.DataFrame) -> None:
-        self.df = df
-        if all(
-            col in df.columns for col in ["index", "time_s", "temperature", "hbr", "ventilation"]
-        ):
-            self.df = self.df.select(pl.col("index", "time_s", "temperature", "hbr", "ventilation"))
-        else:
-            self.df = df
-
-    @Slot(int, int)
-    def exclude_region(self, lower: int, upper: int) -> None:
-        self.sig_data.add_section(lower, upper, set_active=False, include=False)
-
-
-def _blocked_update(widget: QWidget, value: int) -> None:
-    if isinstance(widget, QtWidgets.QSpinBox):
-        widget.blockSignals(True)
-        widget.setValue(value)
-        widget.blockSignals(False)
-
-class DataHandler2(QObject):
+class DataHandler(QtCore.QObject):
     sig_new_raw = Signal()
     sig_sfreq_changed = Signal(int)
-    
-    def __init__(self, app: "SignalEditor", parent: QObject | None = None) -> None:
+    sig_cas_changed = Signal()
+
+    def __init__(self, app: "SignalEditor", parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self._app = app
 
         self._raw_df: pl.DataFrame | None = None
         self._base_df: pl.DataFrame | None = None
-        self._sections: SectionContainer | None = None
+        self._sections: SectionContainer = SectionContainer()
         self._sampling_rate: int = -1
         self._metadata: _t.FileMetadata | None = None
+        self._sig_name: str | None = None
         self._connect_qt_signals()
 
     def _connect_qt_signals(self) -> None:
-        self._app.spin_box_sample_rate.valueChanged.connect(self.update_sfreq)
-        
+        self.sig_sfreq_changed.connect(self._app.spin_box_sample_rate.setValue)
+
+    def _clear(self) -> None:
+        self._raw_df = None
+        self._base_df = None
+        self._sections = SectionContainer()
+        self.set_sfreq(-1)
+        self._metadata = None
+        msg = "Sampling rate not set, no data loaded."
+        self._app.sig_show_message.emit(msg, "warning")
+        return
 
     @property
     def raw_df(self) -> pl.DataFrame:
@@ -343,7 +164,7 @@ class DataHandler2(QObject):
         A modified version of the raw data from which new sections are created.
 
         Schema:
-        
+
         - index: pl.UInt32
         - temperature: pl.Float64
         - {name_of_data_column}: pl.Float64
@@ -353,48 +174,111 @@ class DataHandler2(QObject):
         if self._base_df is None:
             raise RuntimeError("No signal data loaded")
         return self._base_df
-    
+
+    @property
+    def bounds(self) -> SectionIndices:
+        return SectionIndices(0, self.base_df.height - 1)
+
     @property
     def sfreq(self) -> int:
         return self._sampling_rate
 
     def set_sfreq(self, value: int) -> None:
         self._sampling_rate = value
-        _blocked_update(self._app.spin_box_sample_rate, value)
+        self.sig_sfreq_changed.emit(value)
 
     def update_sfreq(self, value: int) -> None:
-        for section in self.sections.get_included():
+        for section in self.sections.values():
             section.update_sfreq(value)
 
     @property
     def sections(self) -> SectionContainer:
-        if self._sections is None:
+        if not self._sections:
             raise RuntimeError("No signal data loaded")
         return self._sections
 
     @property
+    def base_section(self) -> Section:
+        try:
+            return Section(
+                self.base_df, sig_name=self.sig_name, sampling_rate=self.sfreq, _is_base=True
+            )
+        except RuntimeError:
+            self._app.sig_show_message.emit("No data to create base section from", "warning")
+            raise
+
+    @property
     def cas(self) -> Section:
         """Shorthand for the currently active section (cas = current active section)."""
-        return self.sections.get_active_section()
+        section = next((section for section in self.sections.values() if section.is_active), None)
+        if section is None:
+            section = self.base_section
+        return section
 
     @property
     def cas_proc_data(self) -> pl.Series:
-        """Shorthand for the currently active section's processed signal."""
-        return self.sections.get_active_section().proc_data
+        """Shorthand for the currently active section's processed signal column as a `polars.Series`"""
+        return self.cas.proc_data
 
     @property
     def metadata(self) -> _t.FileMetadata:
         if self._metadata is None:
             raise RuntimeError("No signal data loaded")
         return self._metadata
-    
+
+    @property
+    def sig_name(self) -> str:
+        """The name of the column holding the raw signal data."""
+        if self._sig_name is None:
+            raise RuntimeError("No signal data loaded")
+        return self._sig_name
+
+    @property
+    def proc_sig_name(self) -> str:
+        """The name of the column holding the processed signal data."""
+        if self._sig_name is None:
+            raise RuntimeError("No signal data loaded")
+        return f"{self._sig_name}_processed"
+
+    @Slot(QtCore.QDate)
+    def set_date(self, date: QtCore.QDate) -> None:
+        py_date = t.cast(datetime.date, date.toPython())
+        if self._metadata is None:
+            self._metadata = _t.FileMetadata(
+                date_recorded=py_date,
+                animal_id="unknown",
+                oxygen_condition="unknown",
+            )
+        else:
+            self._metadata["date_recorded"] = py_date
+
+    @Slot(str)
+    def set_animal_id(self, animal_id: str) -> None:
+        if self._metadata is None:
+            self._metadata = _t.FileMetadata(
+                date_recorded=date.today(), animal_id=animal_id, oxygen_condition="unknown"
+            )
+        else:
+            self._metadata["animal_id"] = animal_id
+
+    @Slot(str)
+    def set_oxy_condition(self, oxy_condition: _t.OxygenCondition) -> None:
+        if self._metadata is None:
+            self._metadata = _t.FileMetadata(
+                date_recorded=date.today(), animal_id="unknown", oxygen_condition=oxy_condition
+            )
+        else:
+            self._metadata["oxygen_condition"] = oxy_condition
+
     def read_file(self, path: Path | str) -> None:
         path = Path(path).resolve()
+        if not path.exists():
+            info_msg = f"No file named '{path.name}' found in '{path.parent}'"
+            self._app.sig_show_message.emit(info_msg, "error")
+            return
         suffix = path.suffix
         if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx", ".pkl"}:
-            info_msg = (
-                "Supported file types are .csv, .txt, .xlsx, .feather, .pkl and .edf"
-            )
+            info_msg = "Supported file types are .csv, .txt, .xlsx, .feather, .pkl and .edf"
             self._app.sig_show_message.emit(info_msg, "info")
             return
 
@@ -424,7 +308,7 @@ class DataHandler2(QObject):
             try:
                 sfreq = infer_sampling_rate(df)
             except ValueError:
-                sfreq, ok = QInputDialog.getInt(
+                sfreq, ok = QtWidgets.QInputDialog.getInt(
                     self._app,
                     "Sampling rate",
                     "Enter sampling rate (samples per second): ",
@@ -434,31 +318,109 @@ class DataHandler2(QObject):
                     1,
                 )
                 if not ok:
-                    self._reset()
+                    self._clear()
                     return
 
         if meas_date is None:
             meas_date, animal_id, oxy_condition = parse_file_name(path.name)
         else:
             _, animal_id, oxy_condition = parse_file_name(path.name)
-            
-            
+
         self._metadata = _t.FileMetadata(
             date_recorded=meas_date,
             animal_id=animal_id,
             oxygen_condition=oxy_condition,
         )
-            
+
         self._raw_df = df
         self.sig_new_raw.emit()
 
-    def _reset(self) -> None:
-        self._raw_df = None
-        self._sections = None
-        self.set_sfreq(-1)
-        self.meas_date = None
-        msg = "Sampling rate not set, no data loaded."
-        self._app.sig_show_message.emit(msg, "warning")
-        return
+    def create_base_df(self, sig_name: str) -> None:
+        if self._raw_df is None:
+            return
 
-        
+        self._sig_name = sig_name
+        self._base_df = (
+            self._raw_df.lazy()
+            .select(
+                ps.contains("temp"),
+                pl.col(sig_name),
+                pl.col(sig_name).alias(self.proc_sig_name),
+                pl.repeat(False, self._raw_df.height, dtype=pl.Boolean).alias("is_peak"),
+            )
+            .with_row_index()
+            .collect()
+            .rechunk()
+        )
+        self._app.sig_show_message.emit(
+            f"Created base df with columns: {self._base_df.columns}", "debug"
+        )
+
+    @Slot()
+    def reset(self) -> None:
+        self._base_df = self.create_base_df(self.sig_name)
+        self.sections.clear()
+        Section.reset_id_counter()
+
+    def update_base(self, section_df: pl.DataFrame) -> None:
+        self._base_df = (
+            self.base_df.lazy().update(section_df.lazy(), on="index", how="left").collect()
+        )
+
+    @Slot(int, int)
+    def remove_slice(self, start: int, stop: int) -> None:
+        self._base_df = (
+            self.base_df.lazy().filter(~(pl.col("index").is_between(start, stop))).collect()
+        )
+
+    def get_section_results(self) -> dict[SectionID, SectionResult]:
+        return {
+            section.section_id: section.get_complete_result() for section in self.sections.values()
+        }
+
+    def get_focused_results(self) -> dict[SectionID, FocusedResult]:
+        return {
+            section.section_id: section.get_focused_result() for section in self.sections.values()
+        }
+
+    def new_section(self, start: int, stop: int) -> Section:
+        data = self.base_df.filter(pl.col("index").is_between(start, stop))
+        section = Section(data, sig_name=self.sig_name, sampling_rate=self.sfreq)
+        self._sections[section.section_id] = section
+        return section
+
+    def remove_section(self, section_id: SectionID) -> None:
+        del self._sections[section_id]
+
+    def get_section(self, section_id: SectionID) -> Section:
+        return self.sections[section_id]
+
+    def save_sections_to_base(self) -> None:
+        """
+        Updates the base data frame with the data from every current section. Later sections overwrite earlier ones if they overlap.
+        """
+        section_dfs = [section.data for section in self.sections.values()]
+        for section_df in section_dfs:
+            self.update_base(section_df)
+
+    def get_state(self) -> DataState:
+        return DataState(
+            raw_df=self.raw_df,
+            base_df=self.base_df,
+            sections=self.sections,
+            sampling_rate=self.sfreq,
+            metadata=self.metadata,
+        )
+
+    def restore_state(self, state: DataState) -> None:
+        self._raw_df = state.raw_df
+        self._base_df = state.base_df
+        self._sections = state.sections
+        self.set_sfreq(state.sampling_rate)
+        self._metadata = state.metadata
+
+    @Slot(str)
+    def set_cas(self, section_id: SectionID) -> None:
+        for section in self.sections.values():
+            section.set_active(section.section_id == section_id)
+        self.sig_cas_changed.emit()
