@@ -23,6 +23,7 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
+    QInputDialog,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -38,6 +39,7 @@ from .handlers.ui_handler import UIHandler
 from .models.data import CompactDFModel, DescriptiveStatsModel, PolarsModel
 from .models.io import write_hdf5
 from .models.result import CompleteResult
+from .models.section import SectionID, SectionIndices
 from .views.main_window import Ui_MainWindow
 
 
@@ -71,12 +73,10 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.theme_switcher.set_style(saved_style)
         else:
             self.theme_switcher.set_style("dark")
-        self._add_style_toggle()
         if os.environ.get("DEV_MODE", "0") == "1":
             self._add_profiler()
         self.data.set_sfreq(int(self.config.config.get("Defaults", "SampleRate", fallback=-1)))
         self._result: CompleteResult | None = None
-        self._setup_section_widgets()
 
     # region Dev
     def _add_profiler(self) -> None:
@@ -98,7 +98,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             f"./logs/profiler_{int(datetime.timestamp(datetime.now()))}.pstats"
         )
 
-    # endregion
+    # endregion Dev
 
     # region Properties
 
@@ -109,6 +109,10 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     @property
     def proc_sig_name(self) -> str:
         return f"{self.sig_name}_processed"
+
+    @property
+    def section_name(self) -> SectionID:
+        return SectionID(self.combo_box_section_select.currentText())
 
     @property
     def scale_method(self) -> _t.ScaleMethod:
@@ -130,11 +134,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     def xqrs_peak_direction(self) -> _t.WFDBPeakDirection:
         return t.cast(_t.WFDBPeakDirection, self.peak_xqrs_peak_dir.value())
 
-    # endregion
-
-    def _add_style_toggle(self) -> None:
-        self.menubar.addSeparator()
-        self.menubar.addAction("Switch Theme", self.theme_switcher.switch_theme)
+    # endregion Properties
 
     def _setup_section_widgets(self) -> None:
         self.combo_box_section_select.blockSignals(True)
@@ -155,11 +155,14 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.action_load_state.triggered.connect(self.restore_state)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_select_file.triggered.connect(self.select_data_file)
+        self.action_light_switch.toggled.connect(lambda state: self.theme_switcher.set_style("light") if state else self.theme_switcher.set_style("dark"))
 
         # Plotting Related Actions
         self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
         self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected_scatter)
         self.action_reset_view.triggered.connect(self._emit_data_range_info)
+        self.action_mark_section_finished.triggered.connect(self.data.save_cas)
+        self.action_section_overview.toggled.connect(self.plot.toggle_region_overview)
 
         self.sig_update_view_range.connect(self.plot.reset_view_range)
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
@@ -192,6 +195,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
         self.btn_section_confirm.clicked.connect(self._on_section_confirmed)
         self.btn_section_cancel.clicked.connect(self._on_section_canceled)
+        self.btn_section_remove.clicked.connect(self._remove_section)
 
         # UI Handler Signals
         self.ui.sig_section_confirmed.connect(self._on_section_confirmed)
@@ -211,23 +215,34 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         current_limits = self.data.bounds
         self.container_section_confirm_cancel.show()
         self.plot.show_section_selector("included", current_limits)
+        self._section_type = "included"
 
     @Slot()
     def _new_excluded_section(self) -> None:
         current_limits = self.data.bounds
         self.container_section_confirm_cancel.show()
         self.plot.show_section_selector("excluded", current_limits)
+        self._section_type = "excluded"
 
     @Slot()
     def _on_section_confirmed(self) -> None:
+        if not hasattr(self, "_section_type"):
+            return
         lin_reg = self.plot.region_selector
         if lin_reg is None:
             return
+
         lower, upper = lin_reg.getRegion()
         lower, upper = int(lower), int(upper)
-        new_sect = self.data.new_section(lower, upper)
-        self.combo_box_section_select.addItem(new_sect.section_id)
-        self.combo_box_section_select.setCurrentText(new_sect.section_id)
+        match self._section_type:
+            case "included":
+                new_sect = self.data.new_section(lower, upper)
+                self.combo_box_section_select.addItem(new_sect.section_id)
+                self.combo_box_section_select.setCurrentText(new_sect.section_id)
+            case "excluded":
+                self.data.excluded_sections.append(SectionIndices(lower, upper))
+            case _:
+                raise ValueError(f"Invalid section type: {self._section_type}")
         self.container_section_confirm_cancel.hide()
         self.sig_section_added.emit(lower, upper)
 
@@ -235,6 +250,31 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     def _on_section_canceled(self) -> None:
         self.container_section_confirm_cancel.hide()
         self.plot.remove_section_selector()
+
+    @Slot()
+    def _remove_section(self) -> None:
+        excluded_sections = self.data.excluded_sections
+        excluded_sect_strings = [str(sect) for sect in excluded_sections]
+        combined_items = list(self.data.sections.keys())[1:] + excluded_sect_strings
+        to_remove, ok = QInputDialog.getItem(
+            self,
+            "Select Section to Remove",
+            "Items that look like `SEC_<signal_name>_<number>` are included, the rest are excluded.",
+            [str(item) for item in combined_items],
+            0,
+            False,
+        )
+        if ok:
+            if to_remove in excluded_sect_strings:
+                bounds = [int(float(bound)) for bound in to_remove.split(", ")]
+            else:
+                sect_id = SectionID(to_remove)
+                bounds = self.data.get_section(sect_id).base_bounds
+                self.data.remove_section(sect_id)
+                self.combo_box_section_select.removeItem(
+                    self.combo_box_section_select.findText(sect_id)
+                )
+            self.plot.remove_region((bounds[0], bounds[1]))
 
     @Slot()
     def _emit_data_range_info(self) -> None:
@@ -377,10 +417,13 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         )
         if path:
             self.ui.reset_widget_state()
+            self.plot.reset_plots()
+            self.data.reset()
             self.file_info.setFile(path)
             self.line_edit_active_file.setText(Path(path).name)
             self.config.data_dir = self.file_info.dir().path()
             self.data.read_file(path)
+            self._setup_section_widgets()
 
     @Slot()
     def handle_load_data(self) -> None:
@@ -392,19 +435,17 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             msg = f"Selected column '{signal_col}' not found in data. Detected columns are: '{', '.join(self.data.raw_df.columns)}'"
             self.btn_load_selection.failure("Error", msg)
             self.sig_show_message.emit(msg, "error")
-            self.statusbar.showMessage("Selected signal column not found in data.", 3000)
+            self.statusbar.showMessage("Selected signal column not found in data.")
             return
         self.data.create_base_df(signal_col)
 
         self.sig_data_loaded.emit()
         self.btn_load_selection.success()
-        self.statusbar.showMessage("Data loaded.", 3000)
+        self.statusbar.showMessage("Data loaded.")
 
     @Slot()
     def process_signal(self) -> None:
         self.statusbar.showMessage("Filtering data...")
-        btn = self.btn_apply_filter
-        btn.processing("Working...")
         with pg.BusyCursor():
             filter_params = self.ui.get_filter_parameters()
             standardize_params = self.ui.get_standardize_parameters()
@@ -417,35 +458,32 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
                 self.data.cas.scale_data(**standardize_params)
 
             self.handle_draw_signal()
-        btn.success()
-        self.statusbar.showMessage("Filtering finished.", 3000)
+        self.btn_apply_filter.success()
+        self.statusbar.showMessage("Filtering finished.")
         self.sig_data_processed.emit()
 
     @Slot()
     def detect_peaks(self) -> None:
-        self.btn_detect_peaks.processing("Working...")
         self.statusbar.showMessage("Detecting peaks...")
-        with pg.BusyCursor():
-            peak_params = self.ui.get_peak_detection_parameters()
-            self.data.cas.detect_peaks(**peak_params)
+        peak_params = self.ui.get_peak_detection_parameters()
+        self.data.cas.detect_peaks(**peak_params)
         self.sig_peaks_detected.emit()
-        self.statusbar.showMessage("Peak detection finished.", 3000)
+        self.btn_detect_peaks.success()
+        self.statusbar.showMessage("Peak detection finished.")
 
     @Slot()
     def handle_draw_signal(self) -> None:
-        with pg.BusyCursor():
-            data = self.data.cas_proc_data.to_numpy()
-            self.plot.draw_signal(data, self.sig_name)
+        data = self.data.cas_proc_data.to_numpy()
+        self.plot.draw_signal(data, self.sig_name)
 
     @Slot()
     def handle_draw_peaks(self) -> None:
-        with pg.BusyCursor():
-            peaks_x, peaks_y = self.data.cas.get_peak_xy()
-            self.plot.draw_peaks(peaks_x, peaks_y, self.sig_name)
-        self.btn_detect_peaks.success()
+        peaks_x, peaks_y = self.data.cas.get_peak_xy()
+        self.plot.draw_peaks(peaks_x, peaks_y, self.sig_name)
 
     @Slot()
     def handle_draw_rate(self) -> None:
+        self.data.cas.calculate_rate()
         self.plot.draw_rate(self.data.cas.rate_interp, self.sig_name)
 
     @Slot(str, list)

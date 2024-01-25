@@ -10,5 +10,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     os.environ["PYQTGRAPH_QT_LIB"] = "PySide6"
+    os.environ["PYDEVD_DISABLE_FILE_VALIDATION"] = "1"
 
     main(args.dev, args.antialias)

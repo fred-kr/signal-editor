@@ -24,6 +24,9 @@ class SectionIndices(t.NamedTuple):
     start: int
     stop: int
 
+    def __str__(self) -> str:
+        return f"{self.start}, {self.stop}"
+
 
 class SectionID(str):
     def __new__(cls, value: str) -> "SectionID":
@@ -115,39 +118,7 @@ class Section:
         self._peak_edits = ManualPeakEdits()
 
     def __str__(self) -> str:
-        return (
-            f"Section:\n"
-            f"\tID: {self.section_id:10s}\n"
-            f"\tIndices: {self._abs_bounds:10s}\n"
-            f"\tIs active: {self._is_active:10s}\n"
-        )
-
-    def __len__(self) -> int:
-        return self.data.height
-
-    @staticmethod
-    def from_dict(section_dict: _t.SectionResultDict) -> "Section":
-        data = pl.DataFrame(section_dict["data"])
-        section = Section(
-            data,
-            sig_name=section_dict["sig_name"],
-            sampling_rate=section_dict["sampling_rate"],
-            set_active=False,
-        )
-        section.set_peaks(section_dict["peaks"])
-        section._rate = section_dict["rate"]
-        section._rate_interp = section_dict["rate_interpolated"]
-        section._parameters_used = {
-            "sampling_rate": section_dict["sampling_rate"],
-            "filter_parameters": section_dict["processing_parameters"]["filter_parameters"],
-            "standardize_parameters": section_dict["processing_parameters"][
-                "standardize_parameters"
-            ],
-            "peak_detection_parameters": section_dict["processing_parameters"][
-                "peak_detection_parameters"
-            ],
-        }
-        return section
+        return pformat(self.__dict__, indent=4, width=100, compact=True)
 
     @classmethod
     def get_id_counter(cls) -> int:
@@ -336,7 +307,7 @@ class Section:
         pl_peaks = pl.Series("peaks", peaks, pl.UInt32)
 
         self.data = self.data.with_columns(
-            pl.when(pl.col("index").is_in(pl_peaks)).then(True).otherwise(False).alias("is_peak")
+            pl.when(pl.col("section_index").is_in(pl_peaks)).then(True).otherwise(False).alias("is_peak")
         )
         self.calculate_rate()
 
@@ -407,4 +378,4 @@ class SectionContainer(OrderedDict[SectionID, Section]):
         self.move_to_end(key)
 
     def __str__(self) -> str:
-        return pformat(self, indent=4, width=100, compact=True)
+        return pformat(self.__dict__, indent=4, width=100, compact=True)

@@ -1,4 +1,4 @@
-from typing import Any, override
+import typing as t
 
 import jupyter_client
 import numpy as np
@@ -6,35 +6,8 @@ import pyqtgraph as pg
 from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QPushButton, QWidget
+from PySide6.QtWidgets import QApplication
 from qtconsole import inprocess
-
-
-class ConfirmCancelButtons(QWidget):
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self._init_ui()
-        self.hide()
-
-    def _init_ui(self) -> None:
-        confirm_button = QPushButton("Confirm")
-        cancel_button = QPushButton("Cancel")
-
-        layout = QHBoxLayout()
-        layout.addWidget(confirm_button)
-        layout.addWidget(cancel_button)
-
-        self._confirm_button = confirm_button
-        self._cancel_button = cancel_button
-        self.setLayout(layout)
-
-    @property
-    def confirm_button(self) -> QPushButton:
-        return self._confirm_button
-
-    @property
-    def cancel_button(self) -> QPushButton:
-        return self._cancel_button
 
 
 class JupyterConsoleWidget(inprocess.QtInProcessRichJupyterWidget):
@@ -65,7 +38,7 @@ class ScatterPlotItemError(Exception):
 class CustomViewBox(pg.ViewBox):
     sig_selection_changed = Signal(QtGui.QPolygonF)
 
-    def __init__(self, *args: Any, **kargs: Any) -> None:
+    def __init__(self, *args: t.Any, **kargs: t.Any) -> None:
         pg.ViewBox.__init__(self, *args, **kargs)
         self._selection_box: QtWidgets.QGraphicsRectItem | None = None
         self.mapped_peak_selection: QtGui.QPolygonF | None = None
@@ -74,8 +47,8 @@ class CustomViewBox(pg.ViewBox):
     def selection_box(self) -> QtWidgets.QGraphicsRectItem:
         if self._selection_box is None:
             selection_box = QtWidgets.QGraphicsRectItem(0, 0, 1, 1)
-            selection_box.setPen(pg.mkPen((100, 100, 255), width=1))
-            selection_box.setBrush(pg.mkBrush((100, 100, 255, 100)))
+            selection_box.setPen(pg.mkPen((50, 100, 200), width=1))
+            selection_box.setBrush(pg.mkBrush((50, 100, 200, 100)))
             selection_box.setZValue(1e9)
             selection_box.hide()
             self._selection_box = selection_box
@@ -94,7 +67,7 @@ class CustomViewBox(pg.ViewBox):
         self.addItem(selection_box, ignoreBounds=True)
         return
 
-    @override
+    @t.override
     def mouseDragEvent(
         self, ev: mouseEvents.MouseDragEvent, axis: int | float | None = None
     ) -> None:
@@ -189,11 +162,11 @@ class CustomViewBox(pg.ViewBox):
 
 
 class CustomScatterPlotItem(pg.ScatterPlotItem):
-    @override
+    @t.override
     def addPoints(
         self,
-        *args: Any,
-        **kargs: Any,
+        *args: t.Any,
+        **kargs: t.Any,
     ) -> None:
         if len(args) == 1:
             kargs["spots"] = args[0]

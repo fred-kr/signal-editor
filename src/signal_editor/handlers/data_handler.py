@@ -120,6 +120,7 @@ class DataHandler(QtCore.QObject):
         self._raw_df: pl.DataFrame | None = None
         self._base_df: pl.DataFrame | None = None
         self._sections: SectionContainer = SectionContainer()
+        self._excluded_sections: list[SectionIndices] = []
         self._sampling_rate: int = -1
         self._metadata: _t.FileMetadata | None = None
         self._sig_name: str | None = None
@@ -164,7 +165,9 @@ class DataHandler(QtCore.QObject):
 
     @property
     def bounds(self) -> SectionIndices:
-        return SectionIndices(0, self.base_df.height - 1)
+        """The row indices of the first and last row of the base data frame."""
+        index = self.base_df.get_column("index")
+        return SectionIndices(index[0], index[-1])
 
     @property
     def sfreq(self) -> int:
@@ -205,7 +208,14 @@ class DataHandler(QtCore.QObject):
             (section for section in self.sections.values() if section.is_active),
             self.base_section,
         )
+    @property
+    def excluded_sections(self) -> list[SectionIndices]:
+        return self._excluded_sections
 
+    @excluded_sections.setter
+    def excluded_sections(self, value: list[SectionIndices]) -> None:
+        self._excluded_sections = value
+    
     @property
     def cas_proc_data(self) -> pl.Series:
         """Shorthand for the currently active section's processed signal column as a `polars.Series`"""
@@ -338,23 +348,24 @@ class DataHandler(QtCore.QObject):
                 ps.contains("temp"),
                 pl.col(sig_name),
                 pl.col(sig_name).alias(self.proc_sig_name),
-                pl.repeat(False, self._raw_df.height, dtype=pl.Boolean).alias("is_peak"),
+                pl.lit(False).alias("is_peak"),
             )
             .with_row_index()
             .collect()
             .rechunk()
         )
 
-        self._app.sig_show_message.emit(
-            f"Created base df with columns: {self._base_df.columns}", "debug"
-        )
         base_section = self.base_section
         self._sections[base_section.section_id] = base_section
 
     @Slot()
     def reset(self) -> None:
-        self._base_df = self.create_base_df(self.sig_name)
-        self.sections.clear()
+        self._raw_df = None
+        self._base_df = None
+        self._sections = SectionContainer()
+        self.set_sfreq(-1)
+        self._metadata = None
+        self._sig_name = None
         Section.reset_id_counter()
 
     def update_base(self, section_df: pl.DataFrame) -> None:
@@ -385,6 +396,8 @@ class DataHandler(QtCore.QObject):
         return section
 
     def remove_section(self, section_id: SectionID) -> None:
+        if section_id not in self.sections:
+            return
         del self._sections[section_id]
 
     def get_section(self, section_id: SectionID) -> Section:
@@ -398,6 +411,13 @@ class DataHandler(QtCore.QObject):
         for section_df in section_dfs:
             self.update_base(section_df)
 
+    @Slot()
+    def save_cas(self) -> None:
+        """
+        Saves the currently active section to the base data frame.
+        """
+        self.update_base(self.cas.data)
+        
     def get_state(self) -> DataState:
         return DataState(
             raw_df=self.raw_df,

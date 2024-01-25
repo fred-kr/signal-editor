@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+import typing as t
 
 import h5py
 import mne.io
@@ -9,7 +9,7 @@ import polars as pl
 
 from .. import type_aliases as _t
 
-if TYPE_CHECKING:
+if t.TYPE_CHECKING:
     from ..models.result import CompleteResult
 
 
@@ -41,9 +41,9 @@ def read_edf(
 
     """
     raw_edf = mne.io.read_raw_edf(file_path)
-    channel_names = cast(list[str], raw_edf.info.ch_names)
-    date_measured = cast(datetime, raw_edf.info["meas_date"])
-    sampling_rate = cast(float, raw_edf.info["sfreq"])
+    channel_names = t.cast(list[str], raw_edf.info.ch_names)
+    date_measured = t.cast(datetime, raw_edf.info["meas_date"])
+    sampling_rate = t.cast(float, raw_edf.info["sfreq"])
 
     rename_map = {
         "temp": "temperature",
@@ -57,9 +57,9 @@ def read_edf(
         )
         for i, name in enumerate(channel_names)
     ]
-    data, times = raw_edf.get_data(start=start, stop=stop, return_times=True)
+    data, times = raw_edf.get_data(start=start, stop=stop, return_times=True)  # type: ignore
     lf = (
-        pl.from_numpy(data.transpose(), schema={name: pl.Float64 for name in column_names})
+        pl.from_numpy(data.transpose(), schema={name: pl.Float64 for name in column_names})  # type: ignore
         .lazy()
         .with_row_count("index", offset=start)
         .with_columns(
@@ -99,7 +99,7 @@ def create_hdf5_groups(
             group.create_dataset(key, data=value)
         else:
             subgroup = group.create_group(key)
-            create_hdf5_groups(subgroup, value)
+            create_hdf5_groups(subgroup, value)  # type: ignore
 
 
 def write_hdf5(file_path: str | Path, result: "CompleteResult") -> None:

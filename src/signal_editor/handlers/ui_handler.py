@@ -35,7 +35,7 @@ if t.TYPE_CHECKING:
 
 class UIHandler(QObject):
     sig_filter_inputs_ready = Signal()
-    sig_section_confirmed = Signal()
+    sig_section_confirmed = Signal(str)
     sig_section_canceled = Signal()
 
     def __init__(self, app: "SignalEditor", plot: PlotHandler) -> None:
@@ -73,7 +73,7 @@ class UIHandler(QObject):
         export_menu = QMenu(self._app.btn_export_focused)
         export_menu.addAction("CSV", lambda: self._app.export_focused_result("csv"))
         export_menu.addAction(
-            "Text (tab-delimited)", lambda: self._app.export_focused_result("txt")
+            "txt (tab-delimited)", lambda: self._app.export_focused_result("txt")
         )
         export_menu.addAction("Excel", lambda: self._app.export_focused_result("xlsx"))
         self._app.btn_export_focused.setMenu(export_menu)

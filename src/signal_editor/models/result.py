@@ -65,12 +65,14 @@ class FocusedResult:
     rate_bpm: npt.NDArray[np.float64] = attrs.field()
 
     def to_polars(self) -> pl.DataFrame:
-        data = {attr: getattr(self, attr) for attr in self.__slots__}
+        data = {attr: getattr(self, attr) for attr in self.__slots__ if attr != "__weakref__"}
         return pl.DataFrame(data)
 
     def to_structured_array(self) -> npt.NDArray[np.void]:
-        dt = np.dtype([(attr, getattr(self, attr).dtype) for attr in self.__slots__])
-        values = [getattr(self, attr) for attr in self.__slots__]
+        dt = np.dtype(
+            [(attr, getattr(self, attr).dtype) for attr in self.__slots__ if attr != "__weakref__"]
+        )
+        values = [getattr(self, attr) for attr in self.__slots__ if attr != "__weakref__"]
         return np.array(list(zip(*values, strict=True)), dtype=dt)
 
 

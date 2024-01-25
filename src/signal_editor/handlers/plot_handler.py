@@ -1,10 +1,7 @@
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Literal,
-)
+import typing as t
 
 import numpy as np
+import polars as pl
 import pyqtgraph as pg
 from numpy.typing import NDArray
 from PySide6.QtCore import QObject, QPointF, Qt, Signal, Slot
@@ -13,10 +10,11 @@ from PySide6.QtWidgets import QVBoxLayout
 from ..models.result import ManualPeakEdits
 from ..views.custom_widgets import CustomScatterPlotItem, CustomViewBox
 
-if TYPE_CHECKING:
+if t.TYPE_CHECKING:
     from pyqtgraph.GraphicsScene import mouseEvents
 
     from ..app import SignalEditor
+    from ..models.section import SectionIndices
 
 
 SECTION_STYLES = {
@@ -56,6 +54,10 @@ class PlotHandler(QObject):
         self._scatter_item: CustomScatterPlotItem | None = None
         self._rate_item: pg.PlotDataItem | None = None
         self._rate_mean_item: pg.InfiniteLine | None = None
+        self._included_regions: list[pg.LinearRegionItem] = []
+        self._excluded_regions: list[pg.LinearRegionItem] = []
+        self._known_names: set[str] = set()
+        self._line_colors: list[str]
 
     # region Properties
     @property
@@ -91,8 +93,8 @@ class PlotHandler(QObject):
         return self._pw_main.getPlotItem().getViewBox(), self._pw_rate.getPlotItem().getViewBox()
 
     @property
-    def is_selecting_region(self) -> bool:
-        return isinstance(self._selector, pg.LinearRegionItem)
+    def combined_regions(self) -> list[pg.LinearRegionItem]:
+        return self._included_regions + self._excluded_regions
 
     # endregion
 
@@ -150,16 +152,17 @@ class PlotHandler(QObject):
         if not hasattr(self._app, "data"):
             return
         try:
-            temp_col = self._app.data.cas.data.get_column("temperature")
+            # temp_col = self._app.data.cas.data.get_column("temperature")
+            cols = self._app.data.cas.data.select("index", "section_index", "temperature")
         except Exception:
             return
-        pos_data_coords = self._pw_main.plotItem.vb.mapSceneToView(pos)
-        index = np.clip(
-            pos_data_coords.x(), 0, temp_col.len() - 1, dtype=np.int32, casting="unsafe"
-        )
-        temp_val = temp_col.gather(index).to_numpy(zero_copy_only=True)[0]
-        temp_text = f"<span style='color: crimson; font-size: 12pt; font-weight: bold;'>Temperature: {temp_val:.1f} °C</span>"
+        pos_data_coords = self._pw_main.plotItem.vb.mapSceneToView(pos)  # type: ignore
+        index = np.clip(pos_data_coords.x(), 0, cols.height - 1, dtype=np.int32, casting="unsafe")  # type: ignore
+        # temp_val = temp_col.gather(index).to_numpy(zero_copy_only=True)[0]
+        vals = cols.filter(pl.col("section_index") == index)
+        temp_text = f"<span style='color: orange; font-size: 12pt; font-weight: bold;'>Temperature: {vals.get_column("temperature")[0]:.1f} °C; Base Index: {vals.get_column("index")[0]}; Section Index: {vals.get_column("section_index")[0]}</span>"
         self._temperature_label.setText(temp_text)
+        self._app.statusbar.showMessage(f"Cursor position (scene): {pos.x():.2f}, {pos.y():.2f}")
 
     @Slot(int)
     def reset_view_range(self, len_data: int) -> None:
@@ -191,8 +194,29 @@ class PlotHandler(QObject):
 
         self._setup_plot_items()
 
+    @Slot(bool)
+    def toggle_region_overview(self, show: bool) -> None:
+        for region in self._included_regions + self._excluded_regions:
+            region.setVisible(show)
+
+    def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
+        for region in self._included_regions:
+            region_bounds = region.getRegion()
+            if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
+                self._included_regions.remove(region)
+                self._pw_main.removeItem(region)
+                break
+        for region in self._excluded_regions:
+            region_bounds = region.getRegion()
+            if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
+                self._excluded_regions.remove(region)
+                self._pw_main.removeItem(region)
+                break
+
     def show_section_selector(
-        self, section_type: Literal["included", "excluded"], bounds: tuple[int, int]
+        self,
+        section_type: t.Literal["included", "excluded"],
+        bounds: "tuple[int, int] | SectionIndices",
     ) -> None:
         section_style = SECTION_STYLES[section_type]
         span = abs(bounds[1] - bounds[0])
@@ -222,21 +246,64 @@ class PlotHandler(QObject):
             if hasattr(self, "_selector_type"):
                 del self._selector_type
 
-    def draw_signal(self, sig: NDArray[np.float64], name: str, pen_color: str = "crimson") -> None:
+    @Slot(int, int)
+    def mark_section(self, lower: int, upper: int) -> None:
+        if not hasattr(self, "_selector_type"):
+            return
+        section_type = self._selector_type
+        if section_type == "included":
+            r, g, b = 0, 200, 100
+            region_list = self._included_regions
+        elif section_type == "excluded":
+            r, g, b = 200, 0, 100
+            region_list = self._excluded_regions
+        else:
+            return
+        marked_region = pg.LinearRegionItem(
+            values=(lower, upper),
+            brush=(r, g, b, 50),
+            pen=dict(color=(r, g, b, 255), width=2),
+            movable=False,
+        )
+        marked_region.hide()
+        marked_region.setZValue(-100)
+        region_list.append(marked_region)
+        self._pw_main.addItem(marked_region)
+        self.remove_section_selector()
+
+    def draw_signal(self, sig: NDArray[np.float64], name: str) -> None:
+        self._known_names.add(name)
+        colors = ["crimson", "darkgoldenrod", "steelblue", "lightgreen"]
         signal_item = pg.PlotDataItem(
-            sig, pen=pen_color, skipFiniteCheck=True, autoDownSample=True, name=f"Signal ({name})"
+            sig,
+            pen=colors[len(self._known_names) - 1],
+            skipFiniteCheck=True,
+            autoDownSample=True,
+            name=f"Signal ({name})",
         )
         signal_item.curve.setSegmentedLineMode("on")
         signal_item.curve.setClickable(True, self._line_clicked_tolerance)
 
-        if self._signal_item is not None:
-            self._pw_main.removeItem(self._signal_item)
-        if self._scatter_item is not None:
-            self._pw_main.removeItem(self._scatter_item)
-        if self._rate_item is not None:
-            self._pw_rate.removeItem(self._rate_item)
-        if self._rate_mean_item is not None:
-            self._pw_rate.removeItem(self._rate_mean_item)
+        for pw in [self._pw_main, self._pw_rate]:
+            pw.getPlotItem().addLegend().clear()
+            pw.getPlotItem().clear()
+
+        if self._app.section_name.endswith("000"):
+            show = self._app.action_section_overview.isChecked()
+            for region in self.combined_regions:
+                region.setVisible(show)
+                self._pw_main.addItem(region)
+
+        # self._temperature_label.setText("")
+
+        # if self._signal_item is not None:
+        #     self._pw_main.removeItem(self._signal_item)
+        # if self._scatter_item is not None:
+        #     self._pw_main.removeItem(self._scatter_item)
+        # if self._rate_item is not None:
+        #     self._pw_rate.removeItem(self._rate_item)
+        # if self._rate_mean_item is not None:
+        #     self._pw_rate.removeItem(self._rate_mean_item)
 
         self._pw_main.addItem(signal_item)
         signal_item.sigClicked.connect(self.add_scatter)
@@ -310,7 +377,7 @@ class PlotHandler(QObject):
         self._pw_rate.addItem(rate_item)
         self._pw_rate.addItem(rate_mean_item)
         self._pw_rate.getPlotItem().addLegend().addItem(
-            pg.PlotDataItem(np.array([0, 1]), pen=rate_mean_item.pen, skipFiniteCheck=True),
+            pg.PlotDataItem(np.array([0, 1]), pen=rate_mean_item.pen, skipFiniteCheck=True),  # type: ignore
             f"Mean Rate: {int(rate_mean_val)} bpm",
         )
         self._rate_item = rate_item
@@ -320,7 +387,7 @@ class PlotHandler(QObject):
     def remove_scatter(
         self,
         sender: CustomScatterPlotItem,
-        points: np.ndarray[pg.SpotItem, Any],
+        points: np.ndarray[pg.SpotItem, t.Any],
         ev: "mouseEvents.MouseClickEvent",
     ) -> None:
         ev.accept()
@@ -389,7 +456,7 @@ class PlotHandler(QObject):
         rect_x, rect_y, rect_width, rect_height = vb.mapped_peak_selection.boundingRect().getRect()
 
         scatter_x, scatter_y = scatter_item.getData()
-        if scatter_x.size == 0 or scatter_y.size == 0:
+        if scatter_x.shape[0] == 0 or scatter_y.shape[0] == 0:
             return
 
         to_remove = np.argwhere(
@@ -399,11 +466,11 @@ class PlotHandler(QObject):
             & (scatter_y <= rect_y + rect_height)
         ).flatten()
 
-        if len(to_remove) == 0:
+        if to_remove.shape[0] == 0:
             return
 
         scatter_item.setData(x=np.delete(scatter_x, to_remove), y=np.delete(scatter_y, to_remove))
-        self.sig_peaks_edited.emit("remove", list(scatter_x[to_remove].astype(int)))
+        self.sig_peaks_edited.emit("remove", scatter_x[to_remove].astype(int).tolist())
         vb.selection_box = None
 
     @Slot()
@@ -413,32 +480,3 @@ class PlotHandler(QObject):
             return
         vb.selection_box.setVisible(not vb.selection_box.isVisible())
         vb.selection_box.setEnabled(not vb.selection_box.isEnabled())
-
-    def _mark_region(self, lower: int, upper: int, r: int, g: int, b: int) -> None:
-        static_region = pg.LinearRegionItem(
-            values=(lower, upper),
-            brush=(r, g, b, 50),
-            pen=dict(color=(r, g, b, 255), width=2),
-            movable=False,
-        )
-        self._pw_main.getPlotItem().getViewBox().addItem(static_region)
-
-    @Slot(int, int)
-    def mark_section(self, lower: int, upper: int) -> None:
-        if not hasattr(self, "_selector_type"):
-            return
-        section_type = self._selector_type
-        if section_type == "included":
-            r, g, b = 0, 200, 100
-        elif section_type == "excluded":
-            r, g, b = 200, 0, 100
-        else:
-            return
-        marked_region = pg.LinearRegionItem(
-            values=(lower, upper),
-            brush=(r, g, b, 50),
-            pen=dict(color=(r, g, b, 255), width=2),
-            movable=False,
-        )
-        self._pw_main.addItem(marked_region)
-        self.remove_section_selector()
