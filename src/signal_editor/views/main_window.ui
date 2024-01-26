@@ -2513,14 +2513,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
         </item>
         <item row="3" column="0" colspan="2">
          <widget class="QWidget" name="container_section_confirm_cancel" native="true">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
           <layout class="QGridLayout" name="gridLayout_20">
            <item row="1" column="0">
             <widget class="QPushButton" name="btn_section_confirm">
              <property name="styleSheet">
-              <string notr="true">border-color: rgb(0, 255, 127);</string>
+              <string notr="true">background-color: rgba(0, 170, 0, 0.8);</string>
              </property>
              <property name="text">
               <string>Confirm</string>
@@ -2535,15 +2532,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
                <height>24</height>
               </size>
              </property>
-             <property name="flat">
-              <bool>true</bool>
-             </property>
             </widget>
            </item>
            <item row="1" column="1">
             <widget class="QPushButton" name="btn_section_cancel">
              <property name="styleSheet">
-              <string notr="true">border-color: rgb(255, 0, 0);</string>
+              <string notr="true">background-color: rgba(255, 0, 0, 0.8);</string>
              </property>
              <property name="text">
               <string>Cancel</string>
@@ -2557,9 +2551,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
                <width>24</width>
                <height>24</height>
               </size>
-             </property>
-             <property name="flat">
-              <bool>true</bool>
              </property>
             </widget>
            </item>

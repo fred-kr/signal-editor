@@ -1526,28 +1526,25 @@ class Ui_MainWindow(object):
 
         self.container_section_confirm_cancel = QWidget(self.section_widgets_container)
         self.container_section_confirm_cancel.setObjectName(u"container_section_confirm_cancel")
-        self.container_section_confirm_cancel.setEnabled(False)
         self.gridLayout_20 = QGridLayout(self.container_section_confirm_cancel)
         self.gridLayout_20.setSpacing(4)
         self.gridLayout_20.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_20.setObjectName(u"gridLayout_20")
         self.btn_section_confirm = QPushButton(self.container_section_confirm_cancel)
         self.btn_section_confirm.setObjectName(u"btn_section_confirm")
-        self.btn_section_confirm.setStyleSheet(u"border-color: rgb(0, 255, 127);")
+        self.btn_section_confirm.setStyleSheet(u"background-color: rgba(0, 170, 0, 0.8);")
         icon28 = QIcon()
         icon28.addFile(u":/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
         self.btn_section_confirm.setIcon(icon28)
         self.btn_section_confirm.setIconSize(QSize(24, 24))
-        self.btn_section_confirm.setFlat(True)
 
         self.gridLayout_20.addWidget(self.btn_section_confirm, 1, 0, 1, 1)
 
         self.btn_section_cancel = QPushButton(self.container_section_confirm_cancel)
         self.btn_section_cancel.setObjectName(u"btn_section_cancel")
-        self.btn_section_cancel.setStyleSheet(u"border-color: rgb(255, 0, 0);")
+        self.btn_section_cancel.setStyleSheet(u"background-color: rgba(255, 0, 0, 0.8);")
         self.btn_section_cancel.setIcon(icon4)
         self.btn_section_cancel.setIconSize(QSize(24, 24))
-        self.btn_section_cancel.setFlat(True)
 
         self.gridLayout_20.addWidget(self.btn_section_cancel, 1, 1, 1, 1)
 

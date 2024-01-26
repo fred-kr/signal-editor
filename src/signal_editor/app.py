@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
 )
+from PySide6 import QtCore
 
 from . import type_aliases as _t
 from .handlers.config_handler import ConfigHandler
@@ -36,7 +37,7 @@ from .handlers.helpers.table_view_helper import TableViewHelper
 from .handlers.plot_handler import PlotHandler
 from .handlers.style_handler import ThemeSwitcher
 from .handlers.ui_handler import UIHandler
-from .models.data import CompactDFModel, DescriptiveStatsModel, PolarsModel
+from .models.polars_df import CompactDFModel, DescriptiveStatsModel, PolarsModel
 from .models.io import write_hdf5
 from .models.result import CompleteResult
 from .models.section import SectionID, SectionIndices
@@ -137,6 +138,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     # endregion Properties
 
     def _setup_section_widgets(self) -> None:
+        self.list_view_sections.setModel()
         self.combo_box_section_select.blockSignals(True)
         self.combo_box_section_select.addItem(f"SEC_{self.sig_name}_000")
         self.combo_box_section_select.blockSignals(False)
@@ -256,6 +258,10 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     def _on_section_canceled(self) -> None:
         self.container_section_confirm_cancel.hide()
         self.plot.remove_section_selector()
+
+    @Slot(str)
+    def _on_section_changed(self, section_id: SectionID) -> None:
+        self.data.set_cas(section_id)
 
     @Slot()
     def _remove_section(self) -> None:
