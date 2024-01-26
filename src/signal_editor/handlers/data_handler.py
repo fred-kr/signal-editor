@@ -111,7 +111,7 @@ class DataState:
 class DataHandler(QtCore.QObject):
     sig_new_raw = Signal()
     sig_sfreq_changed = Signal(int)
-    sig_cas_changed = Signal()
+    sig_cas_changed = Signal(bool)
 
     def __init__(self, app: "SignalEditor", parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
@@ -241,6 +241,13 @@ class DataHandler(QtCore.QObject):
             raise RuntimeError("No signal data loaded")
         return f"{self._sig_name}_processed"
 
+    @Slot(str)
+    def set_cas(self, section_id: SectionID) -> None:
+        for section in self.sections.values():
+            section.set_active(section.section_id == section_id)
+        has_peaks = not self.cas.peaks.is_empty()
+        self.sig_cas_changed.emit(has_peaks)
+        
     @Slot(QtCore.QDate)
     def set_date(self, date: QtCore.QDate) -> None:
         py_date = t.cast(datetime.date, date.toPython())
@@ -434,11 +441,6 @@ class DataHandler(QtCore.QObject):
         self.set_sfreq(state.sampling_rate)
         self._metadata = state.metadata
 
-    @Slot(str)
-    def set_cas(self, section_id: SectionID) -> None:
-        for section in self.sections.values():
-            section.set_active(section.section_id == section_id)
-        self.sig_cas_changed.emit()
 
     def get_result_identifier(self) -> ResultIdentifier:
         return ResultIdentifier(

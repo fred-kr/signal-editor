@@ -155,7 +155,11 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.action_load_state.triggered.connect(self.restore_state)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_select_file.triggered.connect(self.select_data_file)
-        self.action_light_switch.toggled.connect(lambda state: self.theme_switcher.set_style("light") if state else self.theme_switcher.set_style("dark"))
+        self.action_light_switch.toggled.connect(
+            lambda state: self.theme_switcher.set_style("light")
+            if state
+            else self.theme_switcher.set_style("dark")
+        )
 
         # Plotting Related Actions
         self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
@@ -166,6 +170,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
         self.sig_update_view_range.connect(self.plot.reset_view_range)
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
+        self.plot.sig_peaks_drawn.connect(self.handle_draw_rate)
 
         # Button Actions
         self.btn_apply_filter.clicked.connect(self.process_signal)
@@ -204,6 +209,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         # Widget specific Signals
         self.spin_box_sample_rate.valueChanged.connect(self.data.update_sfreq)
         self.combo_box_section_select.currentTextChanged.connect(self.data.set_cas)
+
         self.date_edit_file_info.dateChanged.connect(self.data.set_date)
         self.line_edit_subject_id.textChanged.connect(self.data.set_animal_id)
         self.combo_box_oxygen_condition.currentTextChanged.connect(self.data.set_oxy_condition)
@@ -466,18 +472,26 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     def detect_peaks(self) -> None:
         self.statusbar.showMessage("Detecting peaks...")
         peak_params = self.ui.get_peak_detection_parameters()
-        self.data.cas.detect_peaks(**peak_params)
+        if peak_params["method"] == "wfdb_xqrs":
+            with pg.BusyCursor():
+                self.data.cas.detect_peaks(**peak_params)
+        else:
+            self.data.cas.detect_peaks(**peak_params)
         self.sig_peaks_detected.emit()
         self.btn_detect_peaks.success()
         self.statusbar.showMessage("Peak detection finished.")
 
-    @Slot()
-    def handle_draw_signal(self) -> None:
+    @Slot(bool)
+    def handle_draw_signal(self, has_peaks: bool = False) -> None:
         data = self.data.cas_proc_data.to_numpy()
         self.plot.draw_signal(data, self.sig_name)
+        if has_peaks:
+            self.handle_draw_peaks()
 
     @Slot()
     def handle_draw_peaks(self) -> None:
+        # if self.data.cas.peaks.is_empty():
+        #     return
         peaks_x, peaks_y = self.data.cas.get_peak_xy()
         self.plot.draw_peaks(peaks_x, peaks_y, self.sig_name)
 

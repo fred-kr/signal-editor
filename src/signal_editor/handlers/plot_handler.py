@@ -39,6 +39,9 @@ class PlotHandler(QObject):
     """
 
     sig_peaks_edited = Signal(str, list)
+    sig_signal_drawn = Signal(int)
+    sig_peaks_drawn = Signal()
+    sig_rate_drawn = Signal()
 
     def __init__(self, app: "SignalEditor", parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -58,6 +61,10 @@ class PlotHandler(QObject):
         self._excluded_regions: list[pg.LinearRegionItem] = []
         self._known_names: set[str] = set()
         self._line_colors: list[str]
+        self._connect_qt_signals()
+
+    def _connect_qt_signals(self) -> None:
+        self.sig_signal_drawn.connect(self.update_view_limits)
 
     # region Properties
     @property
@@ -160,15 +167,16 @@ class PlotHandler(QObject):
         index = np.clip(pos_data_coords.x(), 0, cols.height - 1, dtype=np.int32, casting="unsafe")  # type: ignore
         # temp_val = temp_col.gather(index).to_numpy(zero_copy_only=True)[0]
         vals = cols.filter(pl.col("section_index") == index)
-        temp_text = f"<span style='color: orange; font-size: 12pt; font-weight: bold;'>Temperature: {vals.get_column("temperature")[0]:.1f} °C; Base Index: {vals.get_column("index")[0]}; Section Index: {vals.get_column("section_index")[0]}</span>"
+        temp_text = f"<span style='color: yellow; font-size: 12pt; font-weight: bold;'>Temperature: {vals.get_column("temperature")[0]:.1f} °C; Base Index: {vals.get_column("index")[0]}; Section Index: {vals.get_column("section_index")[0]}</span>"
         self._temperature_label.setText(temp_text)
-        self._app.statusbar.showMessage(f"Cursor position (scene): {pos.x():.2f}, {pos.y():.2f}")
+        self._app.statusbar.showMessage(f"Cursor position (scene): {pos.x():.0f}, {pos.y():.2f}")
 
     @Slot(int)
     def reset_view_range(self, len_data: int) -> None:
         for vb in self.view_boxes:
             vb.setRange(xRange=(0, len_data), disableAutoRange=False)
 
+    @Slot(int)
     def update_view_limits(self, len_data: int) -> None:
         for vb in self.view_boxes:
             vb.setLimits(
@@ -255,7 +263,7 @@ class PlotHandler(QObject):
             r, g, b = 0, 200, 100
             region_list = self._included_regions
         elif section_type == "excluded":
-            r, g, b = 200, 0, 100
+            r, g, b = 250, 0, 50
             region_list = self._excluded_regions
         else:
             return
@@ -273,7 +281,7 @@ class PlotHandler(QObject):
 
     def draw_signal(self, sig: NDArray[np.float64], name: str) -> None:
         self._known_names.add(name)
-        colors = ["crimson", "darkgoldenrod", "steelblue", "lightgreen"]
+        colors = ["crimson", "steelblue", "darkgoldenrod", "lightgreen"]
         signal_item = pg.PlotDataItem(
             sig,
             pen=colors[len(self._known_names) - 1],
@@ -294,21 +302,10 @@ class PlotHandler(QObject):
                 region.setVisible(show)
                 self._pw_main.addItem(region)
 
-        # self._temperature_label.setText("")
-
-        # if self._signal_item is not None:
-        #     self._pw_main.removeItem(self._signal_item)
-        # if self._scatter_item is not None:
-        #     self._pw_main.removeItem(self._scatter_item)
-        # if self._rate_item is not None:
-        #     self._pw_rate.removeItem(self._rate_item)
-        # if self._rate_mean_item is not None:
-        #     self._pw_rate.removeItem(self._rate_mean_item)
-
         self._pw_main.addItem(signal_item)
         signal_item.sigClicked.connect(self.add_scatter)
         self._signal_item = signal_item
-        self.update_view_limits(len(sig))
+        self.sig_signal_drawn.emit(sig.shape[0])
 
     def draw_peaks(
         self,
@@ -318,7 +315,7 @@ class PlotHandler(QObject):
         **kwargs: str | tuple[int, ...],
     ) -> None:
         brush_color = kwargs.get("brush", "darkgoldenrod")
-        hover_brush_color = kwargs.get("hoverBrush", "cyan")
+        hover_brush_color = kwargs.get("hoverBrush", "red")
 
         scatter_item = CustomScatterPlotItem(
             x=x_values,
@@ -344,6 +341,7 @@ class PlotHandler(QObject):
         self._pw_main.addItem(scatter_item)
         scatter_item.sigClicked.connect(self.remove_scatter)
         self._scatter_item = scatter_item
+        self.sig_peaks_drawn.emit()
 
     def draw_rate(
         self, rate_values: NDArray[np.float64], name: str, **kwargs: str | tuple[int, ...]
@@ -382,6 +380,7 @@ class PlotHandler(QObject):
         )
         self._rate_item = rate_item
         self._rate_mean_item = rate_mean_item
+        self.sig_rate_drawn.emit()
 
     @Slot(object, object, object)
     def remove_scatter(
