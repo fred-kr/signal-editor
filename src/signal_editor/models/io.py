@@ -1,6 +1,6 @@
+import typing as t
 from datetime import date, datetime
 from pathlib import Path
-import typing as t
 
 import h5py
 import mne.io

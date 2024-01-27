@@ -31,7 +31,9 @@ class SectionIndices(t.NamedTuple):
 class SectionID(str):
     def __new__(cls, value: str) -> "SectionID":
         if not re.match(r"^SEC_[a-zA-Z0-9]+_[0-9]{3}$", value):
-            raise ValueError(f"SectionID must be of the form 'SEC_<signal_name>_000', got '{value}'")
+            raise ValueError(
+                f"SectionID must be of the form 'SEC_<signal_name>_000', got '{value}'"
+            )
         return super().__new__(cls, value)
 
 
