@@ -59,8 +59,8 @@ class PlotHandler(QObject):
         self._rate_mean_item: pg.InfiniteLine | None = None
         self._included_regions: list[pg.LinearRegionItem] = []
         self._excluded_regions: list[pg.LinearRegionItem] = []
-        self._known_names: set[str] = set()
-        self._line_colors: list[str]
+        self._known_names: list[str] = []
+        self._line_colors: list[str] = ["crimson", "steelblue", "darkgoldenrod", "lightgreen"]
         self._connect_qt_signals()
 
     def _connect_qt_signals(self) -> None:
@@ -159,17 +159,17 @@ class PlotHandler(QObject):
         if not hasattr(self._app, "data"):
             return
         try:
-            # temp_col = self._app.data.cas.data.get_column("temperature")
             cols = self._app.data.cas.data.select("index", "section_index", "temperature")
         except Exception:
             return
         pos_data_coords = self._pw_main.plotItem.vb.mapSceneToView(pos)  # type: ignore
         index = np.clip(pos_data_coords.x(), 0, cols.height - 1, dtype=np.int32, casting="unsafe")  # type: ignore
-        # temp_val = temp_col.gather(index).to_numpy(zero_copy_only=True)[0]
         vals = cols.filter(pl.col("section_index") == index)
-        temp_text = f"<span style='color: yellow; font-size: 12pt; font-weight: bold;'>Temperature: {vals.get_column("temperature")[0]:.1f} °C; Base Index: {vals.get_column("index")[0]}; Section Index: {vals.get_column("section_index")[0]}</span>"
+        temp_text = f"<span style='color: yellow; font-size: 12pt; font-weight: bold;'>Temperature: {vals.get_column("temperature")[0]:.1f} °C</span>"
         self._temperature_label.setText(temp_text)
-        self._app.statusbar.showMessage(f"Cursor position (scene): {pos.x():.0f}, {pos.y():.2f}")
+        self._app.ui.label_cursor_pos.setText(
+            f"Cursor position (scene): {pos.x():.2f}, {pos.y():.2f}; Base Index: {vals.get_column("index")[0]}; Section Index: {vals.get_column("section_index")[0]}"
+        )
 
     @Slot(int)
     def reset_view_range(self, len_data: int) -> None:
@@ -204,22 +204,40 @@ class PlotHandler(QObject):
 
     @Slot(bool)
     def toggle_region_overview(self, show: bool) -> None:
-        for region in self._included_regions + self._excluded_regions:
+        for region in self.combined_regions:
             region.setVisible(show)
 
+    # def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
+    #     for region in self._included_regions:
+    #         region_bounds = region.getRegion()
+    #         if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
+    #             self._included_regions.remove(region)
+    #             self._pw_main.removeItem(region)
+    #             break
+    #     for region in self._excluded_regions:
+    #         region_bounds = region.getRegion()
+    #         if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
+    #             self._excluded_regions.remove(region)
+    #             self._pw_main.removeItem(region)
+                
     def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
-        for region in self._included_regions:
-            region_bounds = region.getRegion()
-            if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
-                self._included_regions.remove(region)
+        def remove_region_from_list(region_list: list[pg.LinearRegionItem], bounds: "tuple[int, int] | SectionIndices") -> None:
+            for region in region_list:
+                region_bounds = region.getRegion()
+                if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
+                    region_list.remove(region)
+                    self._pw_main.removeItem(region)
+                    break
+
+        remove_region_from_list(self._included_regions, bounds)
+        remove_region_from_list(self._excluded_regions, bounds)
+
+    def clear_regions(self) -> None:
+        for region in self.combined_regions:
+            if region in self._pw_main.getPlotItem().items:
                 self._pw_main.removeItem(region)
-                break
-        for region in self._excluded_regions:
-            region_bounds = region.getRegion()
-            if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
-                self._excluded_regions.remove(region)
-                self._pw_main.removeItem(region)
-                break
+        self._included_regions.clear()
+        self._excluded_regions.clear()
 
     def show_section_selector(
         self,
@@ -260,7 +278,7 @@ class PlotHandler(QObject):
             return
         section_type = self._selector_type
         if section_type == "included":
-            r, g, b = 0, 200, 100
+            r, g, b = 0, 250, 50
             region_list = self._included_regions
         elif section_type == "excluded":
             r, g, b = 250, 0, 50
@@ -269,8 +287,8 @@ class PlotHandler(QObject):
             return
         marked_region = pg.LinearRegionItem(
             values=(lower, upper),
-            brush=(r, g, b, 50),
-            pen=dict(color=(r, g, b, 255), width=2),
+            brush=(r, g, b, 25),
+            pen=dict(color=(r, g, b, 255), width=1),
             movable=False,
         )
         marked_region.hide()
@@ -280,106 +298,113 @@ class PlotHandler(QObject):
         self.remove_section_selector()
 
     def draw_signal(self, sig: NDArray[np.float64], name: str) -> None:
-        self._known_names.add(name)
-        colors = ["crimson", "steelblue", "darkgoldenrod", "lightgreen"]
+        if name not in self._known_names:
+            self._known_names.append(name)
+        signal_item = self._signal_item
+        if signal_item is None:
+            self._create_signal_data_item(sig, name)
+        else:
+            if self._scatter_item is not None:
+                self._pw_main.removeItem(self._scatter_item)
+                self._scatter_item = None
+            if self._rate_item is not None:
+                self._pw_rate.removeItem(self._rate_item)
+                self._rate_item = None
+            if self._rate_mean_item is not None:
+                self._pw_rate.removeItem(self._rate_mean_item)
+                self._rate_mean_item = None
+            signal_item.setData(sig)
+
+        self.sig_signal_drawn.emit(sig.shape[0])
+
+    def _create_signal_data_item(self, sig: NDArray[np.float64], name: str) -> None:
         signal_item = pg.PlotDataItem(
             sig,
-            pen=colors[len(self._known_names) - 1],
+            pen=self._line_colors[self._known_names.index(name)],
             skipFiniteCheck=True,
             autoDownSample=True,
             name=f"Signal ({name})",
         )
         signal_item.curve.setSegmentedLineMode("on")
         signal_item.curve.setClickable(True, self._line_clicked_tolerance)
-
-        for pw in [self._pw_main, self._pw_rate]:
-            pw.getPlotItem().addLegend().clear()
-            pw.getPlotItem().clear()
-
-        if self._app.section_name.endswith("000"):
-            show = self._app.action_section_overview.isChecked()
-            for region in self.combined_regions:
-                region.setVisible(show)
-                self._pw_main.addItem(region)
-
         self._pw_main.addItem(signal_item)
         signal_item.sigClicked.connect(self.add_scatter)
         self._signal_item = signal_item
-        self.sig_signal_drawn.emit(sig.shape[0])
 
     def draw_peaks(
         self,
         x_values: NDArray[np.uint32],
         y_values: NDArray[np.float64],
         name: str,
-        **kwargs: str | tuple[int, ...],
+        brush_color: str = "darkgoldenrod",
+        hover_brush_color: str = "red",
     ) -> None:
-        brush_color = kwargs.get("brush", "darkgoldenrod")
-        hover_brush_color = kwargs.get("hoverBrush", "red")
+        scatter_item = self._scatter_item
+        if scatter_item is None:
+            scatter_item = CustomScatterPlotItem(
+                x=x_values,
+                y=y_values,
+                pxMode=True,
+                size=10,
+                pen=None,
+                brush=brush_color,
+                useCache=True,
+                name=f"Peaks ({name})",
+                hoverable=True,
+                hoverPen="black",
+                hoverSymbol="x",
+                hoverBrush=hover_brush_color,
+                hoverSize=15,
+                tip=None,
+            )
+            scatter_item.setZValue(60)
+            self._pw_main.addItem(scatter_item)
+            scatter_item.sigClicked.connect(self.remove_scatter)
+            self._scatter_item = scatter_item
+        else:
+            scatter_item.setData(x=x_values, y=y_values)
 
-        scatter_item = CustomScatterPlotItem(
-            x=x_values,
-            y=y_values,
-            pxMode=True,
-            size=10,
-            pen=None,
-            brush=brush_color,
-            useCache=True,
-            name=f"Peaks ({name})",
-            hoverable=True,
-            hoverPen="black",
-            hoverSymbol="x",
-            hoverBrush=hover_brush_color,
-            hoverSize=15,
-            tip=None,
-        )
-        scatter_item.setZValue(60)
-
-        if self._scatter_item is not None:
-            self._pw_main.removeItem(self._scatter_item)
-
-        self._pw_main.addItem(scatter_item)
-        scatter_item.sigClicked.connect(self.remove_scatter)
-        self._scatter_item = scatter_item
         self.sig_peaks_drawn.emit()
 
     def draw_rate(
-        self, rate_values: NDArray[np.float64], name: str, **kwargs: str | tuple[int, ...]
+        self,
+        rate_values: NDArray[np.float64],
+        name: str,
+        pen_color: str = "limegreen",
+        mean_pen_color: str = "firebrick",
     ) -> None:
         rate_mean_val = np.mean(rate_values, dtype=np.int32)
-        pen_color = kwargs.get("pen", "lightgreen")
-        mean_pen_color = kwargs.get("meanPen", "goldenrod")
 
-        rate_item = pg.PlotDataItem(
-            rate_values,
-            pen=pen_color,
-            autoDownsample=True,
-            skipFiniteCheck=True,
-            name=f"Rate ({name})",
-        )
+        rate_item = self._rate_item
+        rate_mean_item = self._rate_mean_item
 
-        rate_mean_item = pg.InfiniteLine(
-            rate_mean_val,
-            angle=0,
-            pen=dict(color=mean_pen_color, width=2, style=Qt.PenStyle.DashLine),
-            name=f"Mean Rate ({name})",
-        )
+        if rate_item is None or rate_mean_item is None:
+            rate_item = pg.PlotDataItem(
+                rate_values,
+                pen=pen_color,
+                autoDownsample=True,
+                skipFiniteCheck=True,
+                name=f"Rate ({name})",
+            )
 
-        if self._rate_item is not None:
-            self._pw_rate.removeItem(self._rate_item)
-        if self._rate_mean_item is not None:
-            self._pw_rate.removeItem(self._rate_mean_item)
-
-        self._pw_rate.getPlotItem().addLegend().clear()
-
-        self._pw_rate.addItem(rate_item)
-        self._pw_rate.addItem(rate_mean_item)
-        self._pw_rate.getPlotItem().addLegend().addItem(
-            pg.PlotDataItem(np.array([0, 1]), pen=rate_mean_item.pen, skipFiniteCheck=True),  # type: ignore
-            f"Mean Rate: {int(rate_mean_val)} bpm",
-        )
-        self._rate_item = rate_item
-        self._rate_mean_item = rate_mean_item
+            rate_mean_item = pg.InfiniteLine(
+                rate_mean_val,
+                angle=0,
+                pen=dict(color=mean_pen_color, width=3, style=Qt.PenStyle.DashLine),
+                name=f"Mean Rate ({name})",
+            )
+            self._pw_rate.getPlotItem().addLegend().clear()
+            self._pw_rate.addItem(rate_item)
+            self._pw_rate.addItem(rate_mean_item)
+            self._pw_rate.getPlotItem().addLegend().addItem(
+                pg.PlotDataItem(np.array([0, 1]), pen=rate_mean_item.pen, skipFiniteCheck=True),  # type: ignore
+                f"Mean Rate: {int(rate_mean_val)} bpm",
+            )
+            self._rate_item = rate_item
+            self._rate_mean_item = rate_mean_item
+        else:
+            rate_item.setData(rate_values)
+            rate_mean_item.setValue(rate_mean_val)
         self.sig_rate_drawn.emit()
 
     @Slot(object, object, object)

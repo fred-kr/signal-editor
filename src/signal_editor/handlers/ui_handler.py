@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QMenu,
 )
+from PySide6 import QtWidgets
 
 from .. import type_aliases as _t
 from ..handlers.plot_handler import PlotHandler
@@ -34,17 +35,26 @@ if t.TYPE_CHECKING:
 
 
 class UIHandler(QObject):
-    sig_filter_inputs_ready = Signal()
-    sig_section_confirmed = Signal(str)
-    sig_section_canceled = Signal()
 
     def __init__(self, app: "SignalEditor", plot: PlotHandler) -> None:
         super(UIHandler, self).__init__()
         self._app = app
         self.plot = plot
         self.setup_widgets()
-        self._connect_signals()
+        self._connect_qt_signals()
 
+    def _connect_qt_signals(self) -> None:
+        self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
+        self._app.combo_box_filter_method.currentTextChanged.connect(
+            self.handle_filter_method_changed
+        )
+        self._app.combo_box_preprocess_pipeline.currentTextChanged.connect(
+            self.handle_preprocess_pipeline_changed
+        )
+
+        self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
+        self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
+        
     def setup_widgets(self) -> None:
         self._set_combo_box_items()
 
@@ -55,7 +65,7 @@ class UIHandler(QObject):
         self._prepare_widgets()
 
         # Statusbar
-        self._app.statusbar.showMessage("Ready")
+        self._prepare_statusbar()
 
         # Toolbar Plots
         self._prepare_toolbars()
@@ -63,11 +73,18 @@ class UIHandler(QObject):
         # Console
         self.create_jupyter_console_widget()
 
+    def _prepare_statusbar(self) -> None:
+        sb = self._app.statusbar
+        self.label_cursor_pos = QtWidgets.QLabel("Cursor Position (scene): -, -; Base Index: -; Section Index: -", sb)
+        sb.addPermanentWidget(self.label_cursor_pos)
+        sb.showMessage("Ready")
+        
     def _prepare_widgets(self) -> None:
-        self._app.container_file_info.setEnabled(False)
+        self._app.container_file_info.setEnabled(True)
         self._app.btn_load_selection.setEnabled(False)
         self._app.dock_widget_sections.setVisible(False)
         self._app.container_section_confirm_cancel.setEnabled(True)
+        self._app.btn_section_remove.setEnabled(False)
         self._app.container_section_confirm_cancel.hide()
 
         export_menu = QMenu(self._app.btn_export_focused)
@@ -95,25 +112,6 @@ class UIHandler(QObject):
         peak_combo_box.blockSignals(False)
         peak_combo_box.currentIndexChanged.connect(stacked_peak_widget.setCurrentIndex)
 
-    def _connect_signals(self) -> None:
-        self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
-        self._app.combo_box_filter_method.currentTextChanged.connect(
-            self.handle_filter_method_changed
-        )
-        self._app.combo_box_preprocess_pipeline.currentTextChanged.connect(
-            self.handle_preprocess_pipeline_changed
-        )
-
-        self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
-        self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
-
-    @Slot()
-    def _emit_section_confirmed(self) -> None:
-        self.sig_section_confirmed.emit()
-
-    @Slot()
-    def _emit_section_canceled(self) -> None:
-        self.sig_section_canceled.emit()
 
     def _prepare_toolbars(self) -> None:
         plot_toolbar = self._app.toolbar_plots
@@ -204,7 +202,6 @@ class UIHandler(QObject):
         for widget_name, enabled in FILTER_INPUT_STATES[method].items():
             getattr(self._app, widget_name).setEnabled(enabled)
 
-        self.sig_filter_inputs_ready.emit()
 
     def _set_elgendi_cleaning_params(self) -> None:
         self._app.combo_box_filter_method.blockSignals(True)
@@ -214,7 +211,6 @@ class UIHandler(QObject):
         self._app.dbl_spin_box_highcut.setValue(8.0)
         self._app.spin_box_order.setValue(3)
         self._app.slider_order.setValue(3)
-        self.sig_filter_inputs_ready.emit()
 
     @Slot()
     def handle_preprocess_pipeline_changed(self) -> None:

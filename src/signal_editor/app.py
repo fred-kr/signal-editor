@@ -44,21 +44,6 @@ from .models.section import SectionID, SectionIndices
 from .views.main_window import Ui_MainWindow
 
 
-def _blocked_set_index(widget: QtWidgets.QComboBox | QtWidgets.QListWidget, index: int) -> None:
-    widget.blockSignals(True)
-    if isinstance(widget, QtWidgets.QListWidget):
-        widget.setCurrentRow(index)
-    else:
-        widget.setCurrentIndex(index)
-    widget.blockSignals(False)
-
-
-def _blocked_add_item(widget: QtWidgets.QComboBox | QtWidgets.QListWidget, item: str) -> None:
-    widget.blockSignals(True)
-    widget.addItem(item)
-    widget.blockSignals(False)
-
-
 class SignalEditor(QMainWindow, Ui_MainWindow):
     sig_data_loaded = Signal()
     sig_data_processed = Signal()
@@ -72,6 +57,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         super().__init__()
         self.setupUi(self)
         self.setWindowTitle("Signal Editor")
+        self.unsaved_changes: bool = False
         self.config = ConfigHandler("config.ini")
         self.theme_switcher = ThemeSwitcher()
         self.plot = PlotHandler(self)
@@ -79,7 +65,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self._read_settings()
         self.ui = UIHandler(self, self.plot)
         self.file_info: QFileInfo = QFileInfo()
-        # self._section_id_model = SectionListModel()
         self._connect_signals()
         self._on_init_finished()
 
@@ -154,12 +139,12 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot(str)
     def add_section_to_widget(self, section_id: SectionID) -> None:
-        self.combo_box_section_select.blockSignals(True)
-        self.list_widget_sections.blockSignals(True)
+        # self.combo_box_section_select.blockSignals(True)
+        # self.list_widget_sections.blockSignals(True)
         self.list_widget_sections.addItem(section_id)
         self.combo_box_section_select.addItem(section_id)
-        self.combo_box_section_select.blockSignals(False)
-        self.list_widget_sections.blockSignals(False)
+        # self.combo_box_section_select.blockSignals(False)
+        # self.list_widget_sections.blockSignals(False)
 
     @Slot(str)
     def remove_section_from_widget(self, section_id: SectionID) -> None:
@@ -182,12 +167,22 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         """
         Connect signals to slots.
         """
+        # Working with sections
         self.data.sig_section_added.connect(self.add_section_to_widget)
         self.data.sig_section_removed.connect(self.remove_section_from_widget)
         self.list_widget_sections.currentRowChanged.connect(self._on_active_section_changed)
         self.combo_box_section_select.currentIndexChanged.connect(self._on_active_section_changed)
 
-        # Menu & Toolbar Actions
+        self.data.sig_cas_changed.connect(self.handle_draw_signal)
+        self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
+
+        self.action_mark_section_finished.triggered.connect(self.data.save_cas)
+        self.action_clear_sections.triggered.connect(self._on_sections_cleared)
+        self.action_section_overview.toggled.connect(self.plot.toggle_region_overview)
+
+        self.sig_section_confirmed.connect(self.plot.mark_section)
+
+        # General application actions
         self.action_exit.triggered.connect(self.close)
         self.action_load_state.triggered.connect(self.restore_state)
         self.action_save_state.triggered.connect(self.save_state)
@@ -198,8 +193,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
         self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected_scatter)
         self.action_reset_view.triggered.connect(self._emit_data_range_info)
-        self.action_mark_section_finished.triggered.connect(self.data.save_cas)
-        self.action_section_overview.toggled.connect(self.plot.toggle_region_overview)
 
         self.sig_update_view_range.connect(self.plot.reset_view_range)
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
@@ -219,25 +212,14 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
         # Data Related Signals
         self.sig_data_processed.connect(self.handle_table_view_data)
-        self.sig_data_loaded.connect(lambda: self.tabs_main.setCurrentIndex(1))
-        self.sig_data_loaded.connect(self.handle_draw_signal)
-        self.sig_data_loaded.connect(self.handle_table_view_data)
+        self.sig_peaks_detected.connect(self._on_peaks_detected)
+
+        self.sig_data_loaded.connect(self._on_data_loaded)
         self.sig_data_restored.connect(self.refresh_app)
-
-        self.sig_peaks_detected.connect(self.handle_draw_rate)
-        self.sig_peaks_detected.connect(self.handle_draw_peaks)
-
-        self.sig_section_confirmed.connect(self.plot.mark_section)
-        self.data.sig_cas_changed.connect(self.handle_draw_signal)
-        self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
 
         self.btn_section_confirm.clicked.connect(self._on_section_confirmed)
         self.btn_section_cancel.clicked.connect(self._on_section_canceled)
         self.btn_section_remove.clicked.connect(self._remove_section)
-
-        # UI Handler Signals
-        self.ui.sig_section_confirmed.connect(self._on_section_confirmed)
-        self.ui.sig_section_canceled.connect(self._on_section_canceled)
 
         # Widget specific Signals
         self.spin_box_sample_rate.valueChanged.connect(self.data.update_sfreq)
@@ -248,8 +230,29 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
         self.sig_show_message.connect(self.show_message)
 
+    @Slot()
+    def _on_data_loaded(self) -> None:
+        if self.config.switch_on_load:
+            self.tabs_main.setCurrentIndex(1)
+        self.handle_draw_signal()
+        self.handle_table_view_data()
+
+    @Slot()
+    def _on_peaks_detected(self) -> None:
+        self.handle_draw_peaks()
+        self.handle_draw_rate()
+
+    @Slot()
+    def _on_sections_cleared(self) -> None:
+        self.list_widget_sections.clear()
+        self.combo_box_section_select.clear()
+        self.data.clear_sections()
+        self.plot.clear_regions()
+
     @Slot(int)
     def _on_active_section_changed(self, index: int) -> None:
+        if index == -1:
+            return
         sender = self.sender()
         if isinstance(sender, QtWidgets.QListWidget):
             section_id = SectionID(sender.currentItem().text())
@@ -258,8 +261,16 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             section_id = SectionID(sender.currentText())
             self.list_widget_sections.setCurrentRow(index)
         else:
-            raise ValueError(f"Unknown sender: {sender}")
+            return
         self.data.set_cas(section_id)
+        if index != 0:
+            self.btn_section_add.setEnabled(False)
+            self.btn_section_add.setToolTip(
+                "Creating a new section is currently only possible when the first section (the one ending in `000`) is selected."
+            )
+        else:
+            self.btn_section_add.setEnabled(True)
+            self.btn_section_add.setToolTip("Create a new section.")
 
     @Slot()
     def _maybe_new_included_section(self) -> None:
@@ -293,6 +304,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             case _:
                 raise ValueError(f"Invalid section type: {self._section_type}")
         self.container_section_confirm_cancel.hide()
+        self.btn_section_remove.setEnabled(True)
         self.sig_section_confirmed.emit(lower, upper)
 
     @Slot()
@@ -305,10 +317,14 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         excluded_sections = self.data.excluded_sections
         excluded_sect_strings = [str(sect) for sect in excluded_sections]
         combined_items = list(self.data.sections.keys())[1:] + excluded_sect_strings
+        if len(combined_items) == 0:
+            msg = "No sections to remove."
+            self.sig_show_message.emit(msg, "info")
+            return
         to_remove, ok = QInputDialog.getItem(
             self,
             "Select Section to Remove",
-            "Items that look like `SEC_<signal_name>_<number>` are included, the rest are excluded.",
+            "Items that look like `SEC_<signal_name>_<number>` are included, those that look like `<start_index>, <stop_index>` are excluded.",
             [str(item) for item in combined_items],
             0,
             False,
@@ -316,14 +332,14 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         if ok:
             if to_remove in excluded_sect_strings:
                 bounds = [int(float(bound)) for bound in to_remove.split(", ")]
+                self.data.excluded_sections.remove(SectionIndices(*bounds))
             else:
                 sect_id = SectionID(to_remove)
                 bounds = self.data.get_section(sect_id).base_bounds
                 self.data.remove_section(sect_id)
-                # self.combo_box_section_select.removeItem(
-                #     self.combo_box_section_select.findText(sect_id)
-                # )
             self.plot.remove_region((bounds[0], bounds[1]))
+            if len(self.data.combined_section_ids) == 0:
+                self.btn_section_remove.setEnabled(False)
 
     @Slot()
     def _emit_data_range_info(self) -> None:
@@ -367,10 +383,12 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         )[0]:
             complete_results = self.data.get_complete_result()
             write_hdf5(file_path, complete_results)
+            self.sig_show_message.emit(f"Saved results to {file_path}.", "info")
+            self.unsaved_changes = False
 
     @Slot()
     def update_results(self) -> None:
-        if len(self.data.cas.peaks) == 0:
+        if self.data.cas.peaks.len() == 0:
             msg = (
                 f"No peaks detected for signal '{self.sig_name}'. Please run peak detection first."
             )
@@ -378,6 +396,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             return
         self.statusbar.showMessage("Computing results...")
         self._result = self.data.get_complete_result()
+        self.statusbar.showMessage("Results computed.")
 
     @Slot(str)
     def export_focused_result(self, output_format: t.Literal["csv", "xlsx", "txt"]) -> None:
@@ -418,7 +437,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         }
         if level == "debug" and os.environ.get("DEV_MODE", "0") == "0":
             return
-        msg_box = QMessageBox(icon_map[level], "Notice", text)
+        msg_box = QMessageBox(icon_map[level], "Notice", text, QMessageBox.StandardButton.Ok)
         msg_box.exec()
 
     @Slot()
@@ -456,6 +475,17 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def select_data_file(self) -> None:
+        if self.unsaved_changes:
+            msg = "You have unsaved changes. Are you sure you want to continue?"
+            reply = QMessageBox.question(
+                self,
+                "Unsaved Changes",
+                msg,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
         path, _ = QFileDialog.getOpenFileName(
             self,
             caption="Select File",
@@ -498,21 +528,35 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             filter_params = self.ui.get_filter_parameters()
             standardize_params = self.ui.get_standardize_parameters()
 
-            self.data.cas.filter_data(
-                self.pipeline,
-                **filter_params,
-            )
-            if self.scale_method != "None":
-                self.data.cas.scale_data(**standardize_params)
+            if (
+                self.pipeline == "custom"
+                and self.filter_method == "None"
+                and self.scale_method == "None"
+            ):
+                self.data.cas.data = self.data.cas.data.with_columns(
+                    pl.col(self.sig_name).alias(self.proc_sig_name),
+                    pl.repeat(False, self.data.cas.data.height).alias("is_peak"),
+                )
+            else:
+                self.data.cas.filter_data(
+                    self.pipeline,
+                    **filter_params,
+                )
+                if self.scale_method != "None":
+                    self.data.cas.scale_data(**standardize_params)
 
             self.handle_draw_signal()
-        self.btn_apply_filter.success()
-        self.statusbar.showMessage("Filtering finished.")
+
         self.sig_data_processed.emit()
+        self.unsaved_changes = True
+        self.btn_apply_filter.success(limitedTime=False)
+        self.statusbar.showMessage("Filtering finished.")
+        self.btn_apply_filter.reset()
 
     @Slot()
     def detect_peaks(self) -> None:
         self.statusbar.showMessage("Detecting peaks...")
+        self.btn_detect_peaks.processing("Working...")
         peak_params = self.ui.get_peak_detection_parameters()
         if peak_params["method"] == "wfdb_xqrs":
             with pg.BusyCursor():
@@ -520,8 +564,12 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         else:
             self.data.cas.detect_peaks(**peak_params)
         self.sig_peaks_detected.emit()
-        self.btn_detect_peaks.success()
-        self.statusbar.showMessage("Peak detection finished.")
+        self.unsaved_changes = True
+        self.btn_detect_peaks.success(limitedTime=False)
+        self.statusbar.showMessage(
+            f"Peak detection finished. Found {self.data.cas.peaks.len()} peaks."
+        )
+        self.btn_detect_peaks.reset()
 
     @Slot(bool)
     def handle_draw_signal(self, has_peaks: bool = False) -> None:
@@ -529,10 +577,16 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         if has_peaks:
             self.handle_draw_peaks()
 
+        for region in self.plot.combined_regions:
+            if self.section_name.endswith("000") and self.action_section_overview.isChecked():
+                if region not in self.plot.main_plot_widget.getPlotItem().items:
+                    self.plot.main_plot_widget.addItem(region)
+                region.show()
+            else:
+                region.hide()
+
     @Slot()
     def handle_draw_peaks(self) -> None:
-        # if self.data.cas.peaks.is_empty():
-        #     return
         peaks_x, peaks_y = self.data.cas.get_peak_xy()
         self.plot.draw_peaks(peaks_x, peaks_y, self.sig_name)
 
@@ -755,6 +809,7 @@ def main(dev_mode: bool = False, antialias: bool = False) -> None:
         level="DEBUG",
     )
     app = QApplication(sys.argv)
+    # app.setAttribute(QtGui.Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
     window = SignalEditor()
     window.show()
     sys.exit(app.exec())
