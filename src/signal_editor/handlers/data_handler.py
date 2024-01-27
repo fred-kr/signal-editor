@@ -215,9 +215,6 @@ class DataHandler(QtCore.QObject):
 
     @Slot(str)
     def set_cas(self, section_id: SectionID) -> None:
-        # logger.debug(
-        #     f"\nSender: {self.sender()}\nData: {section_id}\nSenderSignalIndex: {self.senderSignalIndex()}"
-        # )
         for section in self.sections.values():
             section.set_active(section.section_id == section_id)
         has_peaks = not self.cas.peaks.is_empty()
@@ -230,6 +227,10 @@ class DataHandler(QtCore.QObject):
     @excluded_sections.setter
     def excluded_sections(self, value: list[SectionIndices]) -> None:
         self._excluded_sections = value
+
+    @property
+    def combined_section_ids(self) -> list[SectionID | SectionIndices]:
+        return list(self.sections.keys())[1:] + self.excluded_sections
 
     @property
     def metadata(self) -> _t.FileMetadata:
@@ -374,10 +375,18 @@ class DataHandler(QtCore.QObject):
         self._raw_df = None
         self._base_df = None
         self._sections = SectionContainer()
+        self._excluded_sections = []
         self.set_sfreq(-1)
         self._metadata = None
         self._sig_name = None
         Section.reset_id_counter()
+
+    @Slot()
+    def clear_sections(self) -> None:
+        self._sections.clear()
+        self._excluded_sections.clear()
+        Section.reset_id_counter()
+        self.create_base_df(self.sig_name)
 
     def update_base(self, section_df: pl.DataFrame) -> None:
         self._base_df = (
