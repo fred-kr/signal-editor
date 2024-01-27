@@ -1,5 +1,6 @@
 import datetime
 import typing as t
+import pprint as pp
 
 import attrs
 import numpy as np
@@ -11,6 +12,7 @@ from .. import type_aliases as _t
 if t.TYPE_CHECKING:
     from .section import SectionID, SectionResult
 
+p = pp.PrettyPrinter(indent=4, width=120, compact=True, underscore_numbers=True)
 
 @attrs.define(slots=True, frozen=True)
 class ResultIdentifier:
@@ -20,6 +22,20 @@ class ResultIdentifier:
     animal_id: str = attrs.field()
     oxygen_condition: _t.OxygenCondition = attrs.field()
 
+    def __str__(self) -> str:
+        return f"ResultIdentifier({self.signal_name}, {self.source_file_name})"
+    
+    def __repr__(self) -> str:
+        return f"""
+ResultIdentifier(
+    signal_name={self.signal_name},
+    source_file_name={self.source_file_name},
+    date_recorded={self.date_recorded},
+    animal_id={self.animal_id},
+    oxygen_condition={self.oxygen_condition},
+)
+"""
+        
     def as_dict(self) -> _t.ResultIdentifierDict:
         return {
             "signal_name": self.signal_name,
@@ -64,6 +80,17 @@ class FocusedResult:
     temperature: npt.NDArray[np.float64] = attrs.field()
     rate_bpm: npt.NDArray[np.float64] = attrs.field()
 
+    def __repr__(self) -> str:
+        return f"""
+FocusedResult(
+    time_s={self.time_s},
+    index={self.index},
+    peak_intervals={self.peak_intervals},
+    temperature={self.temperature},
+    rate_bpm={self.rate_bpm},
+)
+""" 
+    
     def to_polars(self) -> pl.DataFrame:
         data = {attr: getattr(self, attr) for attr in self.__slots__ if attr != "__weakref__"}
         return pl.DataFrame(data)
@@ -84,6 +111,21 @@ class CompleteResult:
     focused_section_results: dict["SectionID", FocusedResult] = attrs.field()
     peak_interval_stats: dict["SectionID", dict[str, float]] = attrs.field()
     rate_stats: dict["SectionID", dict[str, float]] = attrs.field()
+
+    def __str__(self) -> str:
+        return f"CompleteResult({self.identifier})"
+
+    def __repr__(self) -> str:
+        return f"""
+CompleteResult(
+    identifier={self.identifier},
+    base_df_with_changes={self.base_df_with_changes},
+    complete_section_results={self.complete_section_results},
+    focused_section_results={self.focused_section_results},
+    peak_interval_stats={self.peak_interval_stats},
+    rate_stats={self.rate_stats},
+)
+"""
 
     def as_dict(self) -> _t.CompleteResultDict:
         return {
