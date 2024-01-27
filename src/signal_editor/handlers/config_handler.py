@@ -13,6 +13,7 @@ class ConfigHandler:
             self.create_default_file(config_file)
         self.config.read(config_file)
         current_dir = Path.cwd()
+        self._switch_on_load = self.config.getboolean("BEHAVIOUR", "SwitchTabOnFileLoad", fallback=True)
         self._app_dir = self._get_path("PATHS", "AppDir", fallback=current_dir)
         self._data_dir = self._get_path("PATHS", "DataDir", fallback=self._app_dir)
         self._output_dir = self._get_path("PATHS", "OutputDir", fallback=self._app_dir / "output")
@@ -36,12 +37,13 @@ class ConfigHandler:
     def create_default_file(cls, config_file_location: str | os.PathLike[str]) -> None:
         config = ConfigParser()
         current_dir = Path.cwd()
+        config["DEFAULT"] = {"Style": "dark", "SampleRate": str(-1)}
+        config["BEHAVIOUR"] = {"SwitchTabOnFileLoad": "True"}
         config["PATHS"] = {
             "AppDir": str(current_dir),
             "DataDir": str(current_dir),
             "OutputDir": str(current_dir / "output"),
         }
-        config["DEFAULT"] = {"Style": "dark", "SampleRate": str(-1)}
         config["NAMEPATTERNS"] = {
             "FocusedResult": "FocusedResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
             "CompleteResult": "CompleteResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
@@ -62,6 +64,10 @@ class ConfigHandler:
         if path.is_dir():
             self.config.set("PATHS", section, str(path))
 
+    @property
+    def switch_on_load(self) -> bool:
+        return self._switch_on_load
+    
     @property
     def style(self) -> t.Literal["light", "dark"]:
         return t.cast(t.Literal["light", "dark"], self._style)
