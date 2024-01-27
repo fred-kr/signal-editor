@@ -112,6 +112,8 @@ class DataHandler(QtCore.QObject):
     sig_new_raw = Signal()
     sig_sfreq_changed = Signal(int)
     sig_cas_changed = Signal(bool)
+    sig_section_added = Signal(str)
+    sig_section_removed = Signal(str)
 
     def __init__(self, app: "SignalEditor", parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
@@ -135,6 +137,8 @@ class DataHandler(QtCore.QObject):
         self._sections = SectionContainer()
         self.set_sfreq(-1)
         self._metadata = None
+        self._sig_name = None
+        Section.reset_id_counter()
         msg = "Sampling rate not set, no data loaded."
         self._app.sig_show_message.emit(msg, "warning")
         return
@@ -208,6 +212,17 @@ class DataHandler(QtCore.QObject):
             (section for section in self.sections.values() if section.is_active),
             self.base_section,
         )
+
+    @Slot(str)
+    def set_cas(self, section_id: SectionID) -> None:
+        # logger.debug(
+        #     f"\nSender: {self.sender()}\nData: {section_id}\nSenderSignalIndex: {self.senderSignalIndex()}"
+        # )
+        for section in self.sections.values():
+            section.set_active(section.section_id == section_id)
+        has_peaks = not self.cas.peaks.is_empty()
+        self.sig_cas_changed.emit(has_peaks)
+
     @property
     def excluded_sections(self) -> list[SectionIndices]:
         return self._excluded_sections
@@ -215,11 +230,6 @@ class DataHandler(QtCore.QObject):
     @excluded_sections.setter
     def excluded_sections(self, value: list[SectionIndices]) -> None:
         self._excluded_sections = value
-    
-    @property
-    def cas_proc_data(self) -> pl.Series:
-        """Shorthand for the currently active section's processed signal column as a `polars.Series`"""
-        return self.cas.proc_data
 
     @property
     def metadata(self) -> _t.FileMetadata:
@@ -241,13 +251,6 @@ class DataHandler(QtCore.QObject):
             raise RuntimeError("No signal data loaded")
         return f"{self._sig_name}_processed"
 
-    @Slot(str)
-    def set_cas(self, section_id: SectionID) -> None:
-        for section in self.sections.values():
-            section.set_active(section.section_id == section_id)
-        has_peaks = not self.cas.peaks.is_empty()
-        self.sig_cas_changed.emit(has_peaks)
-        
     @Slot(QtCore.QDate)
     def set_date(self, date: QtCore.QDate) -> None:
         py_date = t.cast(datetime.date, date.toPython())
@@ -364,6 +367,7 @@ class DataHandler(QtCore.QObject):
 
         base_section = self.base_section
         self._sections[base_section.section_id] = base_section
+        self.sig_section_added.emit(base_section.section_id)
 
     @Slot()
     def reset(self) -> None:
@@ -396,19 +400,20 @@ class DataHandler(QtCore.QObject):
             section.section_id: section.get_focused_result() for section in self.sections.values()
         }
 
-    def new_section(self, start: int, stop: int) -> Section:
+    def new_section(self, start: int, stop: int) -> None:
         data = self.base_df.filter(pl.col("index").is_between(start, stop))
         section = Section(data, sig_name=self.sig_name, sampling_rate=self.sfreq)
         self._sections[section.section_id] = section
-        return section
+        self.sig_section_added.emit(section.section_id)
 
     def remove_section(self, section_id: SectionID) -> None:
         if section_id not in self.sections:
             return
         del self._sections[section_id]
+        self.sig_section_removed.emit(section_id)
 
     def get_section(self, section_id: SectionID) -> Section:
-        return self.sections[section_id]
+        return self.sections.get(section_id, self.base_section)
 
     def save_sections_to_base(self) -> None:
         """
@@ -424,7 +429,7 @@ class DataHandler(QtCore.QObject):
         Saves the currently active section to the base data frame.
         """
         self.update_base(self.cas.data)
-        
+
     def get_state(self) -> DataState:
         return DataState(
             raw_df=self.raw_df,
@@ -440,7 +445,6 @@ class DataHandler(QtCore.QObject):
         self._sections = state.sections
         self.set_sfreq(state.sampling_rate)
         self._metadata = state.metadata
-
 
     def get_result_identifier(self) -> ResultIdentifier:
         return ResultIdentifier(

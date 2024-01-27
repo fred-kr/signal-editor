@@ -1,4 +1,4 @@
-from typing import Literal
+import typing as t
 
 import pyqtgraph as pg
 import qdarkstyle
@@ -10,17 +10,15 @@ class ThemeSwitcher:
     def __init__(
         self,
         plot_widgets: list[pg.PlotWidget] | None = None,
-        style: Literal["light", "dark"] = "dark",
+        style: t.Literal["light", "dark"] = "dark",
     ) -> None:
-        self.active_style: Literal["light", "dark"] = style
+        self.active_style: t.Literal["light", "dark"] = style
         self.plot_widgets = plot_widgets
         self.app = QApplication.instance()
 
     def _set_light_style(self) -> None:
         self.app.setStyleSheet(
-            qdarkstyle.load_stylesheet(
-                qt_api="pyside6", palette=qdarkstyle.LightPalette
-            )
+            qdarkstyle.load_stylesheet(qt_api="pyside6", palette=qdarkstyle.LightPalette)
         )
         self.active_style = "light"
 
@@ -31,7 +29,7 @@ class ThemeSwitcher:
 
         self.active_style = "dark"
 
-    def set_style(self, style: Literal["light", "dark"] | None = None) -> None:
+    def set_style(self, style: t.Literal["light", "dark"] | None = None) -> None:
         if style is None:
             style = self.active_style
         if style == "light":
@@ -39,9 +37,9 @@ class ThemeSwitcher:
         elif style == "dark":
             self._set_dark_style()
 
-    @Slot()
-    def switch_theme(self) -> None:
-        if self.active_style == "light":
-            self._set_dark_style()
-        else:
+    @Slot(bool)
+    def switch_theme(self, checked: bool) -> None:
+        if checked:
             self._set_light_style()
+        else:
+            self._set_dark_style()

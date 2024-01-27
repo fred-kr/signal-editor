@@ -31,7 +31,7 @@ class SectionIndices(t.NamedTuple):
 class SectionID(str):
     def __new__(cls, value: str) -> "SectionID":
         if not re.match(r"^SEC_[a-zA-Z0-9]+_[0-9]{3}$", value):
-            raise ValueError("SectionID must be of the form 'SEC_{name of signal}_001'")
+            raise ValueError(f"SectionID must be of the form 'SEC_<signal_name>_000', got '{value}'")
         return super().__new__(cls, value)
 
 
@@ -164,7 +164,7 @@ class Section:
     @property
     def raw_data(self) -> pl.Series:
         return self.data.get_column(self.sig_name)
-    
+
     @property
     def proc_data(self) -> pl.Series:
         return self.data.get_column(self._proc_sig_name)
@@ -307,7 +307,10 @@ class Section:
         pl_peaks = pl.Series("peaks", peaks, pl.UInt32)
 
         self.data = self.data.with_columns(
-            pl.when(pl.col("section_index").is_in(pl_peaks)).then(True).otherwise(False).alias("is_peak")
+            pl.when(pl.col("section_index").is_in(pl_peaks))
+            .then(True)
+            .otherwise(False)
+            .alias("is_peak")
         )
         self.calculate_rate()
 

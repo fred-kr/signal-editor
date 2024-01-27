@@ -20,11 +20,11 @@ from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QAbstract
     QCheckBox, QComboBox, QDateEdit, QDockWidget,
     QDoubleSpinBox, QFormLayout, QFrame, QGridLayout,
     QGroupBox, QHBoxLayout, QHeaderView, QLabel,
-    QLineEdit, QListView, QMainWindow, QMenu,
-    QMenuBar, QPushButton, QSizePolicy, QSlider,
-    QSpacerItem, QSpinBox, QStackedWidget, QStatusBar,
-    QTabWidget, QTableView, QTextBrowser, QToolBar,
-    QVBoxLayout, QWidget)
+    QLineEdit, QListView, QListWidget, QListWidgetItem,
+    QMainWindow, QMenu, QMenuBar, QPushButton,
+    QSizePolicy, QSlider, QSpacerItem, QSpinBox,
+    QStackedWidget, QStatusBar, QTabWidget, QTableView,
+    QTextBrowser, QToolBar, QVBoxLayout, QWidget)
 
 from pyqtgraph import (ComboBox, FeedbackButton)
 from . import icons_rc
@@ -1570,17 +1570,17 @@ class Ui_MainWindow(object):
 
         self.gridLayout_18.addWidget(self.combo_box_section_select, 1, 0, 1, 2)
 
-        self.list_view_sections = QListView(self.section_widgets_container)
-        self.list_view_sections.setObjectName(u"list_view_sections")
-        self.list_view_sections.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContentsOnFirstShow)
-        self.list_view_sections.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.list_view_sections.setTabKeyNavigation(True)
-        self.list_view_sections.setProperty("showDropIndicator", False)
-        self.list_view_sections.setResizeMode(QListView.Adjust)
-        self.list_view_sections.setUniformItemSizes(True)
-        self.list_view_sections.setItemAlignment(Qt.AlignLeading)
+        self.list_widget_sections = QListWidget(self.section_widgets_container)
+        self.list_widget_sections.setObjectName(u"list_widget_sections")
+        self.list_widget_sections.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContentsOnFirstShow)
+        self.list_widget_sections.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.list_widget_sections.setTabKeyNavigation(True)
+        self.list_widget_sections.setProperty("showDropIndicator", False)
+        self.list_widget_sections.setResizeMode(QListView.Adjust)
+        self.list_widget_sections.setUniformItemSizes(True)
+        self.list_widget_sections.setItemAlignment(Qt.AlignLeading)
 
-        self.gridLayout_18.addWidget(self.list_view_sections, 4, 0, 1, 2)
+        self.gridLayout_18.addWidget(self.list_widget_sections, 4, 0, 1, 2)
 
 
         self.gridLayout_7.addWidget(self.section_widgets_container, 0, 0, 2, 1)

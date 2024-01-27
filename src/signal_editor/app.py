@@ -11,6 +11,7 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 from loguru import logger
+from PySide6 import QtWidgets
 from PySide6.QtCore import (
     QByteArray,
     QFileInfo,
@@ -28,7 +29,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
 )
-from PySide6 import QtCore
 
 from . import type_aliases as _t
 from .handlers.config_handler import ConfigHandler
@@ -37,11 +37,26 @@ from .handlers.helpers.table_view_helper import TableViewHelper
 from .handlers.plot_handler import PlotHandler
 from .handlers.style_handler import ThemeSwitcher
 from .handlers.ui_handler import UIHandler
-from .models.polars_df import CompactDFModel, DescriptiveStatsModel, PolarsModel
 from .models.io import write_hdf5
+from .models.polars_df import CompactDFModel, DescriptiveStatsModel, PolarsModel
 from .models.result import CompleteResult
 from .models.section import SectionID, SectionIndices
 from .views.main_window import Ui_MainWindow
+
+
+def _blocked_set_index(widget: QtWidgets.QComboBox | QtWidgets.QListWidget, index: int) -> None:
+    widget.blockSignals(True)
+    if isinstance(widget, QtWidgets.QListWidget):
+        widget.setCurrentRow(index)
+    else:
+        widget.setCurrentIndex(index)
+    widget.blockSignals(False)
+
+
+def _blocked_add_item(widget: QtWidgets.QComboBox | QtWidgets.QListWidget, item: str) -> None:
+    widget.blockSignals(True)
+    widget.addItem(item)
+    widget.blockSignals(False)
 
 
 class SignalEditor(QMainWindow, Ui_MainWindow):
@@ -50,7 +65,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     sig_peaks_detected = Signal()
     sig_show_message = Signal(str, str)
     sig_data_restored = Signal()
-    sig_section_added = Signal(int, int)
+    sig_section_confirmed = Signal(int, int)
     sig_update_view_range = Signal(int)
 
     def __init__(self) -> None:
@@ -64,6 +79,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self._read_settings()
         self.ui = UIHandler(self, self.plot)
         self.file_info: QFileInfo = QFileInfo()
+        # self._section_id_model = SectionListModel()
         self._connect_signals()
         self._on_init_finished()
 
@@ -102,7 +118,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     # endregion Dev
 
     # region Properties
-
     @property
     def sig_name(self) -> str:
         return self.combo_box_signal_column.currentText()
@@ -137,31 +152,47 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     # endregion Properties
 
-    def _setup_section_widgets(self) -> None:
-        self.list_view_sections.setModel()
+    @Slot(str)
+    def add_section_to_widget(self, section_id: SectionID) -> None:
         self.combo_box_section_select.blockSignals(True)
-        self.combo_box_section_select.addItem(f"SEC_{self.sig_name}_000")
+        self.list_widget_sections.blockSignals(True)
+        self.list_widget_sections.addItem(section_id)
+        self.combo_box_section_select.addItem(section_id)
         self.combo_box_section_select.blockSignals(False)
+        self.list_widget_sections.blockSignals(False)
+
+    @Slot(str)
+    def remove_section_from_widget(self, section_id: SectionID) -> None:
+        index = self.combo_box_section_select.findText(section_id)
+        self.list_widget_sections.takeItem(index)
+        self.combo_box_section_select.removeItem(index)
+        self.list_widget_sections.setCurrentRow(0)
+        self.combo_box_section_select.setCurrentIndex(0)
+
+    def _setup_section_widgets(self) -> None:
+        self.list_widget_sections.clear()
+        self.combo_box_section_select.clear()
+
         add_section_menu = QMenu(self.btn_section_add)
-        add_section_menu.addAction("Included", self._new_included_section)
-        add_section_menu.addAction("Excluded", self._new_excluded_section)
+        add_section_menu.addAction("Included", self._maybe_new_included_section)
+        add_section_menu.addAction("Excluded", self._maybe_new_excluded_section)
         self.btn_section_add.setMenu(add_section_menu)
 
     def _connect_signals(self) -> None:
         """
         Connect signals to slots.
         """
+        self.data.sig_section_added.connect(self.add_section_to_widget)
+        self.data.sig_section_removed.connect(self.remove_section_from_widget)
+        self.list_widget_sections.currentRowChanged.connect(self._on_active_section_changed)
+        self.combo_box_section_select.currentIndexChanged.connect(self._on_active_section_changed)
 
         # Menu & Toolbar Actions
         self.action_exit.triggered.connect(self.close)
         self.action_load_state.triggered.connect(self.restore_state)
         self.action_save_state.triggered.connect(self.save_state)
         self.action_select_file.triggered.connect(self.select_data_file)
-        self.action_light_switch.toggled.connect(
-            lambda state: self.theme_switcher.set_style("light")
-            if state
-            else self.theme_switcher.set_style("dark")
-        )
+        self.action_light_switch.toggled.connect(self.theme_switcher.switch_theme)
 
         # Plotting Related Actions
         self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
@@ -196,7 +227,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.sig_peaks_detected.connect(self.handle_draw_rate)
         self.sig_peaks_detected.connect(self.handle_draw_peaks)
 
-        self.sig_section_added.connect(self.plot.mark_section)
+        self.sig_section_confirmed.connect(self.plot.mark_section)
         self.data.sig_cas_changed.connect(self.handle_draw_signal)
         self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
 
@@ -210,7 +241,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
         # Widget specific Signals
         self.spin_box_sample_rate.valueChanged.connect(self.data.update_sfreq)
-        self.combo_box_section_select.currentTextChanged.connect(self.data.set_cas)
 
         self.date_edit_file_info.dateChanged.connect(self.data.set_date)
         self.line_edit_subject_id.textChanged.connect(self.data.set_animal_id)
@@ -218,15 +248,28 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
         self.sig_show_message.connect(self.show_message)
 
+    @Slot(int)
+    def _on_active_section_changed(self, index: int) -> None:
+        sender = self.sender()
+        if isinstance(sender, QtWidgets.QListWidget):
+            section_id = SectionID(sender.currentItem().text())
+            self.combo_box_section_select.setCurrentIndex(index)
+        elif isinstance(sender, QtWidgets.QComboBox):
+            section_id = SectionID(sender.currentText())
+            self.list_widget_sections.setCurrentRow(index)
+        else:
+            raise ValueError(f"Unknown sender: {sender}")
+        self.data.set_cas(section_id)
+
     @Slot()
-    def _new_included_section(self) -> None:
+    def _maybe_new_included_section(self) -> None:
         current_limits = self.data.bounds
         self.container_section_confirm_cancel.show()
         self.plot.show_section_selector("included", current_limits)
         self._section_type = "included"
 
     @Slot()
-    def _new_excluded_section(self) -> None:
+    def _maybe_new_excluded_section(self) -> None:
         current_limits = self.data.bounds
         self.container_section_confirm_cancel.show()
         self.plot.show_section_selector("excluded", current_limits)
@@ -244,24 +287,18 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         lower, upper = int(lower), int(upper)
         match self._section_type:
             case "included":
-                new_sect = self.data.new_section(lower, upper)
-                self.combo_box_section_select.addItem(new_sect.section_id)
-                self.combo_box_section_select.setCurrentText(new_sect.section_id)
+                self.data.new_section(lower, upper)
             case "excluded":
                 self.data.excluded_sections.append(SectionIndices(lower, upper))
             case _:
                 raise ValueError(f"Invalid section type: {self._section_type}")
         self.container_section_confirm_cancel.hide()
-        self.sig_section_added.emit(lower, upper)
+        self.sig_section_confirmed.emit(lower, upper)
 
     @Slot()
     def _on_section_canceled(self) -> None:
         self.container_section_confirm_cancel.hide()
         self.plot.remove_section_selector()
-
-    @Slot(str)
-    def _on_section_changed(self, section_id: SectionID) -> None:
-        self.data.set_cas(section_id)
 
     @Slot()
     def _remove_section(self) -> None:
@@ -283,15 +320,14 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
                 sect_id = SectionID(to_remove)
                 bounds = self.data.get_section(sect_id).base_bounds
                 self.data.remove_section(sect_id)
-                self.combo_box_section_select.removeItem(
-                    self.combo_box_section_select.findText(sect_id)
-                )
+                # self.combo_box_section_select.removeItem(
+                #     self.combo_box_section_select.findText(sect_id)
+                # )
             self.plot.remove_region((bounds[0], bounds[1]))
 
     @Slot()
     def _emit_data_range_info(self) -> None:
-        data = self.data.cas_proc_data.to_numpy()
-        self.sig_update_view_range.emit(len(data))
+        self.sig_update_view_range.emit(self.data.cas.data.height)
 
     @Slot(int)
     def update_sfreq_blocked(self, value: int) -> None:
@@ -489,8 +525,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot(bool)
     def handle_draw_signal(self, has_peaks: bool = False) -> None:
-        data = self.data.cas_proc_data.to_numpy()
-        self.plot.draw_signal(data, self.sig_name)
+        self.plot.draw_signal(self.data.cas.proc_data.to_numpy(), self.sig_name)
         if has_peaks:
             self.handle_draw_peaks()
 
