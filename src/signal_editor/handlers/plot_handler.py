@@ -207,19 +207,6 @@ class PlotHandler(QObject):
         for region in self.combined_regions:
             region.setVisible(show)
 
-    # def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
-    #     for region in self._included_regions:
-    #         region_bounds = region.getRegion()
-    #         if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
-    #             self._included_regions.remove(region)
-    #             self._pw_main.removeItem(region)
-    #             break
-    #     for region in self._excluded_regions:
-    #         region_bounds = region.getRegion()
-    #         if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
-    #             self._excluded_regions.remove(region)
-    #             self._pw_main.removeItem(region)
-                
     def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
         def remove_region_from_list(region_list: list[pg.LinearRegionItem], bounds: "tuple[int, int] | SectionIndices") -> None:
             for region in region_list:
@@ -245,8 +232,9 @@ class PlotHandler(QObject):
         bounds: "tuple[int, int] | SectionIndices",
     ) -> None:
         section_style = SECTION_STYLES[section_type]
-        span = abs(bounds[1] - bounds[0])
-        initial_limits = (0, span / 3)
+        view_x = self._pw_main.getPlotItem().getViewBox().viewRange()[0]
+        span = view_x[1] - view_x[0]
+        initial_limits = (view_x[0] + span * 0.25, view_x[0] + span * 0.75)
         self.remove_section_selector()
 
         selector = pg.LinearRegionItem(

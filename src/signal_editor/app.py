@@ -68,6 +68,65 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self._connect_signals()
         self._on_init_finished()
 
+    def _connect_signals(self) -> None:
+        """
+        Connect signals to slots.
+        """
+        # General application actions
+        self.action_exit.triggered.connect(self.close)
+        self.action_load_state.triggered.connect(self.restore_state)
+        self.action_save_state.triggered.connect(self.save_state)
+        self.action_select_file.triggered.connect(self.select_data_file)
+        self.action_light_switch.toggled.connect(self.theme_switcher.switch_theme)
+        self.sig_show_message.connect(self.show_message)
+
+        # Sections
+        self.data.sig_section_added.connect(self.add_section_to_widget)
+        self.data.sig_section_removed.connect(self.remove_section_from_widget)
+        self.data.sig_cas_changed.connect(self.handle_draw_signal)
+        self.list_widget_sections.currentRowChanged.connect(self._on_active_section_changed)
+        self.combo_box_section_select.currentIndexChanged.connect(self._on_active_section_changed)
+        self.action_mark_section_finished.triggered.connect(self.data.save_cas)
+        self.action_clear_sections.triggered.connect(self._on_sections_cleared)
+        self.action_section_overview.toggled.connect(self.plot.toggle_region_overview)
+        self.sig_section_confirmed.connect(self.plot.mark_section)
+        self.btn_section_confirm.clicked.connect(self._on_section_confirmed)
+        self.btn_section_cancel.clicked.connect(self._on_section_canceled)
+        self.btn_section_remove.clicked.connect(self._remove_section)
+
+        # File I/O
+        self.btn_browse_output_dir.clicked.connect(self.select_output_location)
+        self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
+        self.btn_select_file.clicked.connect(self.select_data_file)
+        self.btn_export_focused.clicked.connect(self.export_focused_result)
+
+        # Data Handling
+        self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
+        self.btn_load_selection.clicked.connect(self.handle_load_data)
+        self.sig_data_loaded.connect(self._on_data_loaded)
+        self.sig_data_restored.connect(self.refresh_app)
+        self.btn_compute_results.clicked.connect(self.update_results)
+
+        # Processing & Editing
+        self.btn_apply_filter.clicked.connect(self.process_signal)
+        self.btn_detect_peaks.clicked.connect(self.detect_peaks)
+        self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
+        self.plot.sig_peaks_drawn.connect(self.handle_draw_rate)
+        self.sig_data_processed.connect(self.handle_table_view_data)
+        self.sig_peaks_detected.connect(self._on_peaks_detected)
+        self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
+        self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected_scatter)
+
+        # Plot / View actions
+        self.action_reset_view.triggered.connect(self._emit_data_range_info)
+        self.sig_update_view_range.connect(self.plot.reset_view_range)
+
+        # File information / metadata
+        self.spin_box_sample_rate.valueChanged.connect(self.data.update_sfreq)
+        self.date_edit_file_info.dateChanged.connect(self.data.set_date)
+        self.line_edit_subject_id.textChanged.connect(self.data.set_animal_id)
+        self.combo_box_oxygen_condition.currentTextChanged.connect(self.data.set_oxy_condition)
+
     def _on_init_finished(self) -> None:
         self.line_edit_output_dir.setText(self.config.output_dir.as_posix())
         saved_style = self.config.style
@@ -139,12 +198,8 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot(str)
     def add_section_to_widget(self, section_id: SectionID) -> None:
-        # self.combo_box_section_select.blockSignals(True)
-        # self.list_widget_sections.blockSignals(True)
         self.list_widget_sections.addItem(section_id)
         self.combo_box_section_select.addItem(section_id)
-        # self.combo_box_section_select.blockSignals(False)
-        # self.list_widget_sections.blockSignals(False)
 
     @Slot(str)
     def remove_section_from_widget(self, section_id: SectionID) -> None:
@@ -162,73 +217,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         add_section_menu.addAction("Included", self._maybe_new_included_section)
         add_section_menu.addAction("Excluded", self._maybe_new_excluded_section)
         self.btn_section_add.setMenu(add_section_menu)
-
-    def _connect_signals(self) -> None:
-        """
-        Connect signals to slots.
-        """
-        # Working with sections
-        self.data.sig_section_added.connect(self.add_section_to_widget)
-        self.data.sig_section_removed.connect(self.remove_section_from_widget)
-        self.list_widget_sections.currentRowChanged.connect(self._on_active_section_changed)
-        self.combo_box_section_select.currentIndexChanged.connect(self._on_active_section_changed)
-
-        self.data.sig_cas_changed.connect(self.handle_draw_signal)
-        self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
-
-        self.action_mark_section_finished.triggered.connect(self.data.save_cas)
-        self.action_clear_sections.triggered.connect(self._on_sections_cleared)
-        self.action_section_overview.toggled.connect(self.plot.toggle_region_overview)
-
-        self.sig_section_confirmed.connect(self.plot.mark_section)
-
-        # General application actions
-        self.action_exit.triggered.connect(self.close)
-        self.action_load_state.triggered.connect(self.restore_state)
-        self.action_save_state.triggered.connect(self.save_state)
-        self.action_select_file.triggered.connect(self.select_data_file)
-        self.action_light_switch.toggled.connect(self.theme_switcher.switch_theme)
-
-        # Plotting Related Actions
-        self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
-        self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected_scatter)
-        self.action_reset_view.triggered.connect(self._emit_data_range_info)
-
-        self.sig_update_view_range.connect(self.plot.reset_view_range)
-        self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
-        self.plot.sig_peaks_drawn.connect(self.handle_draw_rate)
-
-        # Button Actions
-        self.btn_apply_filter.clicked.connect(self.process_signal)
-        self.btn_compute_results.clicked.connect(self.update_results)
-        self.btn_browse_output_dir.clicked.connect(self.select_output_location)
-        self.btn_detect_peaks.clicked.connect(self.detect_peaks)
-        self.btn_load_selection.clicked.connect(self.handle_load_data)
-        self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
-        self.btn_select_file.clicked.connect(self.select_data_file)
-
-        # Data Export Actions
-        self.btn_export_focused.clicked.connect(self.export_focused_result)
-
-        # Data Related Signals
-        self.sig_data_processed.connect(self.handle_table_view_data)
-        self.sig_peaks_detected.connect(self._on_peaks_detected)
-
-        self.sig_data_loaded.connect(self._on_data_loaded)
-        self.sig_data_restored.connect(self.refresh_app)
-
-        self.btn_section_confirm.clicked.connect(self._on_section_confirmed)
-        self.btn_section_cancel.clicked.connect(self._on_section_canceled)
-        self.btn_section_remove.clicked.connect(self._remove_section)
-
-        # Widget specific Signals
-        self.spin_box_sample_rate.valueChanged.connect(self.data.update_sfreq)
-
-        self.date_edit_file_info.dateChanged.connect(self.data.set_date)
-        self.line_edit_subject_id.textChanged.connect(self.data.set_animal_id)
-        self.combo_box_oxygen_condition.currentTextChanged.connect(self.data.set_oxy_condition)
-
-        self.sig_show_message.connect(self.show_message)
 
     @Slot()
     def _on_data_loaded(self) -> None:
