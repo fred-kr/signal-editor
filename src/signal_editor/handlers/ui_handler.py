@@ -6,10 +6,10 @@ import pdir
 import polars as pl
 import polars.selectors as ps
 import pyqtgraph as pg
+from PySide6 import QtWidgets
 from PySide6.QtCore import (
     QDate,
     QObject,
-    Signal,
     Slot,
 )
 from PySide6.QtWidgets import (
@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QMenu,
 )
-from PySide6 import QtWidgets
 
 from .. import type_aliases as _t
 from ..handlers.plot_handler import PlotHandler
@@ -35,7 +34,6 @@ if t.TYPE_CHECKING:
 
 
 class UIHandler(QObject):
-
     def __init__(self, app: "SignalEditor", plot: PlotHandler) -> None:
         super(UIHandler, self).__init__()
         self._app = app
@@ -54,7 +52,7 @@ class UIHandler(QObject):
 
         self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
         self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
-        
+
     def setup_widgets(self) -> None:
         self._set_combo_box_items()
 
@@ -75,10 +73,12 @@ class UIHandler(QObject):
 
     def _prepare_statusbar(self) -> None:
         sb = self._app.statusbar
-        self.label_cursor_pos = QtWidgets.QLabel("Cursor Position (scene): -, -; Base Index: -; Section Index: -", sb)
+        self.label_cursor_pos = QtWidgets.QLabel(
+            "Cursor Position (scene): -, -; Base Index: -; Section Index: -", sb
+        )
         sb.addPermanentWidget(self.label_cursor_pos)
         sb.showMessage("Ready")
-        
+
     def _prepare_widgets(self) -> None:
         self._app.container_file_info.setEnabled(True)
         self._app.btn_load_selection.setEnabled(False)
@@ -89,9 +89,7 @@ class UIHandler(QObject):
 
         export_menu = QMenu(self._app.btn_export_focused)
         export_menu.addAction("CSV", lambda: self._app.export_focused_result("csv"))
-        export_menu.addAction(
-            "txt (tab-delimited)", lambda: self._app.export_focused_result("txt")
-        )
+        export_menu.addAction("txt (tab-delimited)", lambda: self._app.export_focused_result("txt"))
         export_menu.addAction("Excel", lambda: self._app.export_focused_result("xlsx"))
         self._app.btn_export_focused.setMenu(export_menu)
 
@@ -111,7 +109,6 @@ class UIHandler(QObject):
         stacked_peak_widget.setCurrentIndex(0)
         peak_combo_box.blockSignals(False)
         peak_combo_box.currentIndexChanged.connect(stacked_peak_widget.setCurrentIndex)
-
 
     def _prepare_toolbars(self) -> None:
         plot_toolbar = self._app.toolbar_plots
@@ -201,7 +198,6 @@ class UIHandler(QObject):
 
         for widget_name, enabled in FILTER_INPUT_STATES[method].items():
             getattr(self._app, widget_name).setEnabled(enabled)
-
 
     def _set_elgendi_cleaning_params(self) -> None:
         self._app.combo_box_filter_method.blockSignals(True)

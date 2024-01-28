@@ -358,8 +358,8 @@ class PlotHandler(QObject):
         self,
         rate_values: NDArray[np.float64],
         name: str,
-        pen_color: str = "limegreen",
-        mean_pen_color: str = "firebrick",
+        pen_color: str = "green",
+        mean_pen_color: str = "darkgoldenrod",
     ) -> None:
         rate_mean_val = np.mean(rate_values, dtype=np.int32)
 
@@ -385,7 +385,7 @@ class PlotHandler(QObject):
             self._pw_rate.addItem(rate_item)
             self._pw_rate.addItem(rate_mean_item)
             self._pw_rate.getPlotItem().addLegend().addItem(
-                pg.PlotDataItem(np.array([0, 1]), pen=rate_mean_item.pen, skipFiniteCheck=True),  # type: ignore
+                pg.PlotDataItem(np.array([0, 1]), pen=rate_mean_item.pen, skipFiniteCheck=True),
                 f"Mean Rate: {int(rate_mean_val)} bpm",
             )
             self._rate_item = rate_item
