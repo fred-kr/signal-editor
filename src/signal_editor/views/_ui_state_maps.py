@@ -179,10 +179,13 @@ COMBO_BOX_ITEMS = {
 #                                              General                                             #
 # ------------------------------------------------------------------------------------------------ #
 INITIAL_STATE_MAP = {
-    "table_data_preview": {
+    "table_view_cas": {
         "model": QStandardItemModel(),
     },
-    "table_data_info": {
+    "table_view_cas_description": {
+        "model": QStandardItemModel(),
+    },
+    "table_view_focused_result": {
         "model": QStandardItemModel(),
     },
     "line_edit_active_file": {"text": ""},
@@ -243,9 +246,6 @@ INITIAL_STATE_MAP = {
         "enabled": True,
     },
     "btn_compute_results": {"enabled": True},
-    "table_view_focused_result": {
-        "model": QStandardItemModel(),
-    },
     "tab_container_result_views": {
         "currentIndex": 0,
     },

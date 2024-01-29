@@ -5,6 +5,7 @@ import sys
 import typing as t
 from datetime import datetime
 from pathlib import Path
+from PySide6 import QtGui
 
 import h5py
 import numpy as np
@@ -33,15 +34,21 @@ from PySide6.QtWidgets import (
 from . import type_aliases as _t
 from .handlers.config_handler import ConfigHandler
 from .handlers.data_handler import DataHandler
-from .handlers.helpers.table_view_helper import TableViewHelper
+from .handlers.helpers.table_helper import TableHelper
 from .handlers.plot_handler import PlotHandler
 from .handlers.style_handler import ThemeSwitcher
 from .handlers.ui_handler import UIHandler
 from .models.io import write_hdf5
-from .models.polars_df import CompactDFModel, DescriptiveStatsModel, PolarsModel
+from .models.polars_df import DescriptiveStatsModel, PolarsTableModel
 from .models.result import CompleteResult
 from .models.section import SectionID, SectionIndices
 from .views.main_window import Ui_MainWindow
+
+
+def readable_section_id(section_id: SectionID) -> str:
+    number = int(section_id[-3:])
+    sig_name = section_id.split("_")[1]
+    return f"Active Data: Signal={sig_name.upper()}, Section={number:03d}"
 
 
 class SignalEditor(QMainWindow, Ui_MainWindow):
@@ -86,13 +93,17 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.data.sig_cas_changed.connect(self.handle_draw_signal)
         self.list_widget_sections.currentRowChanged.connect(self._on_active_section_changed)
         self.combo_box_section_select.currentIndexChanged.connect(self._on_active_section_changed)
-        self.action_mark_section_finished.triggered.connect(self.data.save_cas)
-        self.action_clear_sections.triggered.connect(self._on_sections_cleared)
+        self.action_mark_section_finished.triggered.connect(self._on_section_done)
+        self.action_reset_all.triggered.connect(self._on_sections_cleared)
         self.action_section_overview.toggled.connect(self.plot.toggle_region_overview)
         self.sig_section_confirmed.connect(self.plot.mark_section)
         self.btn_section_confirm.clicked.connect(self._on_section_confirmed)
         self.btn_section_cancel.clicked.connect(self._on_section_canceled)
+        self.action_confirm.triggered.connect(self._on_section_confirmed)
+        self.action_cancel.triggered.connect(self._on_section_canceled)
         self.btn_section_remove.clicked.connect(self._remove_section)
+        self.action_remove_section.triggered.connect(self._remove_section)
+        self.action_add_section.triggered.connect(self._maybe_new_included_section)
 
         # File I/O
         self.btn_browse_output_dir.clicked.connect(self.select_output_location)
@@ -112,7 +123,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.btn_detect_peaks.clicked.connect(self.detect_peaks)
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
         self.plot.sig_peaks_drawn.connect(self.handle_draw_rate)
-        self.sig_data_processed.connect(self.handle_table_view_data)
+        self.sig_data_processed.connect(self.update_cas_table)
         self.sig_peaks_detected.connect(self._on_peaks_detected)
         self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
         self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected_scatter)
@@ -136,6 +147,10 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.theme_switcher.set_style("dark")
         if os.environ.get("DEV_MODE", "0") == "1":
             self._add_profiler()
+        self.action_group_cc = QtGui.QActionGroup(self)
+        self.action_group_cc.addAction(self.action_confirm)
+        self.action_group_cc.addAction(self.action_cancel)
+        self.action_group_cc.setVisible(False)
         self.data.set_sfreq(int(self.config.config.get("Defaults", "SampleRate", fallback=-1)))
         self._result: CompleteResult | None = None
 
@@ -221,21 +236,37 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     @Slot()
     def _on_data_loaded(self) -> None:
         if self.config.switch_on_load:
+            self.action_toggle_section_sidebar.setChecked(True)
             self.tabs_main.setCurrentIndex(1)
         self.handle_draw_signal()
-        self.handle_table_view_data()
+        self.update_cas_table()
 
     @Slot()
     def _on_peaks_detected(self) -> None:
         self.handle_draw_peaks()
         self.handle_draw_rate()
+        self.update_cas_table()
 
     @Slot()
     def _on_sections_cleared(self) -> None:
+        ok = QMessageBox.question(
+            self,
+            "Reset everything?",
+            "This will remove all sections and set the data back to its original state (as read from the file). Continue?",
+        )
+        if ok == QMessageBox.StandardButton.No:
+            return
         self.list_widget_sections.clear()
         self.combo_box_section_select.clear()
         self.data.clear_sections()
         self.plot.clear_regions()
+        self.update_cas_table()
+        self._result = None
+
+    @Slot()
+    def _on_section_done(self) -> None:
+        self.data.save_cas()
+        self.update_focused_result_table()
 
     @Slot(int)
     def _on_active_section_changed(self, index: int) -> None:
@@ -251,6 +282,8 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         else:
             return
         self.data.set_cas(section_id)
+        self.update_cas_table()
+        self.ui.label_currently_showing.setText(readable_section_id(section_id))
         if index != 0:
             self.btn_section_add.setEnabled(False)
             self.btn_section_add.setToolTip(
@@ -264,6 +297,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     def _maybe_new_included_section(self) -> None:
         current_limits = self.data.bounds
         self.container_section_confirm_cancel.show()
+        self.action_group_cc.setVisible(True)
         self.plot.show_section_selector("included", current_limits)
         self._section_type = "included"
 
@@ -271,6 +305,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     def _maybe_new_excluded_section(self) -> None:
         current_limits = self.data.bounds
         self.container_section_confirm_cancel.show()
+        self.action_group_cc.setVisible(True)
         self.plot.show_section_selector("excluded", current_limits)
         self._section_type = "excluded"
 
@@ -291,12 +326,14 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
                 self.data.excluded_sections.append(SectionIndices(lower, upper))
             case _:
                 raise ValueError(f"Invalid section type: {self._section_type}")
+        self.action_group_cc.setVisible(False)
         self.container_section_confirm_cancel.hide()
         self.btn_section_remove.setEnabled(True)
         self.sig_section_confirmed.emit(lower, upper)
 
     @Slot()
     def _on_section_canceled(self) -> None:
+        self.action_group_cc.setVisible(False)
         self.container_section_confirm_cancel.hide()
         self.plot.remove_section_selector()
 
@@ -443,23 +480,36 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.output_dir = path
 
     @Slot()
-    def handle_table_view_data(self) -> None:
+    def update_cas_table(self) -> None:
         """
         Update the data preview table and the data info table with the current data.
         """
-        data = self.data.cas.data
-        n_rows = 10
-        df_head = data.head(n_rows)
-        df_tail = data.tail(n_rows)
-        df_description = data.describe(percentiles=None)
+        cas_df = self.data.cas.data
+        cas_desc_df = cas_df.describe()
 
-        model = CompactDFModel(df_head=df_head, df_tail=df_tail)
-        raw_data_table = TableViewHelper(self.table_data_preview)
-        raw_data_table.make_table(model)
+        if not hasattr(self, "cas_table"):
+            model = PolarsTableModel(cas_df)
+            self.cas_table = TableHelper(self.table_view_cas, model)
+        else:
+            self.cas_table.update_cas_df(cas_df)
 
-        info = DescriptiveStatsModel(df_description)
-        info_table = TableViewHelper(self.table_data_info)
-        info_table.make_table(info)
+        if not hasattr(self, "cas_desc_table"):
+            info = DescriptiveStatsModel(cas_desc_df, orig_dtypes=self.data.cas.data.dtypes)
+            self.cas_desc_table = TableHelper(self.table_view_cas_description, info)
+        else:
+            self.cas_desc_table.update_cas_desc_df(cas_desc_df, cas_df.dtypes)
+
+    @Slot()
+    def update_focused_result_table(self) -> None:
+        try:
+            if self._result is None:
+                results = PolarsTableModel(pl.DataFrame())
+            else:
+                results = PolarsTableModel(self.data.cas.get_focused_result().to_polars())
+            self.cas_focused_table = TableHelper(self.table_view_focused_result, results)
+        except Exception as e:
+            msg = f"Failed to create focused result table: {e}"
+            self.sig_show_message.emit(msg, "error")
 
     @Slot()
     def select_data_file(self) -> None:
@@ -769,12 +819,8 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def refresh_app(self) -> None:
-        self.handle_table_view_data()
-        self.handle_draw_signal()
-        self.handle_draw_peaks()
-        self.handle_draw_rate()
-        result_table = TableViewHelper(self.table_view_focused_result)
-        result_table.make_table(PolarsModel(self.data.cas.get_focused_result().to_polars()))
+        # TODO: implement
+        ...
 
 
 def main(dev_mode: bool = False, antialias: bool = False) -> None:

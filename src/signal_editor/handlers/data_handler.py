@@ -432,7 +432,6 @@ class DataHandler(QtCore.QObject):
         for section_df in section_dfs:
             self.update_base(section_df)
 
-    @Slot()
     def save_cas(self) -> None:
         """
         Saves the currently active section to the base data frame.

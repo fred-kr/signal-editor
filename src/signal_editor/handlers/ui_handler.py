@@ -6,7 +6,7 @@ import pdir
 import polars as pl
 import polars.selectors as ps
 import pyqtgraph as pg
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtCore
 from PySide6.QtCore import (
     QDate,
     QObject,
@@ -77,6 +77,8 @@ class UIHandler(QObject):
             "Cursor Position (scene): -, -; Base Index: -; Section Index: -", sb
         )
         sb.addPermanentWidget(self.label_cursor_pos)
+        self.label_currently_showing = QtWidgets.QLabel("Currently showing: ")
+        sb.addPermanentWidget(self.label_currently_showing)
         sb.showMessage("Ready")
 
     def _prepare_widgets(self) -> None:
@@ -111,9 +113,14 @@ class UIHandler(QObject):
         peak_combo_box.currentIndexChanged.connect(stacked_peak_widget.setCurrentIndex)
 
     def _prepare_toolbars(self) -> None:
-        plot_toolbar = self._app.toolbar_plots
-        plot_toolbar.setVisible(False)
+        edit_tb = self._app.toolbar_plots
+        edit_tb.insertWidget(self._app.action_confirm, self._app.combo_box_section_select)
+        edit_tb.setVisible(False)
+        self._app.action_toggle_section_sidebar.setChecked(False)
 
+    def update_currently_shown_label(self, text: str) -> None:
+        self.label_currently_showing.setText(f"Currently showing: {text}")
+        
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():
             combo_box: pg.ComboBox = getattr(self._app, key)
@@ -167,12 +174,9 @@ class UIHandler(QObject):
 
     @Slot(int)
     def on_main_tab_changed(self, index: int) -> None:
-        is_index_one = index == 1
-
-        self._app.toolbar_plots.setVisible(is_index_one)
-        self._app.toolbar_plots.setEnabled(is_index_one)
-        self._app.dock_widget_sections.setVisible(is_index_one)
-        self._app.dock_widget_sections.setEnabled(is_index_one)
+        show_section_dock = index == 1 and self._app.action_toggle_section_sidebar.isChecked()
+        self._app.toolbar_plots.setVisible(index == 1)
+        self._app.dock_widget_sections.setVisible(show_section_dock)
 
     def create_jupyter_console_widget(self) -> None:
         self.jupyter_console = JupyterConsoleWidget()

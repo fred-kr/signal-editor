@@ -5,120 +5,109 @@ from configparser import ConfigParser
 from pathlib import Path
 
 
+def create_config_file(filename: str | Path) -> ConfigParser:
+    config = ConfigParser()
+
+    config["General"] = {"style": "dark", "auto_switch_tabs": "True"}
+
+    config["Processing"] = {
+        "sample_rate": "-1",
+    }
+
+    config["FileLocations"] = {"data_files": ".", "output_files": ".\\output"}
+
+    config["FilePatterns"] = {
+        "focused_result": "FocusedResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
+        "complete_result": "CompleteResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
+        "app_state_snapshot": "SignalEditorStateSnapshot_{TIMESTAMP}",
+    }
+
+    with open(filename, "w") as configfile:
+        config.write(configfile)
+
+    return config
+
+
 class ConfigHandler:
     def __init__(self, config_file: str | os.PathLike[str]) -> None:
-        self.config_file = config_file
-        self.config = ConfigParser()
-        if not Path(config_file).exists():
-            self.create_default_file(config_file)
-        self.config.read(config_file)
-        current_dir = Path.cwd()
-        self._switch_on_load = self.config.getboolean("BEHAVIOUR", "SwitchTabOnFileLoad", fallback=True)
-        self._app_dir = self._get_path("PATHS", "AppDir", fallback=current_dir)
-        self._data_dir = self._get_path("PATHS", "DataDir", fallback=self._app_dir)
-        self._output_dir = self._get_path("PATHS", "OutputDir", fallback=self._app_dir / "output")
-        self._style = self.config.get("DEFAULT", "Style", fallback="dark")
-        self._sample_rate = int(self.config.get("DEFAULT", "SampleRate", fallback=-1))
-        self._focused_result_file_name_pattern = self.config.get(
-            "NAMEPATTERNS",
-            "FocusedResult",
-            fallback="FocusedResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
-        )
-        self._complete_result_file_name_pattern = self.config.get(
-            "NAMEPATTERNS",
-            "CompleteResult",
-            fallback="CompleteResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
-        )
-        self._app_state_file_name_pattern = self.config.get(
-            "NAMEPATTERNS", "AppState", fallback="SignalEditorStateSnapshot_{TIMESTAMP}"
-        )
+        self.config_file = Path(config_file)
+        if not self.config_file.exists():
+            self.config = create_config_file(self.config_file)
+        else:
+            self.config = ConfigParser()
+            self.config.read(config_file)
 
-    @classmethod
-    def create_default_file(cls, config_file_location: str | os.PathLike[str]) -> None:
-        config = ConfigParser()
-        current_dir = Path.cwd()
-        config["DEFAULT"] = {"Style": "dark", "SampleRate": str(-1)}
-        config["BEHAVIOUR"] = {"SwitchTabOnFileLoad": "True"}
-        config["PATHS"] = {
-            "AppDir": str(current_dir),
-            "DataDir": str(current_dir),
-            "OutputDir": str(current_dir / "output"),
-        }
-        config["NAMEPATTERNS"] = {
-            "FocusedResult": "FocusedResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
-            "CompleteResult": "CompleteResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
-            "AppState": "SignalEditorStateSnapshot_{TIMESTAMP}",
-        }
-        with open(config_file_location, "w") as configfile:
-            config.write(configfile)
+        self._general = dict(self.config.items("General"))
+        self._processing = dict(self.config.items("Processing"))
+        self._file_locations = dict(self.config.items("FileLocations"))
+        self._file_patterns = dict(self.config.items("FilePatterns"))
 
     def write_config(self) -> None:
         with open(self.config_file, "w") as configfile:
             self.config.write(configfile)
 
-    def _get_path(self, section: str, option: str, fallback: str | Path) -> Path:
-        return Path(self.config.get(section, option, fallback=fallback))
-
     def _set_path(self, section: str, value: Path | str) -> None:
         path = Path(value)
         if path.is_dir():
-            self.config.set("PATHS", section, str(path))
+            self.config.set("FileLocations", section, path.as_posix())
+        else:
+            e = NotADirectoryError()
+            e.add_note(f"{path} is not a directory.")
+            raise e
 
     @property
     def switch_on_load(self) -> bool:
-        return self._switch_on_load
-    
+        return bool(self._general["auto_switch_tabs"])
+
     @property
     def style(self) -> t.Literal["light", "dark"]:
-        return t.cast(t.Literal["light", "dark"], self._style)
+        return t.cast(t.Literal["light", "dark"], self._general.get("style", "dark"))
 
     @style.setter
     def style(self, value: str | t.Literal["light", "dark"]) -> None:
-        self.config.set("DEFAULT", "Style", value)
-        self.write_config()
-
-    @property
-    def app_dir(self) -> Path:
-        return self._app_dir
-
-    @property
-    def data_dir(self) -> Path:
-        return self._data_dir
-
-    @data_dir.setter
-    def data_dir(self, value: Path | str) -> None:
-        self._set_path("DataDir", value)
-        self.write_config()
-
-    @property
-    def output_dir(self) -> Path:
-        return self._output_dir
-
-    @output_dir.setter
-    def output_dir(self, value: Path | str) -> None:
-        self._set_path("OutputDir", value)
+        self.config.set("General", "style", value)
         self.write_config()
 
     @property
     def sample_rate(self) -> int:
-        return self._sample_rate
+        return self.config.getint("Processing", "sample_rate", fallback=-1)
 
     @sample_rate.setter
     def sample_rate(self, value: int | float) -> None:
-        self.config.set("DEFAULT", "SampleRate", str(int(value)))
+        self.config.set("Processing", "sample_rate", str(int(value)))
+        self.write_config()
+
+    @property
+    def data_dir(self) -> Path:
+        return Path(self._file_locations.get("data_files", ".")).resolve()
+
+    @data_dir.setter
+    def data_dir(self, value: Path | str) -> None:
+        self._set_path("data_files", value)
+        self.write_config()
+
+    @property
+    def output_dir(self) -> Path:
+        return Path(self._file_locations.get("output_files", ".\\output")).resolve()
+
+    @output_dir.setter
+    def output_dir(self, value: Path | str) -> None:
+        self._set_path("output_files", value)
         self.write_config()
 
     def make_focused_result_name(self, signal_name: str, source_file_name: str) -> str:
-        return self._focused_result_file_name_pattern.format(
-            SIGNAL_NAME=signal_name, SOURCE_FILE_NAME=source_file_name
-        )
+        return self._file_patterns.get(
+            "focused_result", "FocusedResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}"
+        ).format(SIGNAL_NAME=signal_name, SOURCE_FILE_NAME=source_file_name)
 
     def make_complete_result_name(self, signal_name: str, source_file_name: str) -> str:
-        return self._complete_result_file_name_pattern.format(
-            SIGNAL_NAME=signal_name, SOURCE_FILE_NAME=source_file_name
-        )
+        return self._file_patterns.get(
+            "complete_result", "CompleteResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}"
+        ).format(SIGNAL_NAME=signal_name, SOURCE_FILE_NAME=source_file_name)
 
     def make_app_state_name(self, timestamp: datetime.datetime | str) -> str:
         if isinstance(timestamp, datetime.datetime):
             timestamp = timestamp.strftime("%Y%m%d_%H%M%S")
-        return self._app_state_file_name_pattern.format(TIMESTAMP=timestamp)
+        return self._file_patterns.get(
+            "app_state_snapshot", "SignalEditorStateSnapshot_{TIMESTAMP}"
+        ).format(TIMESTAMP=timestamp)

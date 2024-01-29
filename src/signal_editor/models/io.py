@@ -63,7 +63,7 @@ def read_edf(
         .lazy()
         .with_row_count("index", offset=start)
         .with_columns(
-            pl.Series("time_s", times, dtype=pl.Float64),
+            pl.Series("time_s", times, dtype=pl.Decimal),
             pl.col("temperature").round(1),
         )
         .filter((pl.col("temperature") != 0) & (pl.col("hbr") != 0) & (pl.col("ventilation") != 0))

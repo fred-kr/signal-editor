@@ -1,6 +1,7 @@
-from typing import Any
+import typing as t
 
 import polars as pl
+import polars.selectors as ps
 from PySide6.QtCore import (
     QAbstractTableModel,
     QModelIndex,
@@ -10,61 +11,73 @@ from PySide6.QtCore import (
 from PySide6.QtWidgets import QWidget
 
 
-class CompactDFModel(QAbstractTableModel):
+class PolarsTableModel(QAbstractTableModel):
     def __init__(
         self,
-        df_head: pl.DataFrame,
-        df_tail: pl.DataFrame,
+        dataframe: pl.DataFrame,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self._columns = [
-            (col, str(dtype)) for col, dtype in zip(df_head.columns, df_head.dtypes, strict=True)
-        ]
-        self._data = (
-            df_head.to_numpy().tolist()
-            + [["..."] * len(self._columns)]
-            + df_tail.to_numpy().tolist()
+        self._df = (
+            dataframe.lazy()
+            .with_columns(
+                ps.contains("time").cast(pl.Decimal(12, 3)),
+                ps.contains("temp").cast(pl.Decimal(3, 1)),
+            )
+            .collect()
+            .rechunk()
         )
 
+    def set_df(self, dataframe: pl.DataFrame) -> None:
+        self.beginResetModel()
+        self._df = (
+            dataframe.lazy()
+            .with_columns(
+                ps.contains("time").cast(pl.Decimal(12, 3)),
+                ps.contains("temp").cast(pl.Decimal(3, 1)),
+            )
+            .collect()
+            .rechunk()
+        )
+        self.endResetModel()
+
     def rowCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
-        return len(self._data)
+        return self._df.height
 
     def columnCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
-        return len(self._columns)
+        return self._df.width
 
     def data(
         self,
         index: QModelIndex | QPersistentModelIndex,
         role: int = Qt.ItemDataRole.DisplayRole,
-    ) -> Any:
+    ) -> t.Any:
         if not index.isValid():
             return None
 
-        row, column = index.row(), index.column()
-
         if role == Qt.ItemDataRole.DisplayRole:
-            col_name = self._columns[column][0]
-            if self._data[row][column] == "...":
-                return "..."
-            if "index" in col_name or "peak" in col_name:
-                return f"{int(self._data[row][column]):_}"
-            elif "is_included" in col_name:
-                return f"{self._data[row][column]}"
-            elif "time" in col_name:
-                return f"{float(self._data[row][column]):_.5f}"
-            elif "rate" in col_name:
-                return f"{int(self._data[row][column]):_}"
-            elif (
-                "temp" not in col_name
-                and "hb" in col_name
-                or "temp" not in col_name
-                and "vent" in col_name
-            ):
-                return f"{float(self._data[row][column]):.4f}"
-            elif "temp" in col_name:
-                return f"{float(self._data[row][column]):.1f}"
-            return str(self._data[row][column])
+            row, column = index.row(), index.column()
+            value = self._df.get_column(self._df.columns[column])[row]
+            dtype = self._df.dtypes[column]
+
+            match dtype:
+                case (
+                    pl.Int8
+                    | pl.Int16
+                    | pl.Int32
+                    | pl.Int64
+                    | pl.UInt8
+                    | pl.UInt16
+                    | pl.UInt32
+                    | pl.UInt64
+                ):
+                    return f"{value:_}"
+                case pl.Float32 | pl.Float64:
+                    return f"{value:_.4f}"
+                case pl.Decimal:
+                    return f"{value}"
+                case _:
+                    return str(value)
 
         return None
 
@@ -73,104 +86,60 @@ class CompactDFModel(QAbstractTableModel):
         section: int,
         orientation: Qt.Orientation,
         role: int = Qt.ItemDataRole.DisplayRole,
-    ) -> Any:
+    ) -> t.Any:
         if role == Qt.ItemDataRole.DisplayRole:
             if orientation == Qt.Orientation.Horizontal:
-                column_name, column_type = self._columns[section]
-                return f"{column_name} ({column_type})"
+                name, dtype = self._df.columns[section], self._df.dtypes[section]
+                return f"{name}\n---\n{dtype}"
             if orientation == Qt.Orientation.Vertical:
                 return str(section)
 
         return None
 
 
-class PolarsModel(QAbstractTableModel):
-    """
-    A TableModel for use with polars dataframes.
-    """
-
-    def __init__(self, dataframe: pl.DataFrame, parent: QWidget | None = None):
-        super().__init__(parent)
-        self._dataframe = dataframe
-
-    def rowCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
-        return self._dataframe.shape[0]
-
-    def columnCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
-        return self._dataframe.shape[1]
-
-    def headerData(
-        self,
-        section: int,
-        orientation: Qt.Orientation,
-        role: int = Qt.ItemDataRole.DisplayRole,
-    ) -> Any:
-        if role == Qt.ItemDataRole.DisplayRole:
-            if orientation == Qt.Orientation.Horizontal:
-                return self._dataframe.columns[section]
-
-            if orientation == Qt.Orientation.Vertical:
-                return f"{section}"
-
-        return None
-
-    def data(
-        self,
-        index: QModelIndex | QPersistentModelIndex,
-        role: int = Qt.ItemDataRole.DisplayRole,
-    ) -> Any:
-        if not index.isValid():
-            return None
-
-        column = index.column()
-        row = index.row()
-
-        if role == Qt.ItemDataRole.DisplayRole:
-            col_name = self._dataframe.columns[column]
-
-            if "index" in col_name or "peak" in col_name:
-                idx = self._dataframe[row, column]
-                return f"{int(idx)}"
-            if "time" in col_name:
-                time_s = self._dataframe[row, column]
-                return f"{time_s:.4f}"
-            elif "temp" in col_name:
-                temperature = self._dataframe[row, column]
-                return f"{temperature:.1f}"
-            elif "hb" in col_name:
-                hbr = self._dataframe[row, column]
-                return f"{hbr:.4f}"
-            elif "vent" in col_name:
-                ventilation = self._dataframe[row, column]
-                return f"{ventilation:.4f}"
-            return str(self._dataframe[row, column])
-
-        return None
-
-
 class DescriptiveStatsModel(QAbstractTableModel):
-    def __init__(self, dataframe: pl.DataFrame, parent: QWidget | None = None):
+    def __init__(
+        self, desc_df: pl.DataFrame, orig_dtypes: list[pl.DataType], parent: QWidget | None = None
+    ):
         QAbstractTableModel.__init__(self, parent)
-        self._dataframe = dataframe.shrink_to_fit(in_place=True)
+        self._dtypes = orig_dtypes
+        self._desc_df = desc_df
+
+    @property
+    def desc_df(self):
+        return self._desc_df
+
+    def set_df(self, desc_df: pl.DataFrame):
+        self.beginResetModel()
+        self._desc_df = desc_df
+        self.endResetModel()
+
+    @property
+    def dtypes(self):
+        return [pl.String, *self._dtypes]
+
+    def set_dtypes(self, dtypes: list[pl.DataType]):
+        self._dtypes = dtypes
 
     def rowCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
-        return self._dataframe.shape[0]
+        return self._desc_df.height
 
     def columnCount(self, parent: QModelIndex | QPersistentModelIndex | None = None) -> int:
-        return self._dataframe.shape[1]
+        return self._desc_df.width
 
     def headerData(
         self,
         section: int,
         orientation: Qt.Orientation,
         role: int = Qt.ItemDataRole.DisplayRole,
-    ) -> Any:
+    ) -> t.Any:
         if role == Qt.ItemDataRole.DisplayRole:
-            if orientation == Qt.Orientation.Horizontal:
-                return self._dataframe.columns[section]
-
-            if orientation == Qt.Orientation.Vertical:
-                return f"{section}"
+            match orientation:
+                case Qt.Orientation.Horizontal:
+                    name, dtype = self.desc_df.columns[section], self.dtypes[section]
+                    return f"{name}\n---\n{dtype}"
+                case Qt.Orientation.Vertical:
+                    return str(section)
 
         return None
 
@@ -178,22 +147,33 @@ class DescriptiveStatsModel(QAbstractTableModel):
         self,
         index: QModelIndex | QPersistentModelIndex,
         role: int = Qt.ItemDataRole.DisplayRole,
-    ) -> Any:
+    ) -> t.Any:
         if not index.isValid():
             return None
 
-        column = index.column()
-        row = index.row()
+        row, column = index.row(), index.column()
 
         if role == Qt.ItemDataRole.DisplayRole:
-            col_name = self._dataframe.columns[column]
-            info_data = self._dataframe[row, column]
-            if self._dataframe.get_column(col_name).dtype != pl.Float64 or info_data > 100:
-                if isinstance(info_data, str):
-                    return info_data
-                elif isinstance(info_data, (int, float)):
-                    return f"{int(info_data):_}"
-                return str(info_data or "")
-            return f"{info_data:.4g}"
+            value = self._desc_df.get_column(self.desc_df.columns[column])[row]
+            dtype = self.dtypes[column]
+
+            match dtype:
+                case (
+                    pl.Int8
+                    | pl.Int16
+                    | pl.Int32
+                    | pl.Int64
+                    | pl.UInt8
+                    | pl.UInt16
+                    | pl.UInt32
+                    | pl.UInt64
+                ):
+                    return f"{value:_}"
+                case pl.Float32 | pl.Float64:
+                    return f"{value:_.4f}"
+                case pl.Decimal:
+                    return f"{value}"
+                case _:
+                    return str(value)
 
         return None

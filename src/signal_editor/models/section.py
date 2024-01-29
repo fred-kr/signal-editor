@@ -55,7 +55,7 @@ def _to_float_array(value: npt.NDArray[np.float64] | pl.Series) -> npt.NDArray[n
     return value.cast(pl.Float64).to_numpy(writable=True) if isinstance(value, pl.Series) else value
 
 
-@attrs.define(slots=True, frozen=True)
+@attrs.define(slots=True, frozen=True, repr=True)
 class SectionResult:
     sig_name: str = attrs.field()
     section_id: SectionID = attrs.field()
@@ -69,37 +69,8 @@ class SectionResult:
     processing_parameters: _t.ProcessingParameters = attrs.field()
     focused_result: npt.NDArray[np.void] = attrs.field(converter=_to_structured_array)
 
-    def __repr__(self) -> str:
-        return f"""
-SectionResult(
-    sig_name={self.sig_name},
-    section_id={self.section_id},
-    absolute_bounds={self.absolute_bounds},
-    data={self.data},
-    sampling_rate={self.sampling_rate},
-    peaks={self.peaks},
-    peak_edits={self.peak_edits},
-    rate={self.rate},
-    rate_interpolated={self.rate_interpolated},
-    processing_parameters={self.processing_parameters},
-    focused_result={self.focused_result},
-)
-"""
-
     def as_dict(self) -> _t.SectionResultDict:
-        return {
-            "sig_name": self.sig_name,
-            "section_id": self.section_id,
-            "absolute_bounds": self.absolute_bounds,
-            "data": self.data,
-            "sampling_rate": self.sampling_rate,
-            "peaks": self.peaks,
-            "peak_edits": self.peak_edits.as_dict(),
-            "rate": self.rate,
-            "rate_interpolated": self.rate_interpolated,
-            "processing_parameters": self.processing_parameters,
-            "focused_result": self.focused_result,
-        }
+        return _t.SectionResultDict(**attrs.asdict(self), peak_edits=self.peak_edits.as_dict())
 
 
 class Section:
@@ -137,23 +108,23 @@ class Section:
         self._peak_edits = ManualPeakEdits()
 
     def __repr__(self) -> str:
-        return f"""
-Section(
-    section_id={self.section_id},
-    sig_name={self.sig_name},
-    sampling_rate={self._sampling_rate},
-    is_active={self._is_active},
-    base_bounds={self._abs_bounds},
-    sect_bounds={self.sect_bounds},
-    raw_data={self.raw_data},
-    proc_data={self.proc_data},
-    peaks={self.peaks},
-    rate={self.rate},
-    rate_interp={self.rate_interp},
-    rate_stats={self.rate_stats},
-    interval_stats={self.interval_stats},
-)
-"""
+        return (
+            "Section("
+            f"section_id={self.section_id}, "
+            f"sig_name={self.sig_name}, "
+            f"sampling_rate={self._sampling_rate}, "
+            f"is_active={self._is_active}, "
+            f"base_bounds={self._abs_bounds}, "
+            f"sect_bounds={self.sect_bounds}, "
+            f"raw_data={self.raw_data}, "
+            f"proc_data={self.proc_data}, "
+            f"peaks={self.peaks}, "
+            f"rate={self.rate}, "
+            f"rate_interp={self.rate_interp}, "
+            f"rate_stats={self.rate_stats}, "
+            f"interval_stats={self.interval_stats}"
+            ")"
+        )
 
     @classmethod
     def get_id_counter(cls) -> int:

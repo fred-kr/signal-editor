@@ -1,5 +1,6 @@
 import argparse
 import os
+import polars as pl
 
 from src.signal_editor.app import main
 
@@ -11,5 +12,7 @@ if __name__ == "__main__":
 
     os.environ["PYQTGRAPH_QT_LIB"] = "PySide6"
     os.environ["PYDEVD_DISABLE_FILE_VALIDATION"] = "1"
+
+    pl.Config.activate_decimals(True)
 
     main(args.dev, args.antialias)

@@ -21,7 +21,7 @@
   </property>
   <property name="windowIcon">
    <iconset resource="../../resources/icons/icons.qrc">
-    <normaloff>:/custom-icons/app-icon-v2.svg</normaloff>:/custom-icons/app-icon-v2.svg</iconset>
+    <normaloff>:/custom/custom-icons/app-icon-v2.svg</normaloff>:/custom/custom-icons/app-icon-v2.svg</iconset>
   </property>
   <property name="toolButtonStyle">
    <enum>Qt::ToolButtonFollowStyle</enum>
@@ -30,7 +30,7 @@
    <set>QMainWindow::AllowNestedDocks|QMainWindow::AnimatedDocks|QMainWindow::VerticalTabs</set>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QHBoxLayout" name="_2">
+   <layout class="QGridLayout" name="gridLayout_24">
     <property name="leftMargin">
      <number>0</number>
     </property>
@@ -43,7 +43,7 @@
     <property name="bottomMargin">
      <number>0</number>
     </property>
-    <item>
+    <item row="0" column="0">
      <widget class="QTabWidget" name="tabs_main">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -63,90 +63,14 @@
       <widget class="QWidget" name="tab_data">
        <attribute name="icon">
         <iconset resource="../../resources/icons/icons.qrc">
-         <normaloff>:/material-symbols/dataset_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/dataset_FILL0_wght400_GRAD0_opsz24.png</iconset>
+         <normaloff>:/iconduck/iconduck/data-table.svg</normaloff>:/iconduck/iconduck/data-table.svg</iconset>
        </attribute>
        <attribute name="title">
         <string>Data</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout_4">
-        <item row="0" column="0" rowspan="3">
-         <widget class="QFrame" name="container_text_info">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <layout class="QGridLayout" name="gridLayout_13">
-           <property name="bottomMargin">
-            <number>0</number>
-           </property>
-           <item row="0" column="0">
-            <widget class="QLabel" name="label_19">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="text">
-              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:14pt; font-weight:700;&quot;&gt;Info&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="0">
-            <widget class="QTextBrowser" name="text_info_loading_data">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="sizeAdjustPolicy">
-              <enum>QAbstractScrollArea::AdjustToContentsOnFirstShow</enum>
-             </property>
-             <property name="html">
-              <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;meta charset=&quot;utf-8&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-hr { height: 1px; border-width: 0; }
-li.unchecked::marker { content: &quot;\2610&quot;; }
-li.checked::marker { content: &quot;\2612&quot;; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot;-qt-paragraph-type:empty; margin-top:12px; margin-bottom:4px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;br /&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item row="2" column="2">
-         <widget class="QTableView" name="table_data_info">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="sizeAdjustPolicy">
-           <enum>QAbstractScrollArea::AdjustToContents</enum>
-          </property>
-          <property name="editTriggers">
-           <set>QAbstractItemView::NoEditTriggers</set>
-          </property>
-          <property name="showDropIndicator" stdset="0">
-           <bool>false</bool>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="2" rowspan="2">
-         <widget class="QTableView" name="table_data_preview">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
+        <item row="1" column="1" rowspan="2">
+         <widget class="QTableView" name="table_view_cas">
           <property name="sizeAdjustPolicy">
            <enum>QAbstractScrollArea::AdjustToContents</enum>
           </property>
@@ -161,12 +85,57 @@ li.checked::marker { content: &quot;\2612&quot;; }
           </property>
          </widget>
         </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="label_17">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:11pt; font-weight:700;&quot;&gt;Current Data&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="QTableView" name="table_view_cas_description">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Expanding" vsizetype="Minimum">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="sizeAdjustPolicy">
+           <enum>QAbstractScrollArea::AdjustToContents</enum>
+          </property>
+          <property name="editTriggers">
+           <set>QAbstractItemView::NoEditTriggers</set>
+          </property>
+          <property name="showDropIndicator" stdset="0">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="2">
+         <widget class="QLabel" name="label_25">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:11pt; font-weight:700;&quot;&gt;Current Data Summary&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
       <widget class="QWidget" name="tab_plots">
        <attribute name="icon">
         <iconset resource="../../resources/icons/icons.qrc">
-         <normaloff>:/material-symbols/earthquake_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/earthquake_FILL0_wght400_GRAD0_opsz24.png</iconset>
+         <normaloff>:/iconduck/iconduck/chart-line-smooth.svg</normaloff>:/iconduck/iconduck/chart-line-smooth.svg</iconset>
        </attribute>
        <attribute name="title">
         <string>Plots</string>
@@ -186,7 +155,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
        </property>
        <attribute name="icon">
         <iconset resource="../../resources/icons/icons.qrc">
-         <normaloff>:/material-symbols/table_chart_view_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/table_chart_view_FILL0_wght400_GRAD0_opsz24.png</iconset>
+         <normaloff>:/iconduck/iconduck/report-data.svg</normaloff>:/iconduck/iconduck/report-data.svg</iconset>
        </attribute>
        <attribute name="title">
         <string>Results</string>
@@ -313,7 +282,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
       <widget class="QWidget" name="tab_analysis">
        <attribute name="icon">
         <iconset resource="../../resources/icons/icons.qrc">
-         <normaloff>:/material-symbols/query_stats_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/query_stats_FILL0_wght400_GRAD0_opsz24.png</iconset>
+         <normaloff>:/iconduck/iconduck/dashboard.svg</normaloff>:/iconduck/iconduck/dashboard.svg</iconset>
        </attribute>
        <attribute name="title">
         <string>Analysis</string>
@@ -349,15 +318,18 @@ li.checked::marker { content: &quot;\2612&quot;; }
     </property>
     <addaction name="action_remove_peak_rect"/>
     <addaction name="action_remove_selected_peaks"/>
-    <addaction name="action_reset_view"/>
     <addaction name="separator"/>
+    <addaction name="action_reset_view"/>
     <addaction name="action_reset_all"/>
+    <addaction name="separator"/>
    </widget>
    <widget class="QMenu" name="menu_file">
     <property name="title">
      <string>File</string>
     </property>
     <addaction name="action_select_file"/>
+    <addaction name="separator"/>
+    <addaction name="action_save_to_hdf5"/>
     <addaction name="separator"/>
     <addaction name="action_save_state"/>
     <addaction name="action_load_state"/>
@@ -424,12 +396,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <bool>false</bool>
    </attribute>
    <addaction name="action_select_file"/>
-   <addaction name="action_save_to_hdf5"/>
    <addaction name="separator"/>
-   <addaction name="action_save_state"/>
-   <addaction name="action_load_state"/>
-   <addaction name="separator"/>
-   <addaction name="action_open_console"/>
    <addaction name="action_light_switch"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -491,7 +458,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
           <widget class="QPushButton" name="btn_info_data_selection">
            <property name="icon">
             <iconset resource="../../resources/icons/icons.qrc">
-             <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+             <normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
            </property>
            <property name="flat">
             <bool>true</bool>
@@ -736,7 +703,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
           <widget class="QPushButton" name="btn_info_metadata">
            <property name="icon">
             <iconset resource="../../resources/icons/icons.qrc">
-             <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+             <normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
            </property>
            <property name="flat">
             <bool>true</bool>
@@ -1426,7 +1393,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
              <widget class="QPushButton" name="btn_info_standardize">
               <property name="icon">
                <iconset resource="../../resources/icons/icons.qrc">
-                <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+                <normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
               </property>
               <property name="flat">
                <bool>true</bool>
@@ -1450,7 +1417,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
              <widget class="QPushButton" name="btn_info_preprocess">
               <property name="icon">
                <iconset resource="../../resources/icons/icons.qrc">
-                <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+                <normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
               </property>
               <property name="flat">
                <bool>true</bool>
@@ -2230,7 +2197,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
              <widget class="QPushButton" name="btn_info_peak_detect">
               <property name="icon">
                <iconset resource="../../resources/icons/icons.qrc">
-                <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+                <normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
               </property>
               <property name="flat">
                <bool>true</bool>
@@ -2354,7 +2321,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
                <string>Browse</string>
               </property>
               <property name="icon">
-               <iconset resource="../../resources/icons/icons.qrc">
+               <iconset>
                 <normaloff>:/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/folder_FILL0_wght400_GRAD0_opsz24.png</iconset>
               </property>
              </widget>
@@ -2394,19 +2361,10 @@ li.checked::marker { content: &quot;\2612&quot;; }
   </widget>
   <widget class="QToolBar" name="toolbar_plots">
    <property name="enabled">
-    <bool>false</bool>
-   </property>
-   <property name="sizePolicy">
-    <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-     <horstretch>0</horstretch>
-     <verstretch>0</verstretch>
-    </sizepolicy>
+    <bool>true</bool>
    </property>
    <property name="windowTitle">
     <string>toolbar_plots</string>
-   </property>
-   <property name="layoutDirection">
-    <enum>Qt::RightToLeft</enum>
    </property>
    <property name="movable">
     <bool>false</bool>
@@ -2430,14 +2388,17 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <bool>false</bool>
    </attribute>
    <addaction name="action_reset_view"/>
-   <addaction name="action_clear_sections"/>
-   <addaction name="separator"/>
    <addaction name="action_section_overview"/>
+   <addaction name="separator"/>
    <addaction name="action_mark_section_finished"/>
+   <addaction name="action_add_section"/>
+   <addaction name="action_remove_section"/>
+   <addaction name="action_confirm"/>
+   <addaction name="action_cancel"/>
   </widget>
   <widget class="QDockWidget" name="dock_widget_sections">
    <property name="enabled">
-    <bool>false</bool>
+    <bool>true</bool>
    </property>
    <property name="features">
     <set>QDockWidget::DockWidgetFloatable|QDockWidget::DockWidgetMovable</set>
@@ -2468,38 +2429,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
         </sizepolicy>
        </property>
        <layout class="QGridLayout" name="gridLayout_18">
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_6">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="text">
-           <string>Currently showing:</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1" alignment="Qt::AlignRight">
-         <widget class="QPushButton" name="btn_info_section">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="icon">
-           <iconset resource="../../resources/icons/icons.qrc">
-            <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
-          </property>
-          <property name="flat">
-           <bool>true</bool>
-          </property>
-         </widget>
-        </item>
         <item row="2" column="0">
-         <widget class="QPushButton" name="btn_section_add">
+         <widget class="QToolButton" name="btn_section_add">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
             <horstretch>0</horstretch>
@@ -2509,85 +2440,18 @@ li.checked::marker { content: &quot;\2612&quot;; }
           <property name="text">
            <string>Add Section</string>
           </property>
-         </widget>
-        </item>
-        <item row="3" column="0" colspan="2">
-         <widget class="QWidget" name="container_section_confirm_cancel" native="true">
-          <layout class="QGridLayout" name="gridLayout_20">
-           <item row="1" column="0">
-            <widget class="QPushButton" name="btn_section_confirm">
-             <property name="styleSheet">
-              <string notr="true">background-color: rgba(0, 170, 0, 0.8);</string>
-             </property>
-             <property name="text">
-              <string>Confirm</string>
-             </property>
-             <property name="icon">
-              <iconset resource="../../resources/icons/icons.qrc">
-               <normaloff>:/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png</iconset>
-             </property>
-             <property name="iconSize">
-              <size>
-               <width>24</width>
-               <height>24</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item row="1" column="1">
-            <widget class="QPushButton" name="btn_section_cancel">
-             <property name="styleSheet">
-              <string notr="true">background-color: rgba(255, 0, 0, 0.8);</string>
-             </property>
-             <property name="text">
-              <string>Cancel</string>
-             </property>
-             <property name="icon">
-              <iconset resource="../../resources/icons/icons.qrc">
-               <normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</iconset>
-             </property>
-             <property name="iconSize">
-              <size>
-               <width>24</width>
-               <height>24</height>
-              </size>
-             </property>
-            </widget>
-           </item>
-           <item row="0" column="0" colspan="2">
-            <widget class="QLabel" name="label_24">
-             <property name="text">
-              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:700;&quot;&gt;Selection&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-             </property>
-             <property name="alignment">
-              <set>Qt::AlignCenter</set>
-             </property>
-            </widget>
-           </item>
-          </layout>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="QPushButton" name="btn_section_remove">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
+          <property name="popupMode">
+           <enum>QToolButton::MenuButtonPopup</enum>
           </property>
-          <property name="text">
-           <string>Remove Section</string>
+          <property name="toolButtonStyle">
+           <enum>Qt::ToolButtonTextOnly</enum>
+          </property>
+          <property name="autoRaise">
+           <bool>false</bool>
           </property>
          </widget>
         </item>
-        <item row="1" column="0" colspan="2">
-         <widget class="QComboBox" name="combo_box_section_select">
-          <property name="inputMethodHints">
-           <set>Qt::ImhNone</set>
-          </property>
-         </widget>
-        </item>
-        <item row="4" column="0" colspan="2">
+        <item row="6" column="0" colspan="2">
          <widget class="QListWidget" name="list_widget_sections">
           <property name="sizeAdjustPolicy">
            <enum>QAbstractScrollArea::AdjustToContentsOnFirstShow</enum>
@@ -2612,11 +2476,144 @@ li.checked::marker { content: &quot;\2612&quot;; }
           </property>
          </widget>
         </item>
+        <item row="2" column="1">
+         <widget class="QToolButton" name="btn_section_remove">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Remove Section</string>
+          </property>
+          <property name="toolButtonStyle">
+           <enum>Qt::ToolButtonTextOnly</enum>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0" colspan="2">
+         <widget class="QComboBox" name="combo_box_section_select">
+          <property name="inputMethodHints">
+           <set>Qt::ImhNone</set>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0" colspan="2">
+         <widget class="QWidget" name="container_section_confirm_cancel" native="true">
+          <layout class="QGridLayout" name="gridLayout_20">
+           <item row="1" column="0">
+            <widget class="QPushButton" name="btn_section_confirm">
+             <property name="text">
+              <string>Confirm</string>
+             </property>
+             <property name="icon">
+              <iconset>
+               <normaloff>:/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png</iconset>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>24</width>
+               <height>24</height>
+              </size>
+             </property>
+             <property name="default">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QPushButton" name="btn_section_cancel">
+             <property name="text">
+              <string>Cancel</string>
+             </property>
+             <property name="icon">
+              <iconset>
+               <normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</iconset>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>24</width>
+               <height>24</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0" colspan="2">
+            <widget class="QLabel" name="label_24">
+             <property name="text">
+              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:10pt; font-weight:700;&quot;&gt;Selection&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="label_6">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Maximum">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="text">
+           <string>Currently showing:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1" alignment="Qt::AlignRight">
+         <widget class="QPushButton" name="btn_info_section">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="icon">
+           <iconset resource="../../resources/icons/icons.qrc">
+            <normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+          </property>
+          <property name="flat">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>
     </layout>
    </widget>
+  </widget>
+  <widget class="QToolBar" name="toolbar_section_sidebar">
+   <property name="windowTitle">
+    <string>toolBar</string>
+   </property>
+   <property name="layoutDirection">
+    <enum>Qt::RightToLeft</enum>
+   </property>
+   <property name="movable">
+    <bool>false</bool>
+   </property>
+   <property name="allowedAreas">
+    <set>Qt::TopToolBarArea</set>
+   </property>
+   <property name="toolButtonStyle">
+    <enum>Qt::ToolButtonIconOnly</enum>
+   </property>
+   <property name="floatable">
+    <bool>false</bool>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="action_toggle_section_sidebar"/>
   </widget>
   <action name="action_open_console">
    <property name="checked">
@@ -2624,7 +2621,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/terminal_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/terminal_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/iconduck/iconduck/window-terminal.svg</normaloff>:/iconduck/iconduck/window-terminal.svg</iconset>
    </property>
    <property name="text">
     <string>Console</string>
@@ -2642,34 +2639,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_toggle_sidebar">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/thumbnail_bar_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/thumbnail_bar_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Show Sidebar</string>
-   </property>
-   <property name="toolTip">
-    <string>Show / Hide sidebar</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
   <action name="action_select_file">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/folder_open_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/folder_open_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/folder_open_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/folder_open_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Select File</string>
+    <string>Open File</string>
    </property>
    <property name="toolTip">
     <string>Select a file to work on</string>
@@ -2678,7 +2654,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <action name="action_exit">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Exit</string>
@@ -2687,27 +2663,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <string>Exit program</string>
    </property>
   </action>
-  <action name="action_reset_all">
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/frame_reload_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/frame_reload_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Reset All</string>
-   </property>
-   <property name="toolTip">
-    <string>Resets state of data and app back to how it was just after being loaded. Only use in case of weird app behaviour or sth, as all unsaved progress will be lost.</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
   <action name="action_pan_mode">
    <property name="checkable">
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
+    <iconset>
      <normaloff>:/material-symbols/drag_pan_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/drag_pan_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
@@ -2725,7 +2686,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <bool>true</bool>
    </property>
    <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
+    <iconset>
      <normaloff>:/material-symbols/crop_free_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/crop_free_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
@@ -2738,7 +2699,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <action name="action_reset_view">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/fit_screen_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/fit_screen_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/fit_screen_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/fit_screen_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Reset View</string>
@@ -2753,49 +2714,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_previous_section">
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/arrow_back_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/arrow_back_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Previous Section</string>
-   </property>
-   <property name="toolTip">
-    <string>Show the previous section</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+Left</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
-  <action name="action_next_section">
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/arrow_forward_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/arrow_forward_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Next Section</string>
-   </property>
-   <property name="toolTip">
-    <string>Show the next section</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+Right</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
   <action name="action_toggle_whats_this_mode">
    <property name="checkable">
     <bool>true</bool>
    </property>
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/help_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Whats this?</string>
@@ -2813,7 +2738,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <action name="action_remove_peak_rect">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/select_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Toggle Peak Deletion Rectangle</string>
@@ -2828,58 +2753,13 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_run_preprocessing">
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/data_thresholding_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/data_thresholding_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Run pre-processing</string>
-   </property>
-   <property name="toolTip">
-    <string>Filter and standardize the active signal with the currently selected values</string>
-   </property>
-   <property name="autoRepeat">
-    <bool>false</bool>
-   </property>
-  </action>
-  <action name="action_run_peak_detection">
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/query_stats_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/query_stats_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Run peak detection</string>
-   </property>
-   <property name="toolTip">
-    <string>Detect peaks in the current signal using the selected method and input values</string>
-   </property>
-   <property name="autoRepeat">
-    <bool>false</bool>
-   </property>
-  </action>
-  <action name="action_get_results">
-   <property name="icon">
-    <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/start_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/start_FILL0_wght400_GRAD0_opsz24.png</iconset>
-   </property>
-   <property name="text">
-    <string>Get Results</string>
-   </property>
-   <property name="toolTip">
-    <string>Creates exportable results from the current data</string>
-   </property>
-   <property name="menuRole">
-    <enum>QAction::NoRole</enum>
-   </property>
-  </action>
   <action name="action_remove_selected_peaks">
    <property name="checkable">
     <bool>false</bool>
    </property>
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Remove Selected Peaks</string>
@@ -2900,7 +2780,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/file_save_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/file_save_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/file_save_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/file_save_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Save State</string>
@@ -2915,7 +2795,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <action name="action_load_state">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/upload_file_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/upload_file_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/upload_file_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/upload_file_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Load State</string>
@@ -2930,7 +2810,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <action name="action_save_to_hdf5">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/save_as_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/save_as_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/output_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/output_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Save to HDF5</string>
@@ -2948,7 +2828,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <action name="action_mark_section_finished">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/task_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/task_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Mark finished</string>
@@ -2966,11 +2846,11 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/visibility_off_FILL0_wght400_GRAD0_opsz24.png</normaloff>
-     <normalon>:/material-symbols/visibility_FILL0_wght400_GRAD0_opsz24.png</normalon>:/material-symbols/visibility_off_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/visibility_off_FILL0_wght400_GRAD0_opsz24.png</normaloff>
+     <normalon>:/material/material-symbols/visibility_FILL0_wght400_GRAD0_opsz24.png</normalon>:/material/material-symbols/visibility_off_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
-    <string>Toggle Section Overview</string>
+    <string>Section Overview</string>
    </property>
    <property name="toolTip">
     <string>Shows/Hides the existing sections when viewing the default ('SEC_{name}_000') section</string>
@@ -2979,16 +2859,16 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <enum>QAction::NoRole</enum>
    </property>
   </action>
-  <action name="action_clear_sections">
+  <action name="action_reset_all">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/remove_selection_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/iconduck/iconduck/reset.svg</normaloff>:/iconduck/iconduck/reset.svg</iconset>
    </property>
    <property name="text">
-    <string>Clear Sections</string>
+    <string>Reset All</string>
    </property>
    <property name="toolTip">
-    <string>Deletes all active sections (both visually and on the data side)</string>
+    <string>Deletes all active sections and resets the data back to the state it was in directly after loading the current file.</string>
    </property>
    <property name="menuRole">
     <enum>QAction::NoRole</enum>
@@ -3003,8 +2883,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
    </property>
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/dark_mode_FILL0_wght400_GRAD0_opsz24.png</normaloff>
-     <normalon>:/material-symbols/light_mode_FILL0_wght400_GRAD0_opsz24.png</normalon>:/material-symbols/dark_mode_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/dark_mode_FILL0_wght400_GRAD0_opsz24.png</normaloff>
+     <normalon>:/material/material-symbols/light_mode_FILL0_wght400_GRAD0_opsz24.png</normalon>:/material/material-symbols/dark_mode_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Lightswitch</string>
@@ -3019,13 +2899,85 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <action name="action_open_config_file">
    <property name="icon">
     <iconset resource="../../resources/icons/icons.qrc">
-     <normaloff>:/material-symbols/edit_document_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material-symbols/edit_document_FILL0_wght400_GRAD0_opsz24.png</iconset>
+     <normaloff>:/material/material-symbols/edit_document_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/edit_document_FILL0_wght400_GRAD0_opsz24.png</iconset>
    </property>
    <property name="text">
     <string>Open config.ini</string>
    </property>
    <property name="toolTip">
     <string>Edit configuration file</string>
+   </property>
+  </action>
+  <action name="action_toggle_section_sidebar">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset resource="../../resources/icons/icons.qrc">
+     <normaloff>:/iconduck/iconduck/open-panel-right.svg</normaloff>:/iconduck/iconduck/open-panel-right.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Section Sidebar</string>
+   </property>
+   <property name="toolTip">
+    <string>Show/Hide the 'Section Controls' sidebar</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_add_section">
+   <property name="icon">
+    <iconset resource="../../resources/icons/icons.qrc">
+     <normaloff>:/material/material-symbols/add_FILL0_wght400_GRAD0_opsz24.svg</normaloff>:/material/material-symbols/add_FILL0_wght400_GRAD0_opsz24.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Add Section</string>
+   </property>
+   <property name="toolTip">
+    <string>Create a new section to edit</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_remove_section">
+   <property name="icon">
+    <iconset resource="../../resources/icons/icons.qrc">
+     <normaloff>:/material/material-symbols/remove_FILL0_wght400_GRAD0_opsz24.svg</normaloff>:/material/material-symbols/remove_FILL0_wght400_GRAD0_opsz24.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Remove Section</string>
+   </property>
+   <property name="toolTip">
+    <string>Select a section to remove</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_confirm">
+   <property name="icon">
+    <iconset resource="../../resources/icons/icons.qrc">
+     <normaloff>:/material/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png</iconset>
+   </property>
+   <property name="text">
+    <string>Confirm</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
+   </property>
+  </action>
+  <action name="action_cancel">
+   <property name="icon">
+    <iconset resource="../../resources/icons/icons.qrc">
+     <normaloff>:/material/material-symbols/cancel_FILL0_wght400_GRAD0_opsz24.png</normaloff>:/material/material-symbols/cancel_FILL0_wght400_GRAD0_opsz24.png</iconset>
+   </property>
+   <property name="text">
+    <string>Cancel</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::NoRole</enum>
    </property>
   </action>
  </widget>
@@ -3155,6 +3107,22 @@ li.checked::marker { content: &quot;\2612&quot;; }
     <hint type="destinationlabel">
      <x>55</x>
      <y>121</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>action_toggle_section_sidebar</sender>
+   <signal>toggled(bool)</signal>
+   <receiver>dock_widget_sections</receiver>
+   <slot>setVisible(bool)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>-1</x>
+     <y>-1</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>2270</x>
+     <y>632</y>
     </hint>
    </hints>
   </connection>
