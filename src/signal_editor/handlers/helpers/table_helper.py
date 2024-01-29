@@ -45,6 +45,8 @@ class TableHelper:
         header_alignment: Qt.AlignmentFlag = Qt.AlignmentFlag.AlignLeft,
         resize_mode: QHeaderView.ResizeMode = QHeaderView.ResizeMode.Stretch,
     ) -> None:
+        self._view.horizontalHeader().setSelectionMode(QHeaderView.SelectionMode.NoSelection)
+        self._view.setSortingEnabled(False)
         self._view.horizontalHeader().setDefaultAlignment(header_alignment)
         self._view.verticalHeader().setVisible(False)
         self._view.resizeColumnsToContents()

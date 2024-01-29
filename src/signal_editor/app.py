@@ -5,14 +5,13 @@ import sys
 import typing as t
 from datetime import datetime
 from pathlib import Path
-from PySide6 import QtGui
 
 import h5py
 import numpy as np
 import polars as pl
 import pyqtgraph as pg
 from loguru import logger
-from PySide6 import QtWidgets
+from PySide6 import QtGui, QtWidgets
 from PySide6.QtCore import (
     QByteArray,
     QFileInfo,
@@ -85,6 +84,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.action_save_state.triggered.connect(self.save_state)
         self.action_select_file.triggered.connect(self.select_data_file)
         self.action_light_switch.toggled.connect(self.theme_switcher.switch_theme)
+        self.action_open_config_file.triggered.connect(self.open_config_file)
         self.sig_show_message.connect(self.show_message)
 
         # Sections
@@ -109,6 +109,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.btn_browse_output_dir.clicked.connect(self.select_output_location)
         self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
         self.btn_select_file.clicked.connect(self.select_data_file)
+        self.action_save_to_hdf5.triggered.connect(self.save_to_hdf5)
         self.btn_export_focused.clicked.connect(self.export_focused_result)
 
         # Data Handling
@@ -211,6 +212,13 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     # endregion Properties
 
+    @Slot()
+    def open_config_file(self) -> None:
+        file = self.config.config_file.as_posix()
+        if not os.path.exists(file):
+            self.sig_show_message.emit(f"Config file not found: {file}", "warning")
+            return
+
     @Slot(str)
     def add_section_to_widget(self, section_id: SectionID) -> None:
         self.list_widget_sections.addItem(section_id)
@@ -249,16 +257,18 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def _on_sections_cleared(self) -> None:
-        ok = QMessageBox.question(
-            self,
-            "Reset everything?",
-            "This will remove all sections and set the data back to its original state (as read from the file). Continue?",
-        )
-        if ok == QMessageBox.StandardButton.No:
-            return
+        if len(self.data.sections) != 0:
+            ok = QMessageBox.question(
+                self,
+                "Reset everything?",
+                "This will remove all sections and set the data back to its original state (as read from the file). Continue?",
+            )
+            if ok == QMessageBox.StandardButton.No:
+                return
         self.list_widget_sections.clear()
         self.combo_box_section_select.clear()
         self.data.clear_sections()
+        self.data.create_base_df(self.sig_name)
         self.plot.clear_regions()
         self.update_cas_table()
         self._result = None
@@ -285,11 +295,13 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.update_cas_table()
         self.ui.label_currently_showing.setText(readable_section_id(section_id))
         if index != 0:
+            self.action_add_section.setEnabled(False)
             self.btn_section_add.setEnabled(False)
             self.btn_section_add.setToolTip(
                 "Creating a new section is currently only possible when the first section (the one ending in `000`) is selected."
             )
         else:
+            self.action_add_section.setEnabled(True)
             self.btn_section_add.setEnabled(True)
             self.btn_section_add.setToolTip("Create a new section.")
 
@@ -408,6 +420,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         )[0]:
             complete_results = self.data.get_complete_result()
             write_hdf5(file_path, complete_results)
+
             self.sig_show_message.emit(f"Saved results to {file_path}.", "info")
             self.unsaved_changes = False
 
@@ -477,7 +490,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             options=QFileDialog.Option.ShowDirsOnly,
         ):
             self.line_edit_output_dir.setText(path)
-            self.output_dir = path
+            self.config.output_dir = Path(path)
 
     @Slot()
     def update_cas_table(self) -> None:
@@ -503,10 +516,15 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     def update_focused_result_table(self) -> None:
         try:
             if self._result is None:
-                results = PolarsTableModel(pl.DataFrame())
+                res_df = pl.DataFrame()
             else:
-                results = PolarsTableModel(self.data.cas.get_focused_result().to_polars())
-            self.cas_focused_table = TableHelper(self.table_view_focused_result, results)
+                res_df = self.data.cas.get_focused_result().to_polars()
+            if not hasattr(self, "cas_focused_table"):
+                self.cas_focused_table = TableHelper(
+                    self.table_view_focused_result, PolarsTableModel(res_df)
+                )
+            else:
+                self.cas_focused_table.update_cas_df(res_df)
         except Exception as e:
             msg = f"Failed to create focused result table: {e}"
             self.sig_show_message.emit(msg, "error")
@@ -553,7 +571,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.sig_show_message.emit(msg, "error")
             self.statusbar.showMessage("Selected signal column not found in data.")
             return
-        self.data.create_base_df(signal_col)
+        self._on_sections_cleared()
 
         self.sig_data_loaded.emit()
         self.btn_load_selection.success()
@@ -649,7 +667,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         if hasattr(self, "hdf5view_process") and self.hdf5view_process:
             self.hdf5view_process.kill()
             self.hdf5view_process = None
-        if self.ui.jupyter_console_dock.isVisible():
+        if os.environ.get("DEV_MODE", "0") == "1" and self.ui.jupyter_console_dock.isVisible():
             self.ui.jupyter_console_dock.close()
 
         super().closeEvent(event)

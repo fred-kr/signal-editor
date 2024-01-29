@@ -72,41 +72,33 @@ def read_edf(
     return lf, date_measured, sampling_rate
 
 
-def create_hdf5_groups(
-    group: h5py.Group,
-    data: _t.CompleteResultDict,
-) -> None:
-    """
-    Creates HDF5 groups from a dictionary.
-
-    Parameters
-    ----------
-    group : h5py.Group
-        The HDF5 group to create the groups in.
-    data : ResultDict
-        A dictionary containing the groups to create.
-    """
+def dict_to_hdf5(root: h5py.Group, data: _t.CompleteResultDict | dict[str, t.Any]) -> None:
     for key, value in data.items():
         if value is None:
-            value = ()
-            group.attrs.create(key, value)
+            root.attrs.create(key, "None")
+        elif isinstance(value, str):
+            root.attrs.create(key, data=value, dtype=h5py.string_dtype(encoding="utf-8"))
+        elif isinstance(value, (int, bool, float)):
+            root.attrs.create(key, value)
         elif isinstance(value, (datetime, date)):
             value = value.isoformat()
-            group.attrs.create(key, value)
-        elif isinstance(value, (str, int, bool, float)):
-            group.attrs.create(key, value)
+            root.attrs.create(key, value)
         elif isinstance(value, (np.ndarray, list)):
-            group.create_dataset(key, data=value)
+            root.create_dataset(key, data=value)
+        elif isinstance(value, dict):
+            subgroup = root.create_group(key)
+            dict_to_hdf5(subgroup, value)
+        elif hasattr(value, "__len__"):
+            root.create_dataset(key, data=value)
         else:
-            subgroup = group.create_group(key)
-            create_hdf5_groups(subgroup, value)  # type: ignore
+            root.attrs.create(key, value)
 
 
 def write_hdf5(file_path: str | Path, result: "CompleteResult") -> None:
     file_path = Path(file_path).resolve().as_posix()
 
     with h5py.File(file_path, "a") as f:
-        main_grp = f.create_group(f"{result.identifier.source_file_name}_results")
+        main_grp = f.create_group(f"{Path(result.identifier.source_file_name).stem}_results")
         res_dict = result.as_dict()
 
-        create_hdf5_groups(main_grp, res_dict)
+        dict_to_hdf5(main_grp, res_dict)

@@ -1,32 +1,28 @@
 import typing as t
 
-import jupyter_client
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtWidgets import QApplication
-from qtconsole import inprocess
 
+# class JupyterConsoleWidget(inprocess.QtInProcessRichJupyterWidget):
+#     def __init__(self):
+#         super().__init__()
 
-class JupyterConsoleWidget(inprocess.QtInProcessRichJupyterWidget):
-    def __init__(self):
-        super().__init__()
+#         self.kernel_manager: inprocess.QtInProcessKernelManager = (
+#             inprocess.QtInProcessKernelManager()
+#         )
+#         self.kernel_manager.start_kernel()
+#         self.kernel_client: jupyter_client.blocking.client.BlockingKernelClient = (
+#             self.kernel_manager.client()
+#         )
+#         self.kernel_client.start_channels()
+#         QApplication.instance().aboutToQuit.connect(self.shutdown_kernel)
 
-        self.kernel_manager: inprocess.QtInProcessKernelManager = (
-            inprocess.QtInProcessKernelManager()
-        )
-        self.kernel_manager.start_kernel()
-        self.kernel_client: jupyter_client.blocking.client.BlockingKernelClient = (
-            self.kernel_manager.client()
-        )
-        self.kernel_client.start_channels()
-        QApplication.instance().aboutToQuit.connect(self.shutdown_kernel)
-
-    def shutdown_kernel(self):
-        self.kernel_client.stop_channels()
-        self.kernel_manager.shutdown_kernel()
+#     def shutdown_kernel(self):
+#         self.kernel_client.stop_channels()
+#         self.kernel_manager.shutdown_kernel()
 
 
 class ScatterPlotItemError(Exception):

@@ -16,9 +16,16 @@ from .processing import filter_elgendi, filter_signal, scale_signal
 from .result import FocusedResult, ManualPeakEdits
 
 
-def _get_summary(data: pl.Series) -> dict[str, float]:
-    summary = data.describe().to_dict()
-    return {k: v[0] for k, v in summary.items()}
+def _get_summary(data: pl.Series) -> dict[str, t.Any]:
+    return {
+        "min": data.min(),
+        "max": data.max(),
+        "mean": data.mean(),
+        "std": data.std(),
+        "median": data.median(),
+        "skew": data.skew(),
+        "kurtosis": data.kurtosis(),
+    }
 
 
 class SectionIndices(t.NamedTuple):
@@ -64,14 +71,18 @@ class SectionResult:
     data: npt.NDArray[np.void] = attrs.field(converter=_to_structured_array)
     sampling_rate: int = attrs.field(converter=int)
     peaks: npt.NDArray[np.uint32] = attrs.field(converter=_to_uint_array)
+    peak_interval_stats: dict[str, float] = attrs.field()
     peak_edits: ManualPeakEdits = attrs.field()
     rate: npt.NDArray[np.float64] = attrs.field(converter=_to_float_array)
+    rate_stats: dict[str, float] = attrs.field()
     rate_interpolated: npt.NDArray[np.float64] = attrs.field(converter=_to_float_array)
     processing_parameters: _t.ProcessingParameters = attrs.field()
     focused_result: npt.NDArray[np.void] = attrs.field(converter=_to_structured_array)
 
     def as_dict(self) -> _t.SectionResultDict:
-        return _t.SectionResultDict(**attrs.asdict(self), peak_edits=self.peak_edits.as_dict())
+        out = _t.SectionResultDict(**attrs.asdict(self))
+        out["peak_edits"] = self.peak_edits.as_dict()
+        return out
 
 
 class Section:
@@ -189,7 +200,6 @@ class Section:
         self._sampling_rate = new_sfreq
         if self._rate.shape[0] != 0 or self._rate_interp.shape[0] != 0:
             self.calculate_rate()
-        
 
     @property
     def peaks(self) -> pl.Series:
@@ -209,7 +219,7 @@ class Section:
 
     @property
     def interval_stats(self) -> dict[str, float]:
-        return _get_summary(pl.Series("peak_intervals", self.peaks.diff(null_behavior="drop")))
+        return _get_summary(pl.Series("peak_intervals", self.peaks.diff()))
 
     def left_shrink(self, new_stop_index: int) -> "Section":
         """
@@ -419,8 +429,10 @@ class Section:
             data=self.data,
             sampling_rate=self.sfreq,
             peaks=self.peaks,
+            peak_interval_stats=self.interval_stats,
             peak_edits=self.get_peak_edits(),
             rate=self.rate,
+            rate_stats=self.rate_stats,
             rate_interpolated=self.rate_interp,
             processing_parameters=self.processing_parameters,
             focused_result=self.get_focused_result().to_structured_array(),

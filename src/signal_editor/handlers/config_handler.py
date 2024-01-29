@@ -8,7 +8,11 @@ from pathlib import Path
 def create_config_file(filename: str | Path) -> ConfigParser:
     config = ConfigParser()
 
-    config["General"] = {"style": "dark", "auto_switch_tabs": "True"}
+    config["General"] = {
+        "style": "dark",
+        "auto_switch_tabs": "True",
+        "add_peak_click_tolerance_px": "80",
+    }
 
     config["Processing"] = {
         "sample_rate": "-1",
@@ -57,7 +61,11 @@ class ConfigHandler:
 
     @property
     def switch_on_load(self) -> bool:
-        return bool(self._general["auto_switch_tabs"])
+        return bool(self._general.get("auto_switch_tabs", "True"))
+
+    @property
+    def click_tolerance(self) -> int:
+        return int(self._general.get("add_peak_click_tolerance_px", "80"))
 
     @property
     def style(self) -> t.Literal["light", "dark"]:

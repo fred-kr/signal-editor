@@ -154,6 +154,7 @@ comment-files
 *.hdf5
 **/dist/**
 build/
+dist/
 **/_internal
 pickles/
 external-typings/

@@ -386,7 +386,7 @@ class DataHandler(QtCore.QObject):
         self._sections.clear()
         self._excluded_sections.clear()
         Section.reset_id_counter()
-        self.create_base_df(self.sig_name)
+        self._base_df = None
 
     def update_base(self, section_df: pl.DataFrame) -> None:
         self._base_df = (
@@ -455,24 +455,22 @@ class DataHandler(QtCore.QObject):
 
     def get_section_results(self) -> dict[SectionID, "SectionResult"]:
         return {
-            section.section_id: section.get_section_result() for section in self.sections.values()
+            section_id: section.get_section_result()
+            for section_id, section in self.sections.items()
+            if section_id != self.base_section.section_id
         }
 
     def get_focused_results(self) -> dict[SectionID, "FocusedResult"]:
         return {
-            section.section_id: section.get_focused_result() for section in self.sections.values()
+            section_id: section.get_focused_result()
+            for section_id, section in self.sections.items()
+            if section_id != self.base_section.section_id
         }
-
+        
     def get_complete_result(self) -> CompleteResult:
         return CompleteResult(
             identifier=self.get_result_identifier(),
             processed_dataframe=self.base_df,
             complete_section_results=self.get_section_results(),
             focused_section_results=self.get_focused_results(),
-            peak_interval_stats={
-                section_id: section.interval_stats for section_id, section in self.sections.items()
-            },
-            rate_stats={
-                section_id: section.rate_stats for section_id, section in self.sections.items()
-            },
         )

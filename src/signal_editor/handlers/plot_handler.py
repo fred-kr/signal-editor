@@ -48,7 +48,7 @@ class PlotHandler(QObject):
         super().__init__(parent)
         self._app = app
         self._manual_peak_edits: dict[str, ManualPeakEdits] = {}
-        self._line_clicked_tolerance: int = 80
+        self._line_clicked_tolerance: int = self._app.config.click_tolerance
 
         self._setup_plot_widgets()
         self._setup_plot_items()
@@ -61,7 +61,7 @@ class PlotHandler(QObject):
         self._included_regions: list[pg.LinearRegionItem] = []
         self._excluded_regions: list[pg.LinearRegionItem] = []
         self._known_names: list[str] = []
-        self._line_colors: list[str] = ["crimson", "steelblue", "darkgoldenrod", "lightgreen"]
+        self._line_colors: list[str] = ["crimson", "steelblue", "yellow", "lightgreen"]
         self._connect_qt_signals()
 
     def _connect_qt_signals(self) -> None:
@@ -364,7 +364,6 @@ class PlotHandler(QObject):
         mean_pen_color: str = "darkgoldenrod",
     ) -> None:
         rate_mean_val = np.mean(rate_values, dtype=np.int32)
-        rate_mean_arr = np.full_like(rate_values, rate_mean_val, dtype=np.int32)
         
         rate_item = self._rate_item
         rate_mean_item = self._rate_mean_item
@@ -378,12 +377,6 @@ class PlotHandler(QObject):
                 skipFiniteCheck=True,
                 name=f"Rate ({name})",
             )
-            # rate_mean_item = pg.PlotDataItem(
-            #     rate_mean_arr,
-            #     pen={"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine},
-            #     skipFiniteCheck=True,
-            #     name=f"Mean Rate: {int(rate_mean_val)} bpm",
-            # )
             rate_mean_item = pg.InfiniteLine(
                 rate_mean_val,
                 0,
@@ -392,7 +385,6 @@ class PlotHandler(QObject):
             )
             rate_mean_item.setZValue(1e3)
             rate_mean_item.opts = {"pen": pg.mkPen({"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine})}
-            # rate_mean_item.setPen({"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine})
             legend.clear()
             self._pw_rate.addItem(rate_item)
             self._pw_rate.addItem(rate_mean_item)

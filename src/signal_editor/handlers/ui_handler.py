@@ -1,12 +1,13 @@
 import pprint
 import typing as t
+import os
 
 import numpy as np
 import pdir
 import polars as pl
 import polars.selectors as ps
 import pyqtgraph as pg
-from PySide6 import QtWidgets, QtCore
+from PySide6 import QtWidgets
 from PySide6.QtCore import (
     QDate,
     QObject,
@@ -27,7 +28,6 @@ from ..views._ui_state_maps import (
     INITIAL_STATE_MAP,
     INITIAL_STATE_METHODS_MAP,
 )
-from ..views.custom_widgets import JupyterConsoleWidget
 
 if t.TYPE_CHECKING:
     from ..app import SignalEditor
@@ -50,8 +50,9 @@ class UIHandler(QObject):
             self.handle_preprocess_pipeline_changed
         )
 
-        self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
         self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
+        if os.environ.get("DEV_MODE", "0") == "1":
+            self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
 
     def setup_widgets(self) -> None:
         self._set_combo_box_items()
@@ -69,7 +70,8 @@ class UIHandler(QObject):
         self._prepare_toolbars()
 
         # Console
-        self.create_jupyter_console_widget()
+        if os.environ.get("DEV_MODE", "0") == "1":
+            self.create_jupyter_console_widget()
 
     def _prepare_statusbar(self) -> None:
         sb = self._app.statusbar
@@ -120,7 +122,7 @@ class UIHandler(QObject):
 
     def update_currently_shown_label(self, text: str) -> None:
         self.label_currently_showing.setText(f"Currently showing: {text}")
-        
+
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():
             combo_box: pg.ComboBox = getattr(self._app, key)
@@ -179,6 +181,30 @@ class UIHandler(QObject):
         self._app.dock_widget_sections.setVisible(show_section_dock)
 
     def create_jupyter_console_widget(self) -> None:
+        try:
+            from PySide6.QtWidgets import QApplication
+            import jupyter_client
+            from qtconsole import inprocess
+        except ImportError:
+            return
+
+        class JupyterConsoleWidget(inprocess.QtInProcessRichJupyterWidget):
+            def __init__(self):
+                super().__init__()
+
+                self.kernel_manager: inprocess.QtInProcessKernelManager = (
+                    inprocess.QtInProcessKernelManager()
+                )
+                self.kernel_manager.start_kernel()
+                self.kernel_client: jupyter_client.blocking.client.BlockingKernelClient = (
+                    self.kernel_manager.client()
+                )
+                self.kernel_client.start_channels()
+                QApplication.instance().aboutToQuit.connect(self.shutdown_kernel)
+
+            def shutdown_kernel(self):
+                self.kernel_client.stop_channels()
+                self.kernel_manager.shutdown_kernel()
         self.jupyter_console = JupyterConsoleWidget()
         self.jupyter_console.set_default_style("linux")
         self.jupyter_console_dock = QDockWidget("Jupyter Console")

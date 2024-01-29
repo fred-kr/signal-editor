@@ -192,8 +192,10 @@ class SectionResultDict(t.TypedDict):
     sampling_rate: int
     data: npt.NDArray[np.void]
     peaks: npt.NDArray[np.uint32]
+    peak_interval_stats: dict[str, float]
     peak_edits: ManualPeakEditsDict
     rate: npt.NDArray[np.float64]
+    rate_stats: dict[str, float]
     rate_interpolated: npt.NDArray[np.float64]
     processing_parameters: ProcessingParameters
     focused_result: npt.NDArray[np.void]
@@ -209,8 +211,6 @@ class ResultIdentifierDict(t.TypedDict):
 
 class CompleteResultDict(t.TypedDict):
     identifier: ResultIdentifierDict
-    base_df_with_changes: npt.NDArray[np.void]
+    processed_dataframe: npt.NDArray[np.void]
     complete_section_results: dict["SectionID", SectionResultDict]
     focused_section_results: dict["SectionID", npt.NDArray[np.void]]
-    peak_interval_stats: dict["SectionID", dict[str, float]]
-    rate_stats: dict["SectionID", dict[str, float]]

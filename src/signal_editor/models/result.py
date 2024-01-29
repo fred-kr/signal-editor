@@ -27,10 +27,10 @@ class ResultIdentifier:
     def as_dict(self) -> _t.ResultIdentifierDict:
         return {
             "signal_name": self.signal_name,
-            "animal_id": self.animal_id,
-            "oxygen_condition": self.oxygen_condition,
             "source_file_name": self.source_file_name,
             "date_recorded": self.date_recorded,
+            "animal_id": self.animal_id,
+            "oxygen_condition": self.oxygen_condition,
         }
 
 
@@ -99,8 +99,6 @@ class CompleteResult:
     processed_dataframe: pl.DataFrame = attrs.field()
     complete_section_results: dict["SectionID", "SectionResult"] = attrs.field()
     focused_section_results: dict["SectionID", FocusedResult] = attrs.field()
-    peak_interval_stats: dict["SectionID", dict[str, float]] = attrs.field()
-    rate_stats: dict["SectionID", dict[str, float]] = attrs.field()
 
     def __str__(self) -> str:
         return f"CompleteResult({self.identifier})"
@@ -108,7 +106,7 @@ class CompleteResult:
     def as_dict(self) -> _t.CompleteResultDict:
         return {
             "identifier": self.identifier.as_dict(),
-            "base_df_with_changes": self.processed_dataframe.to_numpy(structured=True),
+            "processed_dataframe": self.processed_dataframe.to_numpy(structured=True),
             "complete_section_results": {
                 s_id: s_res.as_dict() for s_id, s_res in self.complete_section_results.items()
             },
@@ -116,6 +114,4 @@ class CompleteResult:
                 s_id: s_res.to_structured_array()
                 for s_id, s_res in self.focused_section_results.items()
             },
-            "peak_interval_stats": self.peak_interval_stats,
-            "rate_stats": self.rate_stats,
         }
