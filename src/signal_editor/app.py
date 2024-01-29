@@ -11,7 +11,7 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 from loguru import logger
-from PySide6 import QtGui, QtWidgets
+from PySide6 import QtGui, QtWidgets, QtCore
 from PySide6.QtCore import (
     QByteArray,
     QFileInfo,
@@ -51,10 +51,10 @@ def readable_section_id(section_id: SectionID) -> str:
 
 
 class SignalEditor(QMainWindow, Ui_MainWindow):
+    sig_show_message = Signal(str, str)
     sig_data_loaded = Signal()
     sig_data_processed = Signal()
     sig_peaks_detected = Signal()
-    sig_show_message = Signal(str, str)
     sig_data_restored = Signal()
     sig_section_confirmed = Signal(int, int)
     sig_update_view_range = Signal(int)
@@ -141,18 +141,18 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     def _on_init_finished(self) -> None:
         self.line_edit_output_dir.setText(self.config.output_dir.as_posix())
-        saved_style = self.config.style
-        if saved_style in ["dark", "light"]:
-            self.theme_switcher.set_style(saved_style)
-        else:
-            self.theme_switcher.set_style("dark")
+        self.theme_switcher.set_style(self.config.style)
         if os.environ.get("DEV_MODE", "0") == "1":
             self._add_profiler()
         self.action_group_cc = QtGui.QActionGroup(self)
         self.action_group_cc.addAction(self.action_confirm)
         self.action_group_cc.addAction(self.action_cancel)
         self.action_group_cc.setVisible(False)
-        self.data.set_sfreq(int(self.config.config.get("Defaults", "SampleRate", fallback=-1)))
+        add_section_menu = QMenu(self.btn_section_add)
+        add_section_menu.addAction("Included", self._maybe_new_included_section)
+        add_section_menu.addAction("Excluded", self._maybe_new_excluded_section)
+        self.btn_section_add.setMenu(add_section_menu)
+        self.data.set_sfreq(self.config.sample_rate)
         self._result: CompleteResult | None = None
 
     # region Dev
@@ -218,7 +218,10 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         if not os.path.exists(file):
             self.sig_show_message.emit(f"Config file not found: {file}", "warning")
             return
+        # Open the config.ini file in the default os editor
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(file))
 
+    # region Sections
     @Slot(str)
     def add_section_to_widget(self, section_id: SectionID) -> None:
         self.list_widget_sections.addItem(section_id)
@@ -232,31 +235,13 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.list_widget_sections.setCurrentRow(0)
         self.combo_box_section_select.setCurrentIndex(0)
 
-    def _setup_section_widgets(self) -> None:
+    def _clear_section_widgets(self) -> None:
         self.list_widget_sections.clear()
         self.combo_box_section_select.clear()
 
-        add_section_menu = QMenu(self.btn_section_add)
-        add_section_menu.addAction("Included", self._maybe_new_included_section)
-        add_section_menu.addAction("Excluded", self._maybe_new_excluded_section)
-        self.btn_section_add.setMenu(add_section_menu)
-
-    @Slot()
-    def _on_data_loaded(self) -> None:
-        if self.config.switch_on_load:
-            self.action_toggle_section_sidebar.setChecked(True)
-            self.tabs_main.setCurrentIndex(1)
-        self.handle_draw_signal()
-        self.update_cas_table()
-
-    @Slot()
-    def _on_peaks_detected(self) -> None:
-        self.handle_draw_peaks()
-        self.handle_draw_rate()
-        self.update_cas_table()
-
     @Slot()
     def _on_sections_cleared(self) -> None:
+        # Only ask if there is any data currently loaded (i.e. dont ask the first time)
         if len(self.data.sections) != 0:
             ok = QMessageBox.question(
                 self,
@@ -341,6 +326,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.action_group_cc.setVisible(False)
         self.container_section_confirm_cancel.hide()
         self.btn_section_remove.setEnabled(True)
+        self.action_remove_section.setEnabled(True)
         self.sig_section_confirmed.emit(lower, upper)
 
     @Slot()
@@ -377,6 +363,23 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.plot.remove_region((bounds[0], bounds[1]))
             if len(self.data.combined_section_ids) == 0:
                 self.btn_section_remove.setEnabled(False)
+                self.action_remove_section.setEnabled(False)
+
+    # endregion Sections
+
+    @Slot()
+    def _on_data_loaded(self) -> None:
+        if self.config.switch_on_load:
+            self.action_toggle_section_sidebar.setChecked(True)
+            self.tabs_main.setCurrentIndex(1)
+        self.handle_draw_signal()
+        self.update_cas_table()
+
+    @Slot()
+    def _on_peaks_detected(self) -> None:
+        self.handle_draw_peaks()
+        self.handle_draw_rate()
+        self.update_cas_table()
 
     @Slot()
     def _emit_data_range_info(self) -> None:
@@ -557,7 +560,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.line_edit_active_file.setText(Path(path).name)
             self.config.data_dir = self.file_info.dir().path()
             self.data.read_file(path)
-            self._setup_section_widgets()
+            self._clear_section_widgets()
 
     @Slot()
     def handle_load_data(self) -> None:
@@ -674,7 +677,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     def _read_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
-        geometry = settings.value("geometry", QByteArray(), type=QByteArray)
+        geometry: QByteArray = t.cast(QByteArray, settings.value("geometry", QByteArray(), type=QByteArray))
 
         if geometry.size():
             self.restoreGeometry(geometry)
