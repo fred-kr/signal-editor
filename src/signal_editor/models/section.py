@@ -8,6 +8,7 @@ import neurokit2 as nk
 import numpy as np
 import numpy.typing as npt
 import polars as pl
+import polars.selectors as ps
 
 from .. import type_aliases as _t
 from .peaks import find_peaks
@@ -47,7 +48,7 @@ def _to_structured_array(value: npt.NDArray[np.void] | pl.DataFrame) -> npt.NDAr
     return value
 
 
-def _to_index_array(value: npt.NDArray[np.uint32] | pl.Series) -> npt.NDArray[np.uint32]:
+def _to_uint_array(value: npt.NDArray[np.uint32] | pl.Series) -> npt.NDArray[np.uint32]:
     return value.cast(pl.UInt32).to_numpy(writable=True) if isinstance(value, pl.Series) else value
 
 
@@ -62,7 +63,7 @@ class SectionResult:
     absolute_bounds: SectionIndices = attrs.field(converter=_to_section_indices)
     data: npt.NDArray[np.void] = attrs.field(converter=_to_structured_array)
     sampling_rate: int = attrs.field(converter=int)
-    peaks: npt.NDArray[np.uint32] = attrs.field(converter=_to_index_array)
+    peaks: npt.NDArray[np.uint32] = attrs.field(converter=_to_uint_array)
     peak_edits: ManualPeakEdits = attrs.field()
     rate: npt.NDArray[np.float64] = attrs.field(converter=_to_float_array)
     rate_interpolated: npt.NDArray[np.float64] = attrs.field(converter=_to_float_array)
@@ -89,7 +90,12 @@ class Section:
         )
         if "section_index" in data.columns:
             data = data.drop("section_index")
-        self.data = data.with_row_index("section_index")
+        self.data = (
+            data.with_row_index("section_index")
+            .lazy()
+            .select(ps.by_name("index", "section_index"), ~ps.by_name("index", "section_index"))
+            .collect()
+        )
         self.sig_name = sig_name
         self._proc_sig_name = f"{sig_name}_processed"
         self._sampling_rate = sampling_rate
@@ -181,6 +187,9 @@ class Section:
 
     def update_sfreq(self, new_sfreq: int) -> None:
         self._sampling_rate = new_sfreq
+        if self._rate.shape[0] != 0 or self._rate_interp.shape[0] != 0:
+            self.calculate_rate()
+        
 
     @property
     def peaks(self) -> pl.Series:
@@ -308,6 +317,19 @@ class Section:
         )
 
     def set_peaks(self, peaks: npt.NDArray[np.int32 | np.uint32]) -> None:
+        """
+        Set the `is_peak` column, overwriting the current values.
+
+        Parameters
+        ----------
+        peaks : npt.NDArray[np.int32 | np.uint32]
+            The new peaks
+
+        Raises
+        ------
+        ValueError
+            If any peaks are not positive integers
+        """
         if np.any(peaks < 0):
             raise ValueError("Peaks must be positive integers")
         pl_peaks = pl.Series("peaks", peaks, pl.UInt32)
@@ -318,9 +340,21 @@ class Section:
             .otherwise(False)
             .alias("is_peak")
         )
+        self._peak_edits.clear()
         self.calculate_rate()
 
     def update_peaks(self, action: t.Literal["add", "remove"], peaks: list[int]) -> None:
+        """
+        Update the `is_peak` column based on the given action and indices.
+        Only modifies the values at the given indices, while leaving the rest unchanged.
+
+        Parameters
+        ----------
+        action : t.Literal['add', 'remove']
+            How to modify the peaks.
+        peaks : list[int]
+            The indices of the peaks to modify.
+        """
         pl_peaks = pl.Series("peaks", peaks, pl.Int32)
         then_value = action == "add"
 
@@ -338,6 +372,16 @@ class Section:
     def get_peak_edits(self) -> ManualPeakEdits:
         self._peak_edits.sort_and_deduplicate()
         return self._peak_edits
+
+    def add_is_manual_column(self) -> None:
+        is_manual = pl.Series("is_manual", self._peak_edits.get_joined())
+
+        self.data = self.data.with_columns(
+            pl.when(pl.col("section_index").is_in(is_manual))
+            .then(True)
+            .otherwise(False)
+            .alias("is_manual")
+        )
 
     def get_section_info(self) -> _t.SectionIdentifier:
         return _t.SectionIdentifier(
@@ -365,7 +409,9 @@ class Section:
             rate_bpm=self.rate,
         )
 
-    def get_complete_result(self) -> SectionResult:
+    def get_section_result(self) -> SectionResult:
+        self.add_is_manual_column()
+
         return SectionResult(
             sig_name=self.sig_name,
             section_id=self.section_id,

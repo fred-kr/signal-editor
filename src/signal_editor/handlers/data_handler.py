@@ -399,16 +399,6 @@ class DataHandler(QtCore.QObject):
             self.base_df.lazy().filter(~(pl.col("index").is_between(start, stop))).collect()
         )
 
-    def get_section_results(self) -> dict[SectionID, "SectionResult"]:
-        return {
-            section.section_id: section.get_complete_result() for section in self.sections.values()
-        }
-
-    def get_focused_results(self) -> dict[SectionID, "FocusedResult"]:
-        return {
-            section.section_id: section.get_focused_result() for section in self.sections.values()
-        }
-
     def new_section(self, start: int, stop: int) -> None:
         data = self.base_df.filter(pl.col("index").is_between(start, stop))
         section = Section(data, sig_name=self.sig_name, sampling_rate=self.sfreq)
@@ -463,10 +453,20 @@ class DataHandler(QtCore.QObject):
             oxygen_condition=self.metadata["oxygen_condition"],
         )
 
+    def get_section_results(self) -> dict[SectionID, "SectionResult"]:
+        return {
+            section.section_id: section.get_section_result() for section in self.sections.values()
+        }
+
+    def get_focused_results(self) -> dict[SectionID, "FocusedResult"]:
+        return {
+            section.section_id: section.get_focused_result() for section in self.sections.values()
+        }
+
     def get_complete_result(self) -> CompleteResult:
         return CompleteResult(
             identifier=self.get_result_identifier(),
-            base_df_with_changes=self.base_df,
+            processed_dataframe=self.base_df,
             complete_section_results=self.get_section_results(),
             focused_section_results=self.get_focused_results(),
             peak_interval_stats={

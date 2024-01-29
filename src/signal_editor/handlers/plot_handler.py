@@ -1,4 +1,5 @@
 import typing as t
+from PySide6 import QtGui
 
 import numpy as np
 import polars as pl
@@ -56,7 +57,7 @@ class PlotHandler(QObject):
         self._signal_item: pg.PlotDataItem | None = None
         self._scatter_item: CustomScatterPlotItem | None = None
         self._rate_item: pg.PlotDataItem | None = None
-        self._rate_mean_item: pg.InfiniteLine | None = None
+        self._rate_mean_item: pg.InfiniteLine | pg.PlotDataItem | None = None
         self._included_regions: list[pg.LinearRegionItem] = []
         self._excluded_regions: list[pg.LinearRegionItem] = []
         self._known_names: list[str] = []
@@ -84,7 +85,7 @@ class PlotHandler(QObject):
         return self._rate_item
 
     @property
-    def rate_mean_item(self) -> pg.InfiniteLine | None:
+    def rate_mean_item(self) -> pg.InfiniteLine | pg.PlotDataItem | None:
         return self._rate_mean_item
 
     @property
@@ -190,7 +191,7 @@ class PlotHandler(QObject):
     @Slot()
     def reset_plots(self) -> None:
         for pw in [self._pw_main, self._pw_rate]:
-            pw.getPlotItem().addLegend().clear()
+            # pw.getPlotItem().addLegend().clear()
             pw.getPlotItem().clear()
             pw.getPlotItem().getViewBox().clear()
 
@@ -199,6 +200,7 @@ class PlotHandler(QObject):
         self._scatter_item = None
         self._rate_item = None
         self._rate_mean_item = None
+        self._temperature_label.setText("")
 
         self._setup_plot_items()
 
@@ -362,9 +364,11 @@ class PlotHandler(QObject):
         mean_pen_color: str = "darkgoldenrod",
     ) -> None:
         rate_mean_val = np.mean(rate_values, dtype=np.int32)
-
+        rate_mean_arr = np.full_like(rate_values, rate_mean_val, dtype=np.int32)
+        
         rate_item = self._rate_item
         rate_mean_item = self._rate_mean_item
+        legend = self._pw_rate.getPlotItem().addLegend()
 
         if rate_item is None or rate_mean_item is None:
             rate_item = pg.PlotDataItem(
@@ -374,25 +378,34 @@ class PlotHandler(QObject):
                 skipFiniteCheck=True,
                 name=f"Rate ({name})",
             )
-
+            # rate_mean_item = pg.PlotDataItem(
+            #     rate_mean_arr,
+            #     pen={"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine},
+            #     skipFiniteCheck=True,
+            #     name=f"Mean Rate: {int(rate_mean_val)} bpm",
+            # )
             rate_mean_item = pg.InfiniteLine(
                 rate_mean_val,
-                angle=0,
-                pen=dict(color=mean_pen_color, width=3, style=Qt.PenStyle.DashLine),
-                name=f"Mean Rate ({name})",
+                0,
+                pen={"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine},
+                name=f"Mean Rate: {int(rate_mean_val)} bpm",
             )
-            self._pw_rate.getPlotItem().addLegend().clear()
+            rate_mean_item.setZValue(1e3)
+            rate_mean_item.opts = {"pen": pg.mkPen({"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine})}
+            # rate_mean_item.setPen({"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine})
+            legend.clear()
             self._pw_rate.addItem(rate_item)
             self._pw_rate.addItem(rate_mean_item)
-            self._pw_rate.getPlotItem().addLegend().addItem(
-                pg.PlotDataItem(np.array([0, 1]), pen=rate_mean_item.pen, skipFiniteCheck=True),
-                f"Mean Rate: {int(rate_mean_val)} bpm",
-            )
+            legend.addItem(rate_mean_item, name=f"Mean Rate: {int(rate_mean_val)} bpm")
             self._rate_item = rate_item
             self._rate_mean_item = rate_mean_item
         else:
+            legend.clear()
             rate_item.setData(rate_values)
             rate_mean_item.setValue(rate_mean_val)
+            rate_mean_item.opts = {"pen": pg.mkPen({"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine})}
+            legend.addItem(rate_item, name=f"Rate ({name})")
+            legend.addItem(rate_mean_item, name=f"Mean Rate: {int(rate_mean_val)} bpm")
         self.sig_rate_drawn.emit()
 
     @Slot(object, object, object)

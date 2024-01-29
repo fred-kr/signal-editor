@@ -42,15 +42,22 @@ class ManualPeakEdits:
     def __repr__(self) -> str:
         return f"ManualPeakEdits(added={_format_long_sequence(self.added)}, removed={_format_long_sequence(self.removed)})"
 
-    def new_added(self, index: int) -> None:
-        self.added.append(index)
+    def clear(self) -> None:
+        self.added.clear()
+        self.removed.clear()
+        
+    def new_added(self, value: int) -> None:
+        self.added.append(value)
 
-    def new_removed(self, index: int) -> None:
-        self.removed.append(index)
+    def new_removed(self, value: int) -> None:
+        self.removed.append(value)
 
     def sort_and_deduplicate(self) -> None:
         self.added = sorted(set(self.added))
         self.removed = sorted(set(self.removed))
+
+    def get_joined(self) -> list[int]:
+        return sorted(set(self.added + self.removed))
 
     def as_dict(self) -> _t.ManualPeakEditsDict:
         return {
@@ -89,7 +96,7 @@ class FocusedResult:
 @attrs.define(slots=True, frozen=True)
 class CompleteResult:
     identifier: ResultIdentifier = attrs.field()
-    base_df_with_changes: pl.DataFrame = attrs.field()
+    processed_dataframe: pl.DataFrame = attrs.field()
     complete_section_results: dict["SectionID", "SectionResult"] = attrs.field()
     focused_section_results: dict["SectionID", FocusedResult] = attrs.field()
     peak_interval_stats: dict["SectionID", dict[str, float]] = attrs.field()
@@ -101,7 +108,7 @@ class CompleteResult:
     def as_dict(self) -> _t.CompleteResultDict:
         return {
             "identifier": self.identifier.as_dict(),
-            "base_df_with_changes": self.base_df_with_changes.to_numpy(structured=True),
+            "base_df_with_changes": self.processed_dataframe.to_numpy(structured=True),
             "complete_section_results": {
                 s_id: s_res.as_dict() for s_id, s_res in self.complete_section_results.items()
             },
