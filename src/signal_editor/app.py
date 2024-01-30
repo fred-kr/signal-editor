@@ -11,7 +11,7 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 from loguru import logger
-from PySide6 import QtGui, QtWidgets, QtCore
+from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import (
     QByteArray,
     QFileInfo,
@@ -93,7 +93,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.data.sig_cas_changed.connect(self.handle_draw_signal)
         self.list_widget_sections.currentRowChanged.connect(self._on_active_section_changed)
         self.combo_box_section_select.currentIndexChanged.connect(self._on_active_section_changed)
-        self.action_mark_section_finished.triggered.connect(self._on_section_done)
+        self.action_get_section_result.triggered.connect(self._on_section_done)
         self.action_reset_all.triggered.connect(self._on_sections_cleared)
         self.action_section_overview.toggled.connect(self.plot.toggle_region_overview)
         self.sig_section_confirmed.connect(self.plot.mark_section)
@@ -104,6 +104,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.btn_section_remove.clicked.connect(self._remove_section)
         self.action_remove_section.triggered.connect(self._remove_section)
         self.action_add_section.triggered.connect(self._maybe_new_included_section)
+        # TODO: implement removing values from the base signal
 
         # File I/O
         self.btn_browse_output_dir.clicked.connect(self.select_output_location)
@@ -144,7 +145,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.theme_switcher.set_style(self.config.style)
         if os.environ.get("DEV_MODE", "0") == "1":
             self._add_profiler()
-        self.action_group_cc = QtGui.QActionGroup(self)
+        self.action_group_cc = QtGui.QActionGroup(self.toolbar_plots)
         self.action_group_cc.addAction(self.action_confirm)
         self.action_group_cc.addAction(self.action_cancel)
         self.action_group_cc.setVisible(False)
@@ -677,7 +678,9 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     def _read_settings(self) -> None:
         settings = QSettings("AWI", "Signal Editor")
-        geometry: QByteArray = t.cast(QByteArray, settings.value("geometry", QByteArray(), type=QByteArray))
+        geometry: QByteArray = t.cast(
+            QByteArray, settings.value("geometry", QByteArray(), type=QByteArray)
+        )
 
         if geometry.size():
             self.restoreGeometry(geometry)

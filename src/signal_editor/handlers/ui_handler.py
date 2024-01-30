@@ -89,6 +89,7 @@ class UIHandler(QObject):
         self._app.dock_widget_sections.setVisible(False)
         self._app.container_section_confirm_cancel.setEnabled(True)
         self._app.btn_section_remove.setEnabled(False)
+        self._app.action_remove_section.setEnabled(False)
         self._app.container_section_confirm_cancel.hide()
 
         export_menu = QMenu(self._app.btn_export_focused)

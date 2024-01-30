@@ -384,13 +384,17 @@ class Section:
         return self._peak_edits
 
     def add_is_manual_column(self) -> None:
-        is_manual = pl.Series("is_manual", self._peak_edits.get_joined())
+        manual_indices = pl.Series("manual", self._peak_edits.get_joined(), pl.UInt32)
 
-        self.data = self.data.with_columns(
-            pl.when(pl.col("section_index").is_in(is_manual))
-            .then(True)
-            .otherwise(False)
-            .alias("is_manual")
+        self.data = (
+            self.data.lazy()
+            .with_columns(
+                pl.when(pl.col("section_index").is_in(manual_indices))
+                .then(True)
+                .otherwise(False)
+                .alias("is_manual")
+            )
+            .collect()
         )
 
     def get_section_info(self) -> _t.SectionIdentifier:
@@ -407,13 +411,15 @@ class Section:
 
     def get_focused_result(self) -> FocusedResult:
         peaks = self.peaks
-        time = (peaks * (1 / self.sfreq)).round(4).to_numpy()
+        outer_indices = self.data.get_column("index").gather(peaks)
+        time = (outer_indices * (1 / self.sfreq)).round(4).to_numpy()
         intervals = peaks.diff().fill_null(0).to_numpy()
         temperature = self.data.get_column("temperature").gather(peaks).to_numpy()
 
         return FocusedResult(
+            peaks_section=peaks.to_numpy(),
+            peaks_original=outer_indices.to_numpy(),
             time_s=time,
-            index=peaks.to_numpy(),
             peak_intervals=intervals,
             temperature=temperature,
             rate_bpm=self.rate,

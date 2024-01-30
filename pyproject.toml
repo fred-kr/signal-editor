@@ -8,18 +8,18 @@ packages = [{ include = "signal_editor", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
-pyqtgraph = { git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "master" }
+pyqtgraph = {git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "master"}
 pyopengl-accelerate = "^3.1.7"
 pyarrow = "^14.0.1"
 wfdb = "^4.1.2"
-polars = "^0.20.1"
+polars = "^0.20.6"
 neurokit2 = "^0.2.7"
 pyopengl = "^3.1.7"
-mne = "^1.6.0"
+mne = "^1.6.1"
 pywavelets = "^1.5.0"
 qdarkstyle = "^3.2.3"
-pyside6 = "^6.6.0"
-numpy = "^1.26.2"
+pyside6 = "^6.6.1"
+numpy = "^1.26.3"
 scipy = "^1.11.4"
 xlsxwriter = "^3.1.9"
 h5py = "^3.10.0"
@@ -43,6 +43,8 @@ devtools = "^0.12.2"
 qtconsole = "^5.5.1"
 pdir2 = "^1.1.0"
 attrs = "^23.2.0"
+vitables = "^3.0.3"
+tables = "^3.9.2"
 
 [tool.mypy]
 python_version = "3.12"

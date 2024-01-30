@@ -45,7 +45,7 @@ class ManualPeakEdits:
     def clear(self) -> None:
         self.added.clear()
         self.removed.clear()
-        
+
     def new_added(self, value: int) -> None:
         self.added.append(value)
 
@@ -72,8 +72,9 @@ def _to_uint_array(array: npt.NDArray[np.int_]) -> npt.NDArray[np.uint32]:
 
 @attrs.define(slots=True, frozen=True)
 class FocusedResult:
-    time_s: npt.NDArray[np.float64] = attrs.field()
-    index: npt.NDArray[np.uint32] = attrs.field()
+    peaks_section: npt.NDArray[np.uint32] = attrs.field()
+    peaks_original: npt.NDArray[np.uint32] = attrs.field()
+    time_s: npt.NDArray[np.float64] = attrs.field()  # time values of the original signal
     peak_intervals: npt.NDArray[np.uint32] = attrs.field(converter=_to_uint_array)
     temperature: npt.NDArray[np.float64] = attrs.field()
     rate_bpm: npt.NDArray[np.float64] = attrs.field()
