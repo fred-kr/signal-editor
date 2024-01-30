@@ -93,7 +93,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.data.sig_cas_changed.connect(self.handle_draw_signal)
         self.list_widget_sections.currentRowChanged.connect(self._on_active_section_changed)
         self.combo_box_section_select.currentIndexChanged.connect(self._on_active_section_changed)
-        self.action_get_section_result.triggered.connect(self._on_section_done)
         self.action_reset_all.triggered.connect(self._on_sections_cleared)
         self.action_section_overview.toggled.connect(self.plot.toggle_region_overview)
         self.sig_section_confirmed.connect(self.plot.mark_section)
@@ -119,6 +118,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.sig_data_loaded.connect(self._on_data_loaded)
         self.sig_data_restored.connect(self.refresh_app)
         self.btn_compute_results.clicked.connect(self.update_results)
+        self.action_get_section_result.triggered.connect(self._on_section_done)
 
         # Processing & Editing
         self.btn_apply_filter.clicked.connect(self.process_signal)
@@ -213,6 +213,25 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     # endregion Properties
 
+    @Slot(str, str)
+    def show_message(
+        self, text: str, level: t.Literal["debug", "info", "warning", "critical", "error"]
+    ) -> None:
+        icon_map = {
+            "debug": QMessageBox.Icon.NoIcon,
+            "info": QMessageBox.Icon.Information,
+            "warning": QMessageBox.Icon.Warning,
+            "critical": QMessageBox.Icon.Critical,
+            "error": QMessageBox.Icon.Critical,
+        }
+        if level == "debug" and os.environ.get("DEV_MODE", "0") == "0":
+            return
+        msg_box = QMessageBox()
+        msg_box.setIcon(icon_map[level])
+        msg_box.setText(text)
+        msg_box.setWindowTitle(level.capitalize())
+        msg_box.exec()
+
     @Slot()
     def open_config_file(self) -> None:
         file = self.config.config_file.as_posix()
@@ -236,10 +255,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.list_widget_sections.setCurrentRow(0)
         self.combo_box_section_select.setCurrentIndex(0)
 
-    def _clear_section_widgets(self) -> None:
-        self.list_widget_sections.clear()
-        self.combo_box_section_select.clear()
-
     @Slot()
     def _on_sections_cleared(self) -> None:
         # Only ask if there is any data currently loaded (i.e. dont ask the first time)
@@ -261,8 +276,19 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
 
     @Slot()
     def _on_section_done(self) -> None:
+        if self.data.cas.peaks.len() == 0:
+            msg = f"No peaks detected for section {self.section_name}. Cannot compute results without peaks."
+            self.sig_show_message.emit(msg, "info")
+            return
+        self.statusbar.showMessage("Updating data with values from section...")
         self.data.save_cas()
-        self.update_focused_result_table()
+        self.update_cas_focused_result()
+
+    @Slot()
+    def update_results(self) -> None:
+        self.statusbar.showMessage("Computing results...")
+        self._result = self.data.get_complete_result()
+        self.statusbar.showMessage("Results computed.")
 
     @Slot(int)
     def _on_active_section_changed(self, index: int) -> None:
@@ -428,59 +454,53 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.sig_show_message.emit(f"Saved results to {file_path}.", "info")
             self.unsaved_changes = False
 
-    @Slot()
-    def update_results(self) -> None:
-        if self.data.cas.peaks.len() == 0:
-            msg = (
-                f"No peaks detected for signal '{self.sig_name}'. Please run peak detection first."
-            )
-            self.sig_show_message.emit(msg, "info")
-            return
-        self.statusbar.showMessage("Computing results...")
-        self._result = self.data.get_complete_result()
-        self.statusbar.showMessage("Results computed.")
-
     @Slot(str)
     def export_focused_result(self, output_format: t.Literal["csv", "xlsx", "txt"]) -> None:
         result_file_name = self.config.make_focused_result_name(
             self.sig_name, self.file_info.completeBaseName()
         )
+        self.config.output_dir.mkdir(exist_ok=True)
         result_location = Path.joinpath(self.config.output_dir, result_file_name)
+        output_options = [
+            "Only export currently active section",
+            "Create a new file for each section",
+            "Concatenate all sections and write to a single file",
+        ]
+        item, ok = QInputDialog.getItem(
+            self,
+            "Configure Output",
+            "Specify what to export:",
+            output_options,
+            0,
+            False,
+        )
+
+        if not ok:
+            return
 
         results = self.data.get_focused_results()
-        result_dfs: list[pl.DataFrame] = []
-        for section_id, focused_result in results.items():
-            fr_df = focused_result.to_polars().with_columns(pl.lit(section_id).alias("section_id"))
-            result_dfs.append(fr_df)
-        result_df = pl.concat(result_dfs)
-
-        try:
-            if output_format == "csv":
-                result_df.write_csv(f"{result_location}.csv")
-            elif output_format == "xlsx":
-                result_df.write_excel(f"{result_location}.xlsx")
-            elif output_format == "txt":
-                result_df.write_csv(f"{result_location}.txt", separator="\t")
-        except Exception as e:
-            msg = f"Failed to export results: {e}"
-            self.sig_show_message.emit(msg, "error")
-            return
-
-    @Slot(str, str)
-    def show_message(
-        self, text: str, level: t.Literal["debug", "info", "warning", "critical", "error"]
-    ) -> None:
-        icon_map = {
-            "debug": QMessageBox.Icon.NoIcon,
-            "info": QMessageBox.Icon.Information,
-            "warning": QMessageBox.Icon.Warning,
-            "critical": QMessageBox.Icon.Critical,
-            "error": QMessageBox.Icon.Critical,
+        # Define a mapping from output format to the corresponding write function
+        write_functions: dict[str, t.Callable[[pl.DataFrame, str | Path], t.Any]] = {
+            "csv": lambda df, path: df.write_csv(f"{path}.csv"),
+            "xlsx": lambda df, path: df.write_excel(f"{path}.xlsx"),
+            "txt": lambda df, path: df.write_csv(f"{path}.txt", separator="\t"),
         }
-        if level == "debug" and os.environ.get("DEV_MODE", "0") == "0":
-            return
-        msg_box = QMessageBox(icon_map[level], "Notice", text, QMessageBox.StandardButton.Ok)
-        msg_box.exec()
+        if item == "Only export currently active section":
+            foc_df = self.data.cas.get_focused_result().to_polars()
+            write_functions[output_format](foc_df, result_location)
+
+        elif item == "Create a new file for each section":
+            for s_id, foc_res in results.items():
+                foc_df = foc_res.to_polars()
+                write_functions[output_format](foc_df, f"{result_location}_{s_id}")
+
+        elif item == "Concatenate all sections and write to a single file":
+            result_dfs = [
+                foc_res.to_polars().with_columns(pl.lit(s_id).alias("section_id"))
+                for s_id, foc_res in results.items()
+            ]
+            result_df = pl.concat(result_dfs)
+            write_functions[output_format](result_df, f"{result_location}_all")
 
     @Slot()
     def select_output_location(self) -> None:
@@ -517,21 +537,25 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.cas_desc_table.update_cas_desc_df(cas_desc_df, cas_df.dtypes)
 
     @Slot()
-    def update_focused_result_table(self) -> None:
+    def update_cas_focused_result(self) -> None:
+        """
+        Computes the current active sections focused result and displays it in the 'Focused' table
+        in the 'Results' tab, where the user can export it to a file.
+        """
+        self.statusbar.showMessage("Creating focused result for current section...")
         try:
-            if self._result is None:
-                res_df = pl.DataFrame()
-            else:
-                res_df = self.data.cas.get_focused_result().to_polars()
-            if not hasattr(self, "cas_focused_table"):
-                self.cas_focused_table = TableHelper(
-                    self.table_view_focused_result, PolarsTableModel(res_df)
-                )
-            else:
-                self.cas_focused_table.update_cas_df(res_df)
-        except Exception as e:
-            msg = f"Failed to create focused result table: {e}"
-            self.sig_show_message.emit(msg, "error")
+            cas_foc_res = self.data.cas.get_focused_result()
+        except RuntimeWarning as w:
+            self.sig_show_message.emit(w, "error")
+            return
+
+        if not hasattr(self, "cas_focused_table"):
+            model = PolarsTableModel(cas_foc_res.to_polars())
+            self.cas_focused_table = TableHelper(self.table_view_focused_result, model)
+        else:
+            self.cas_focused_table.update_cas_df(cas_foc_res.to_polars())
+        self.label_focused_result_shown.setText(self.data.cas.section_id)
+        self.statusbar.clearMessage()
 
     @Slot()
     def select_data_file(self) -> None:
@@ -561,7 +585,8 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.line_edit_active_file.setText(Path(path).name)
             self.config.data_dir = self.file_info.dir().path()
             self.data.read_file(path)
-            self._clear_section_widgets()
+            self.list_widget_sections.clear()
+            self.combo_box_section_select.clear()
 
     @Slot()
     def handle_load_data(self) -> None:
@@ -671,7 +696,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         if hasattr(self, "hdf5view_process") and self.hdf5view_process:
             self.hdf5view_process.kill()
             self.hdf5view_process = None
-        if os.environ.get("DEV_MODE", "0") == "1" and self.ui.jupyter_console_dock.isVisible():
+        if os.environ.get("DEV_MODE", "0") == "1":
             self.ui.jupyter_console_dock.close()
 
         super().closeEvent(event)
@@ -867,7 +892,6 @@ def main(dev_mode: bool = False, antialias: bool = False) -> None:
         level="DEBUG",
     )
     app = QApplication(sys.argv)
-    # app.setAttribute(QtGui.Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
     window = SignalEditor()
     window.show()
     sys.exit(app.exec())

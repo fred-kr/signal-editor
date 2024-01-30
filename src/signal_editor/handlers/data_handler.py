@@ -299,9 +299,10 @@ class DataHandler(QtCore.QObject):
         animal_id = None
         oxy_condition = None
         match suffix:
-            case ".pkl":
-                self._app.restore_state(path)
-                return
+            # ? Part of state saving/loading, either remove or update to work with v0.3.0 changes
+            # case ".pkl":
+                # self._app.restore_state(path)
+                # return
             case ".csv":
                 df = pl.read_csv(path)
             case ".edf":

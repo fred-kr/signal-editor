@@ -411,15 +411,20 @@ class Section:
 
     def get_focused_result(self) -> FocusedResult:
         peaks = self.peaks
+        if peaks.len() < 3:
+            raise RuntimeWarning(
+                "Need at least 3 peaks to calculate focused results. No result created."
+            )
+
         outer_indices = self.data.get_column("index").gather(peaks)
-        time = (outer_indices * (1 / self.sfreq)).round(4).to_numpy()
+        time = outer_indices / self.sfreq
         intervals = peaks.diff().fill_null(0).to_numpy()
         temperature = self.data.get_column("temperature").gather(peaks).to_numpy()
 
         return FocusedResult(
             peaks_section=peaks.to_numpy(),
             peaks_original=outer_indices.to_numpy(),
-            time_s=time,
+            time_s=time.to_numpy(),
             peak_intervals=intervals,
             temperature=temperature,
             rate_bpm=self.rate,
