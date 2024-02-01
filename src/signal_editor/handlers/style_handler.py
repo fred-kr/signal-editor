@@ -6,7 +6,7 @@ from PySide6.QtCore import Slot
 from PySide6.QtWidgets import QApplication
 
 
-class ThemeSwitcher:
+class StyleHandler:
     def __init__(
         self,
         plot_widgets: list[pg.PlotWidget] | None = None,

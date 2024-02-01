@@ -11,16 +11,15 @@ from loguru import logger
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from . import type_aliases as _t
-from .handlers.config_handler import ConfigHandler
-from .handlers.data_handler import DataHandler
-from .handlers.helpers.table_helper import TableHelper
-from .handlers.plot_handler import PlotHandler
-from .handlers.style_handler import ThemeSwitcher
-from .handlers.ui_handler import UIHandler
+from .handlers import ConfigHandler, DataHandler, PlotHandler, StyleHandler, TableHelper, UIHandler
+from .models import (
+    CompleteResult,
+    DescriptiveStatsModel,
+    PolarsTableModel,
+    SectionID,
+    SectionIndices,
+)
 from .models.io import result_dict_to_hdf5
-from .models.polars_df import DescriptiveStatsModel, PolarsTableModel
-from .models.result import CompleteResult
-from .models.section import SectionID, SectionIndices
 from .views.main_window import Ui_MainWindow
 
 
@@ -44,7 +43,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.setWindowTitle("QtCore.Signal Editor")
         self.unsaved_changes: bool = False
         self.config = ConfigHandler("config.ini")
-        self.theme_switcher = ThemeSwitcher()
+        self.theme_switcher = StyleHandler()
         self.plot = PlotHandler(self)
         self.data = DataHandler(self)
         self._read_settings()
