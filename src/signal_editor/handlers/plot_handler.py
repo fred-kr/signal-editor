@@ -283,7 +283,7 @@ class PlotHandler(QObject):
             movable=False,
         )
         marked_region.hide()
-        # marked_region.setZValue(-100)
+        marked_region.setZValue(10)
         region_list.append(marked_region)
         self._pw_main.addItem(marked_region)
         self.remove_section_selector()
@@ -436,6 +436,7 @@ class PlotHandler(QObject):
     def add_scatter(self, sender: pg.PlotCurveItem, ev: "mouseEvents.MouseClickEvent") -> None:
         ev.accept()
         click_x = int(ev.pos().x())
+        click_y = ev.pos().y()
 
         signal_item = self._signal_item
         scatter_item = self._scatter_item
@@ -448,21 +449,65 @@ class PlotHandler(QObject):
         if x_data is None or y_data is None:
             return
 
-        search_radius = 15
+        search_radius = 20
 
-        valid_indices = np.where(np.abs(x_data - click_x) <= search_radius)[0]
+        left_index = np.searchsorted(x_data, click_x - search_radius, side="left")
+        right_index = np.searchsorted(x_data, click_x + search_radius, side="right")
 
-        valid_y_values = y_data[valid_indices]
+        valid_x_values = x_data[left_index:right_index]
+        valid_y_values = y_data[left_index:right_index]
 
-        use_index = valid_indices[np.argmin(np.abs(x_data[valid_indices] - click_x))]
-        use_val = valid_y_values[np.argmin(np.abs(x_data[valid_indices] - click_x))]
+        # Find the index of the nearest extreme point to the click position
+        extreme_index = left_index + np.argmin(np.abs(valid_x_values - click_x))
+        extreme_value = valid_y_values[np.argmin(np.abs(valid_x_values - click_x))]
 
-        if use_index in scatter_item.data["x"]:
+        # Find the index of the nearest extreme point to the click position in the y direction
+        y_extreme_index = left_index + np.argmin(np.abs(valid_y_values - click_y))
+        y_extreme_value = valid_y_values[np.argmin(np.abs(valid_y_values - click_y))]
+
+        # Use the index of the nearest extreme point in the y direction if it is closer to the click position
+        if np.abs(y_extreme_value - click_y) < np.abs(extreme_value - click_y):
+            extreme_index = y_extreme_index
+            extreme_value = y_extreme_value
+
+        if extreme_index in scatter_item.data["x"]:
             return
 
-        x_new, y_new = x_data[use_index], use_val
+        x_new, y_new = x_data[extreme_index], extreme_value
         scatter_item.addPoints(x=x_new, y=y_new)
         self.sig_peaks_edited.emit("add", [int(x_new)])
+
+    # @Slot(object, object)
+    # def add_scatter2(self, sender: pg.PlotCurveItem, ev: "mouseEvents.MouseClickEvent") -> None:
+    #     ev.accept()
+    #     click_x = int(ev.pos().x())
+    #     sender.mouseShape()
+
+    #     signal_item = self._signal_item
+    #     scatter_item = self._scatter_item
+
+    #     if signal_item is None or scatter_item is None:
+    #         return
+
+    #     x_data = signal_item.xData
+    #     y_data = signal_item.yData
+    #     if x_data is None or y_data is None:
+    #         return
+
+    #     search_radius = 20
+    #     valid_indices = np.where(np.abs(x_data - click_x) <= search_radius)[0]
+
+    #     valid_y_values = y_data[valid_indices]
+
+    #     use_index = valid_indices[np.argmin(np.abs(x_data[valid_indices] - click_x))]
+    #     use_val = valid_y_values[np.argmin(np.abs(x_data[valid_indices] - click_x))]
+
+    #     if use_index in scatter_item.data["x"]:
+    #         return
+
+    #     x_new, y_new = x_data[use_index], use_val
+    #     scatter_item.addPoints(x=x_new, y=y_new)
+    #     self.sig_peaks_edited.emit("add", [int(x_new)])
 
     @Slot()
     def remove_selected_scatter(self) -> None:
