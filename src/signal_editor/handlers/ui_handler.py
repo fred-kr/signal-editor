@@ -81,10 +81,10 @@ class UIHandler(QObject):
         )
         sb.addWidget(self.progress_bar)
         self.progress_bar.hide()
-        self.label_cursor_pos = QtWidgets.QLabel(
-            "Cursor Position (scene): -, -; Base Index: -; Section Index: -", sb
-        )
-        sb.addPermanentWidget(self.label_cursor_pos)
+        # self.label_cursor_pos = QtWidgets.QLabel(
+        #     "Cursor Position (scene): -, -; Base Index: -; Section Index: -", sb
+        # )
+        # sb.addPermanentWidget(self.label_cursor_pos)
         self.label_currently_showing = QtWidgets.QLabel("Currently showing: ")
         sb.addPermanentWidget(self.label_currently_showing)
         sb.showMessage("Ready")

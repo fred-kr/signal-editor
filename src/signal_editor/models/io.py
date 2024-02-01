@@ -8,9 +8,6 @@ import tables as tb
 
 from .. import type_aliases as _t
 
-if t.TYPE_CHECKING:
-    pass
-
 
 def read_edf(
     file_path: str,
@@ -77,6 +74,7 @@ def unpack_dict_to_attrs(
     | _t.StandardizeParameters
     | _t.PeakDetectionParameters
     | _t.SummaryDict
+    | dict[str, str | object]
     | None,
     file: tb.File,
     node: tb.Node | str,
@@ -108,32 +106,13 @@ def unpack_dict_to_attrs(
 
 
 def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> None:
-    """
-    Writes a dictionary containing the results of a complete analysis to a PyTables file.
-
-    Parameters
-    ----------
-    file_path : str | Path
-        The path to the PyTables file.
-    data : _t.CompleteResultDict
-        A dictionary containing the results of a complete analysis. The dictionary must have the following structure:
-
-        {
-            "identifier": ResultIdentifierDict,
-            "global_dataframe": npt.NDArray[np.void],
-            "complete_section_results": dict["SectionID", SectionResultDict],
-            "focused_section_results": dict["SectionID", FocusedResult],
-        }
-        - ResultIdentifierDict: A dictionary containing result identifier attributes.
-        - npt.NDArray[np.void]: A structured array containing the global data frame.
-        - dict["SectionID", SectionResultDict]: A dictionary containing the results of the analysis of each section. The keys are the section IDs.
-        - dict["SectionID", FocusedResult]: A dictionary containing the focused results of the analysis of each section. The keys are the section IDs.
-
-    """
     file_path = Path(file_path).resolve().as_posix()
 
     with tb.open_file(file_path, "w", title=f"Results_{Path(file_path).stem}") as h5f:
+        # Set the root groups attributes to key-value pairs of the `identifier` dictionary
         unpack_dict_to_attrs(data["identifier"], h5f, h5f.root)
+
+        # Global DataFrame
         h5f.create_table(
             h5f.root,
             name="global_dataframe",
@@ -141,6 +120,8 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
             title="Global DataFrame",
             expectedrows=data["global_dataframe"].shape[0],
         )
+
+        # Focused Section Results
         h5f.create_group(h5f.root, "focused_section_results", title="Focused Section Results")
         for section_id, focused_result in data["focused_section_results"].items():
             h5f.create_table(
@@ -150,6 +131,8 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 title=f"Focused Result ({section_id})",
                 expectedrows=focused_result.shape[0],
             )
+
+        # Complete Section Results
         h5f.create_group(h5f.root, "complete_section_results", title="Complete Section Results")
         for section_id, section_result in data["complete_section_results"].items():
             h5f.create_group(
@@ -157,6 +140,8 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 name=f"complete_result_{section_id}",
                 title=f"Complete Result ({section_id})",
             )
+
+            # Section DataFrame
             h5f.create_table(
                 f"/complete_section_results/complete_result_{section_id}",
                 name="section_dataframe",
@@ -165,6 +150,7 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 expectedrows=section_result["data"].shape[0],
             )
 
+            # Peaks
             h5f.create_group(
                 f"/complete_section_results/complete_result_{section_id}",
                 name="peaks",
@@ -195,6 +181,7 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 title="Manually removed (section)",
             )
 
+            # Rate
             h5f.create_group(
                 f"/complete_section_results/complete_result_{section_id}",
                 name="rate",
@@ -213,6 +200,7 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 title="Rate (interpolated to length of section)",
             )
 
+            # Processing Parameters
             h5f.create_group(
                 f"/complete_section_results/complete_result_{section_id}",
                 name="processing_parameters",
@@ -253,8 +241,13 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 name="peak_detection_parameters",
                 title="Peak detection parameters",
             )
-            unpack_dict_to_attrs(
-                section_result["processing_parameters"]["peak_detection_parameters"],
-                h5f,
-                f"/complete_section_results/complete_result_{section_id}/processing_parameters/peak_detection_parameters",
-            )
+            _peak_params = section_result["processing_parameters"]["peak_detection_parameters"]
+            if _peak_params is not None:
+                _method = _peak_params["method"]
+                _method_params = _peak_params["method_parameters"]
+                flattened_peak_detection_parameters = {"method": _method, **_method_params}
+                unpack_dict_to_attrs(
+                    flattened_peak_detection_parameters,
+                    h5f,
+                    f"/complete_section_results/complete_result_{section_id}/processing_parameters/peak_detection_parameters",
+                )

@@ -168,9 +168,9 @@ class PlotHandler(QObject):
         vals = cols.filter(pl.col("section_index") == index)
         temp_text = f"<span style='color: yellow; font-size: 12pt; font-weight: bold;'>Temperature: {vals.get_column("temperature")[0]:.1f} °C</span>"
         self._temperature_label.setText(temp_text)
-        self._app.ui.label_cursor_pos.setText(
-            f"Cursor position (scene): {pos.x():.2f}, {pos.y():.2f}; Base Index: {vals.get_column("index")[0]}; Section Index: {vals.get_column("section_index")[0]}"
-        )
+        # self._app.ui.label_cursor_pos.setText(
+        #     f"Cursor position (scene): {pos.x():.2f}, {pos.y():.2f}; Base Index: {vals.get_column("index")[0]}; Section Index: {vals.get_column("section_index")[0]}"
+        # )
 
     @Slot(int)
     def reset_view_range(self, len_data: int) -> None:
@@ -191,7 +191,6 @@ class PlotHandler(QObject):
     @Slot()
     def reset_plots(self) -> None:
         for pw in [self._pw_main, self._pw_rate]:
-            # pw.getPlotItem().addLegend().clear()
             pw.getPlotItem().clear()
             pw.getPlotItem().getViewBox().clear()
 
@@ -282,7 +281,7 @@ class PlotHandler(QObject):
             movable=False,
         )
         marked_region.hide()
-        marked_region.setZValue(-100)
+        # marked_region.setZValue(-100)
         region_list.append(marked_region)
         self._pw_main.addItem(marked_region)
         self.remove_section_selector()
@@ -437,7 +436,7 @@ class PlotHandler(QObject):
         if x_data is None or y_data is None:
             return
 
-        search_radius = 20
+        search_radius = 10
 
         valid_indices = np.where(
             (x_data >= click_x - search_radius) & (x_data <= click_x + search_radius)
