@@ -6,24 +6,6 @@ from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import QRectF, Qt, Signal
 
-# class JupyterConsoleWidget(inprocess.QtInProcessRichJupyterWidget):
-#     def __init__(self):
-#         super().__init__()
-
-#         self.kernel_manager: inprocess.QtInProcessKernelManager = (
-#             inprocess.QtInProcessKernelManager()
-#         )
-#         self.kernel_manager.start_kernel()
-#         self.kernel_client: jupyter_client.blocking.client.BlockingKernelClient = (
-#             self.kernel_manager.client()
-#         )
-#         self.kernel_client.start_channels()
-#         QApplication.instance().aboutToQuit.connect(self.shutdown_kernel)
-
-#     def shutdown_kernel(self):
-#         self.kernel_client.stop_channels()
-#         self.kernel_manager.shutdown_kernel()
-
 
 class ScatterPlotItemError(Exception):
     def __init__(self, message: str) -> None:
@@ -164,6 +146,11 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         *args: t.Any,
         **kargs: t.Any,
     ) -> None:
+        spots = kargs.get("spots")
+        x = kargs.get("x")
+        y = kargs.get("y")
+        pos = kargs.get("pos")
+
         if len(args) == 1:
             kargs["spots"] = args[0]
         elif len(args) == 2:
@@ -172,34 +159,25 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         elif len(args) > 2:
             raise ScatterPlotItemError("Only accepts up to two non-keyword arguments.")
 
-        if "pos" in kargs:
-            pos = kargs["pos"]
+        if pos is not None:
             if isinstance(pos, np.ndarray):
                 kargs["x"] = pos[:, 0]
                 kargs["y"] = pos[:, 1]
             else:
-                x = []
-                y = []
-                for p in pos:
-                    if isinstance(p, QtCore.QPointF):
-                        x.append(p.x())
-                        y.append(p.y())
-                    else:
-                        x.append(p[0])
-                        y.append(p[1])
+                x = [p.x() if isinstance(p, QtCore.QPointF) else p[0] for p in pos]
+                y = [p.y() if isinstance(p, QtCore.QPointF) else p[1] for p in pos]
                 kargs["x"] = x
                 kargs["y"] = y
 
-        if "spots" in kargs:
-            numPts = len(kargs["spots"])
-        elif "y" in kargs and kargs["y"] is not None and hasattr(kargs["y"], "__len__"):
-            numPts = len(kargs["y"])
-        elif "y" in kargs and kargs["y"] is not None:
-            numPts = 1
-        else:
-            kargs["x"] = []
-            kargs["y"] = []
-            numPts = 0
+        numPts = (
+            len(spots)
+            if spots is not None
+            else len(y)
+            if y is not None and hasattr(y, "__len__")
+            else 1
+            if y is not None
+            else 0
+        )
 
         self.data["item"][...] = None
 
@@ -212,13 +190,11 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         newData["size"] = -1
         newData["visible"] = True
 
-        if "spots" in kargs:
-            spots = kargs["spots"]
-            for i in range(len(spots)):
-                spot = spots[i]
-                for k in spot:
+        if spots is not None:
+            for i, spot in enumerate(spots):
+                for k, v in spot.items():
                     if k == "pos":
-                        pos = spot[k]
+                        pos = v
                         if isinstance(pos, QtCore.QPointF):
                             x, y = pos.x(), pos.y()
                         else:
@@ -226,29 +202,30 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
                         newData[i]["x"] = x
                         newData[i]["y"] = y
                     elif k == "pen":
-                        newData[i][k] = pg.mkPen(spot[k])
+                        newData[i][k] = pg.mkPen(v)
                     elif k == "brush":
-                        newData[i][k] = pg.mkBrush(spot[k])
+                        newData[i][k] = pg.mkBrush(v)
                     elif k in ["x", "y", "size", "symbol", "data"]:
-                        newData[i][k] = spot[k]
+                        newData[i][k] = v
                     else:
                         raise ScatterPlotItemError(f"Unknown spot parameter: {k}")
-        elif "y" in kargs:
-            newData["x"] = kargs["x"]
-            newData["y"] = kargs["y"]
+        elif y is not None:
+            newData["x"] = x
+            newData["y"] = y
 
-        if "name" in kargs:
-            self.opts["name"] = kargs["name"]
-        if "pxMode" in kargs:
-            self.setPxMode(kargs["pxMode"])
-        if "antialias" in kargs:
-            self.opts["antialias"] = kargs["antialias"]
-        if "hoverable" in kargs:
-            self.opts["hoverable"] = bool(kargs["hoverable"])
-        if "tip" in kargs:
-            self.opts["tip"] = kargs["tip"]
-        if "useCache" in kargs:
-            self.opts["useCache"] = kargs["useCache"]
+        for k, v in kargs.items():
+            if k == "name":
+                self.opts["name"] = v
+            elif k == "pxMode":
+                self.setPxMode(v)
+            elif k == "antialias":
+                self.opts["antialias"] = v
+            elif k == "hoverable":
+                self.opts["hoverable"] = bool(v)
+            elif k == "tip":
+                self.opts["tip"] = v
+            elif k == "useCache":
+                self.opts["useCache"] = v
 
         for k in ["pen", "brush", "symbol", "size"]:
             if k in kargs:
@@ -267,6 +244,7 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
                 elif k == "brush":
                     vh = pg.mkBrush(vh)
                 self.opts[kh] = vh
+
         if "data" in kargs:
             self.setPointData(kargs["data"], dataSet=newData)
 

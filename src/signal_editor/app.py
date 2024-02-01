@@ -293,7 +293,15 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.ui.progress_bar.show()
         self.statusbar.showMessage("Computing result for all sections...")
         self.ui.progress_bar.setValue(10)
-        self._result = self.data.get_complete_result()
+
+        try:
+            self._result = self.data.get_complete_result()
+        except RuntimeWarning:
+            msg = "At least one section has no peaks. Either remove the sections, or finish processing them."
+            self.sig_show_message.emit(msg, "info")
+            self.ui.progress_bar.hide()
+            return
+
         self.ui.progress_bar.setValue(50)
         self.btn_save_to_hdf5.setEnabled(True)
         self.ui.progress_bar.setValue(100)
@@ -562,8 +570,9 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.statusbar.showMessage("Creating focused result for current section...")
         try:
             cas_foc_res = self.data.cas.get_focused_result()
-        except RuntimeWarning as w:
-            self.sig_show_message.emit(w, "error")
+        except RuntimeWarning:
+            msg = "At least one section has no peaks. Either remove the sections, or finish processing them."
+            self.sig_show_message.emit(msg, "info")
             return
         if not hasattr(self, "cas_focused_table"):
             model = PolarsTableModel(cas_foc_res.to_polars())

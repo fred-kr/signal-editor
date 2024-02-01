@@ -72,14 +72,6 @@ class SectionResult:
     rate: npt.NDArray[np.float64] = attrs.field(converter=_to_float_array)
     rate_interpolated: npt.NDArray[np.float64] = attrs.field(converter=_to_float_array)
     processing_parameters: _t.ProcessingParameters = attrs.field()
-    # summary_statistics: dict[str, _t.SummaryDict] = attrs.field()
-    # sampling_rate: int = attrs.field(converter=int)
-    # section_id: SectionID = attrs.field()
-    # absolute_bounds: SectionIndices = attrs.field(converter=_to_section_indices)
-    # sig_name: str = attrs.field()
-    # peak_interval_stats: _t.SummaryDict = attrs.field()
-    # rate_stats: _t.SummaryDict = attrs.field()
-    # focused_result: npt.NDArray[np.void] = attrs.field(converter=_to_structured_array)
 
     def as_dict(self) -> _t.SectionResultDict:
         return {
@@ -440,7 +432,7 @@ class Section:
         peaks = self.peaks
         if peaks.len() < 3:
             raise RuntimeWarning(
-                "Need at least 3 peaks to calculate focused results. No result created."
+                f"Need at least 3 peaks to calculate focused results. Current peaks: {peaks}. No result created."
             )
 
         global_peaks = self.data.get_column("index").gather(peaks)

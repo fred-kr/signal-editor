@@ -1,11 +1,11 @@
 import typing as t
-from PySide6 import QtGui
 
 import numpy as np
 import polars as pl
 import pyqtgraph as pg
 from numpy.typing import NDArray
-from PySide6.QtCore import QObject, QPointF, Qt, Signal, Slot
+from PySide6 import QtGui
+from PySide6.QtCore import QObject, QPointF, Signal, Slot
 from PySide6.QtWidgets import QVBoxLayout
 
 from ..models.result import ManualPeakEdits
@@ -209,7 +209,9 @@ class PlotHandler(QObject):
             region.setVisible(show)
 
     def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
-        def remove_region_from_list(region_list: list[pg.LinearRegionItem], bounds: "tuple[int, int] | SectionIndices") -> None:
+        def remove_region_from_list(
+            region_list: list[pg.LinearRegionItem], bounds: "tuple[int, int] | SectionIndices"
+        ) -> None:
             for region in region_list:
                 region_bounds = region.getRegion()
                 if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
@@ -363,7 +365,7 @@ class PlotHandler(QObject):
         mean_pen_color: str = "darkgoldenrod",
     ) -> None:
         rate_mean_val = np.mean(rate_values, dtype=np.int32)
-        
+
         rate_item = self._rate_item
         rate_mean_item = self._rate_mean_item
         legend = self._pw_rate.getPlotItem().addLegend()
@@ -383,7 +385,11 @@ class PlotHandler(QObject):
                 name=f"Mean Rate: {int(rate_mean_val)} bpm",
             )
             rate_mean_item.setZValue(1e3)
-            rate_mean_item.opts = {"pen": pg.mkPen({"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine})}
+            rate_mean_item.opts = {
+                "pen": pg.mkPen(
+                    {"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine}
+                )
+            }
             legend.clear()
             self._pw_rate.addItem(rate_item)
             self._pw_rate.addItem(rate_mean_item)
@@ -394,7 +400,11 @@ class PlotHandler(QObject):
             legend.clear()
             rate_item.setData(rate_values)
             rate_mean_item.setValue(rate_mean_val)
-            rate_mean_item.opts = {"pen": pg.mkPen({"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine})}
+            rate_mean_item.opts = {
+                "pen": pg.mkPen(
+                    {"color": mean_pen_color, "width": 2.5, "style": QtGui.Qt.PenStyle.DashLine}
+                )
+            }
             legend.addItem(rate_item, name=f"Rate ({name})")
             legend.addItem(rate_mean_item, name=f"Mean Rate: {int(rate_mean_val)} bpm")
         self.sig_rate_drawn.emit()
@@ -412,9 +422,11 @@ class PlotHandler(QObject):
 
         spot_item = points[0]
         to_remove_index = spot_item.index()
-        if scatter_plot := self._scatter_item:
-            new_points_x = np.delete(scatter_plot.data["x"], to_remove_index)
-            new_points_y = np.delete(scatter_plot.data["y"], to_remove_index)
+        scatter_plot = self._scatter_item
+        if scatter_plot is not None:
+            scatter_data = scatter_plot.data
+            new_points_x = np.delete(scatter_data["x"], to_remove_index)
+            new_points_y = np.delete(scatter_data["y"], to_remove_index)
             scatter_plot.setData(x=new_points_x, y=new_points_y)
             peak_edit_x = int(spot_item.pos().x())
 
@@ -436,23 +448,15 @@ class PlotHandler(QObject):
         if x_data is None or y_data is None:
             return
 
-        search_radius = 10
+        search_radius = 15
 
-        valid_indices = np.where(
-            (x_data >= click_x - search_radius) & (x_data <= click_x + search_radius)
-        )[0]
+        valid_indices = np.where(np.abs(x_data - click_x) <= search_radius)[0]
 
         valid_y_values = y_data[valid_indices]
 
-        max_y_index = valid_indices[np.argmax(valid_y_values)]
-        min_y_index = valid_indices[np.argmin(valid_y_values)]
+        use_index = valid_indices[np.argmin(np.abs(x_data[valid_indices] - click_x))]
+        use_val = valid_y_values[np.argmin(np.abs(x_data[valid_indices] - click_x))]
 
-        if np.abs(x_data[max_y_index] - click_x) > np.abs(x_data[min_y_index] - click_x):
-            use_index = min_y_index
-            use_val = valid_y_values.min()
-        else:
-            use_index = max_y_index
-            use_val = valid_y_values.max()
         if use_index in scatter_item.data["x"]:
             return
 
@@ -472,21 +476,17 @@ class PlotHandler(QObject):
         rect_x, rect_y, rect_width, rect_height = vb.mapped_peak_selection.boundingRect().getRect()
 
         scatter_x, scatter_y = scatter_item.getData()
-        if scatter_x.shape[0] == 0 or scatter_y.shape[0] == 0:
+        if scatter_x.size == 0 or scatter_y.size == 0:
             return
 
-        to_remove = np.argwhere(
-            (scatter_x >= rect_x)
-            & (scatter_x <= rect_x + rect_width)
-            & (scatter_y >= rect_y)
-            & (scatter_y <= rect_y + rect_height)
-        ).flatten()
-
-        if to_remove.shape[0] == 0:
-            return
-
-        scatter_item.setData(x=np.delete(scatter_x, to_remove), y=np.delete(scatter_y, to_remove))
-        self.sig_peaks_edited.emit("remove", scatter_x[to_remove].astype(int).tolist())
+        mask = (
+            (scatter_x < rect_x)
+            | (scatter_x > rect_x + rect_width)
+            | (scatter_y < rect_y)
+            | (scatter_y > rect_y + rect_height)
+        )
+        scatter_item.setData(x=scatter_x[mask], y=scatter_y[mask])
+        self.sig_peaks_edited.emit("remove", scatter_x[~mask].astype(int).tolist())
         vb.selection_box = None
 
     @Slot()
