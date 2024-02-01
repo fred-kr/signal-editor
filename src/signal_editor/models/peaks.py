@@ -136,10 +136,10 @@ def _find_ppg_peaks_elgendi(
             continue
 
         data = sig[beg:end]
-        locmax, props = signal.find_peaks(data, prominence=(None, None))  # type: ignore
+        locmax, props = signal.find_peaks(data, prominence=(None, None))
 
         if locmax.size > 0:
-            peak = beg + locmax[np.argmax(props["prominences"])]  # type: ignore
+            peak = beg + locmax[np.argmax(props["prominences"])]
 
             if not peaks or peak - peaks[-1] > min_delay_samples:
                 peaks.append(peak)
@@ -154,8 +154,8 @@ def _find_local_peaks(
     if len(sig) == 0 or np.min(sig) == np.max(sig):
         return np.empty(0, dtype=np.int32)
 
-    max_vals = ndimage.maximum_filter(sig, size=2 * radius + 1, mode="constant")  # type: ignore
-    return np.nonzero(sig == max_vals)[0]  # type: ignore
+    max_vals = ndimage.maximum_filter(sig, size=2 * radius + 1, mode="constant")
+    return np.nonzero(sig == max_vals)[0]
 
 
 def _shift_peaks(

@@ -1,16 +1,15 @@
 import typing as t
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
-import h5py
 import mne.io
-import numpy as np
 import polars as pl
+import tables as tb
 
 from .. import type_aliases as _t
 
 if t.TYPE_CHECKING:
-    from ..models.result import CompleteResult
+    pass
 
 
 def read_edf(
@@ -72,33 +71,190 @@ def read_edf(
     return lf, date_measured, sampling_rate
 
 
-def dict_to_hdf5(root: h5py.Group, data: _t.CompleteResultDict | dict[str, t.Any]) -> None:
+def unpack_dict_to_attrs(
+    data: _t.ResultIdentifierDict
+    | _t.SignalFilterParameters
+    | _t.StandardizeParameters
+    | _t.PeakDetectionParameters
+    | _t.SummaryDict
+    | None,
+    file: tb.File,
+    node: tb.Node | str,
+) -> None:
+    """
+    Unpacks a dictionary of attributes and sets them as node attributes in a PyTables file.
+
+    Parameters
+    ----------
+    data : _t.ResultIdentifierDict | _t.SignalFilterParameters | _t.StandardizeParameters | _t.PeakDetectionParameters | _t.SummaryDict | None
+        A dictionary containing the attributes to be set as node attributes. Can be one of the following types:
+        - _t.ResultIdentifierDict: A dictionary containing result identifier attributes.
+        - _t.SignalFilterParameters: A dictionary containing signal filter parameters.
+        - _t.StandardizeParameters: A dictionary containing standardize parameters.
+        - _t.PeakDetectionParameters: A dictionary containing peak detection parameters.
+        - _t.SummaryDict: A dictionary containing summary attributes.
+        - None: If data is None, the function returns without performing any action.
+
+    file : tb.File
+        The PyTables file object.
+
+    node : tb.Node | str
+        The node in the PyTables file where the attributes will be set. Can be either a PyTables Node object or a string representing the path to the node.
+    """
+    if data is None:
+        return
     for key, value in data.items():
-        if value is None:
-            root.attrs.create(key, "None")
-        elif isinstance(value, str):
-            root.attrs.create(key, data=value, dtype=h5py.string_dtype(encoding="utf-8"))
-        elif isinstance(value, (int, bool, float)):
-            root.attrs.create(key, value)
-        elif isinstance(value, (datetime, date)):
-            value = value.isoformat()
-            root.attrs.create(key, value)
-        elif isinstance(value, (np.ndarray, list)):
-            root.create_dataset(key, data=value)
-        elif isinstance(value, dict):
-            subgroup = root.create_group(key)
-            dict_to_hdf5(subgroup, value)
-        elif hasattr(value, "__len__"):
-            root.create_dataset(key, data=value)
-        else:
-            root.attrs.create(key, value)
+        file.set_node_attr(node, key, value)
 
 
-def write_hdf5(file_path: str | Path, result: "CompleteResult") -> None:
+def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> None:
+    """
+    Writes a dictionary containing the results of a complete analysis to a PyTables file.
+
+    Parameters
+    ----------
+    file_path : str | Path
+        The path to the PyTables file.
+    data : _t.CompleteResultDict
+        A dictionary containing the results of a complete analysis. The dictionary must have the following structure:
+
+        {
+            "identifier": ResultIdentifierDict,
+            "global_dataframe": npt.NDArray[np.void],
+            "complete_section_results": dict["SectionID", SectionResultDict],
+            "focused_section_results": dict["SectionID", FocusedResult],
+        }
+        - ResultIdentifierDict: A dictionary containing result identifier attributes.
+        - npt.NDArray[np.void]: A structured array containing the global data frame.
+        - dict["SectionID", SectionResultDict]: A dictionary containing the results of the analysis of each section. The keys are the section IDs.
+        - dict["SectionID", FocusedResult]: A dictionary containing the focused results of the analysis of each section. The keys are the section IDs.
+
+    """
     file_path = Path(file_path).resolve().as_posix()
 
-    with h5py.File(file_path, "a") as f:
-        main_grp = f.create_group(f"{Path(result.identifier.source_file_name).stem}_results")
-        res_dict = result.as_dict()
+    with tb.open_file(file_path, "w", title=f"Results_{Path(file_path).stem}") as h5f:
+        unpack_dict_to_attrs(data["identifier"], h5f, h5f.root)
+        h5f.create_table(
+            h5f.root,
+            name="global_dataframe",
+            description=data["global_dataframe"],
+            title="Global DataFrame",
+            expectedrows=data["global_dataframe"].shape[0],
+        )
+        h5f.create_group(h5f.root, "focused_section_results", title="Focused Section Results")
+        for section_id, focused_result in data["focused_section_results"].items():
+            h5f.create_table(
+                "/focused_section_results",
+                name=f"focused_result_{section_id}",
+                description=focused_result,
+                title=f"Focused Result ({section_id})",
+                expectedrows=focused_result.shape[0],
+            )
+        h5f.create_group(h5f.root, "complete_section_results", title="Complete Section Results")
+        for section_id, section_result in data["complete_section_results"].items():
+            h5f.create_group(
+                "/complete_section_results",
+                name=f"complete_result_{section_id}",
+                title=f"Complete Result ({section_id})",
+            )
+            h5f.create_table(
+                f"/complete_section_results/complete_result_{section_id}",
+                name="section_dataframe",
+                description=section_result["data"],
+                title=f"DataFrame ({section_id})",
+                expectedrows=section_result["data"].shape[0],
+            )
 
-        dict_to_hdf5(main_grp, res_dict)
+            h5f.create_group(
+                f"/complete_section_results/complete_result_{section_id}",
+                name="peaks",
+                title="Peaks",
+            )
+            h5f.create_array(
+                f"/complete_section_results/complete_result_{section_id}/peaks",
+                name="peak_indices_section",
+                obj=section_result["peaks_section"],
+                title="Peak indices (section)",
+            )
+            h5f.create_array(
+                f"/complete_section_results/complete_result_{section_id}/peaks",
+                name="peak_indices_global",
+                obj=section_result["peaks_global"],
+                title="Peak indices (global)",
+            )
+            h5f.create_array(
+                f"/complete_section_results/complete_result_{section_id}/peaks",
+                name="manually_added_peak_indices",
+                obj=section_result["peak_edits"]["added"],
+                title="Manually added (section)",
+            )
+            h5f.create_array(
+                f"/complete_section_results/complete_result_{section_id}/peaks",
+                name="manually_removed_peak_indices",
+                obj=section_result["peak_edits"]["removed"],
+                title="Manually removed (section)",
+            )
+
+            h5f.create_group(
+                f"/complete_section_results/complete_result_{section_id}",
+                name="rate",
+                title="Calculated rate",
+            )
+            h5f.create_array(
+                f"/complete_section_results/complete_result_{section_id}/rate",
+                name="not_interpolated",
+                obj=section_result["rate"],
+                title="Rate (no interpolation)",
+            )
+            h5f.create_array(
+                f"/complete_section_results/complete_result_{section_id}/rate",
+                name="interpolated",
+                obj=section_result["rate_interpolated"],
+                title="Rate (interpolated to length of section)",
+            )
+
+            h5f.create_group(
+                f"/complete_section_results/complete_result_{section_id}",
+                name="processing_parameters",
+                title=f"Processing parameters ({section_id})",
+            )
+            h5f.set_node_attr(
+                f"/complete_section_results/complete_result_{section_id}/processing_parameters",
+                attrname="sampling_rate",
+                attrvalue=section_result["processing_parameters"]["sampling_rate"],
+            )
+            h5f.set_node_attr(
+                f"/complete_section_results/complete_result_{section_id}/processing_parameters",
+                attrname="pipeline",
+                attrvalue=section_result["processing_parameters"]["pipeline"],
+            )
+            h5f.create_group(
+                f"/complete_section_results/complete_result_{section_id}/processing_parameters",
+                name="filter_parameters",
+                title="Filter parameters",
+            )
+            unpack_dict_to_attrs(
+                section_result["processing_parameters"]["filter_parameters"],
+                h5f,
+                f"/complete_section_results/complete_result_{section_id}/processing_parameters/filter_parameters",
+            )
+            h5f.create_group(
+                f"/complete_section_results/complete_result_{section_id}/processing_parameters",
+                name="standardize_parameters",
+                title="Standardize parameters",
+            )
+            unpack_dict_to_attrs(
+                section_result["processing_parameters"]["standardize_parameters"],
+                h5f,
+                f"/complete_section_results/complete_result_{section_id}/processing_parameters/standardize_parameters",
+            )
+            h5f.create_group(
+                f"/complete_section_results/complete_result_{section_id}/processing_parameters",
+                name="peak_detection_parameters",
+                title="Peak detection parameters",
+            )
+            unpack_dict_to_attrs(
+                section_result["processing_parameters"]["peak_detection_parameters"],
+                h5f,
+                f"/complete_section_results/complete_result_{section_id}/processing_parameters/peak_detection_parameters",
+            )

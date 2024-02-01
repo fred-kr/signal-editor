@@ -1,6 +1,6 @@
+import os
 import pprint
 import typing as t
-import os
 
 import numpy as np
 import pdir
@@ -38,7 +38,7 @@ class UIHandler(QObject):
         super(UIHandler, self).__init__()
         self._app = app
         self.plot = plot
-        self.setup_widgets()
+        self.setup_ui()
         self._connect_qt_signals()
 
     def _connect_qt_signals(self) -> None:
@@ -51,30 +51,36 @@ class UIHandler(QObject):
         )
 
         self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
-        if os.environ.get("DEV_MODE", "0") == "1":
+        if os.environ.get("ENABLE_CONSOLE", "0") == "1":
             self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
 
-    def setup_widgets(self) -> None:
+    def setup_ui(self) -> None:
         self._set_combo_box_items()
 
         # Signal Filtering
-        self._prepare_inputs()
+        self._setup_inputs()
 
         # File Info
-        self._prepare_widgets()
+        self._setup_widgets()
 
         # Statusbar
-        self._prepare_statusbar()
+        self._setup_statusbar()
 
         # Toolbar Plots
-        self._prepare_toolbars()
+        self._setup_toolbars()
 
         # Console
-        if os.environ.get("DEV_MODE", "0") == "1":
+        if os.environ.get("ENABLE_CONSOLE", "0") == "1":
             self.create_jupyter_console_widget()
 
-    def _prepare_statusbar(self) -> None:
+    def _setup_statusbar(self) -> None:
         sb = self._app.statusbar
+        self.progress_bar = QtWidgets.QProgressBar()
+        self.progress_bar.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Fixed
+        )
+        sb.addWidget(self.progress_bar)
+        self.progress_bar.hide()
         self.label_cursor_pos = QtWidgets.QLabel(
             "Cursor Position (scene): -, -; Base Index: -; Section Index: -", sb
         )
@@ -83,7 +89,7 @@ class UIHandler(QObject):
         sb.addPermanentWidget(self.label_currently_showing)
         sb.showMessage("Ready")
 
-    def _prepare_widgets(self) -> None:
+    def _setup_widgets(self) -> None:
         self._app.container_file_info.setEnabled(True)
         self._app.btn_load_selection.setEnabled(False)
         self._app.dock_widget_sections.setVisible(False)
@@ -98,7 +104,7 @@ class UIHandler(QObject):
         export_menu.addAction("Excel", lambda: self._app.export_focused_result("xlsx"))
         self._app.btn_export_focused.setMenu(export_menu)
 
-    def _prepare_inputs(self) -> None:
+    def _setup_inputs(self) -> None:
         # Signal Filtering
         self._app.combo_box_preprocess_pipeline.setValue("custom")
         self._app.container_custom_filter_inputs.setEnabled(True)
@@ -115,7 +121,7 @@ class UIHandler(QObject):
         peak_combo_box.blockSignals(False)
         peak_combo_box.currentIndexChanged.connect(stacked_peak_widget.setCurrentIndex)
 
-    def _prepare_toolbars(self) -> None:
+    def _setup_toolbars(self) -> None:
         edit_tb = self._app.toolbar_plots
         edit_tb.insertWidget(self._app.action_confirm, self._app.combo_box_section_select)
         edit_tb.setVisible(False)
@@ -183,8 +189,8 @@ class UIHandler(QObject):
 
     def create_jupyter_console_widget(self) -> None:
         try:
-            from PySide6.QtWidgets import QApplication
             import jupyter_client
+            from PySide6 import QtCore, QtGui, QtWidgets
             from qtconsole import inprocess
         except ImportError:
             return
@@ -201,17 +207,30 @@ class UIHandler(QObject):
                     self.kernel_manager.client()
                 )
                 self.kernel_client.start_channels()
-                QApplication.instance().aboutToQuit.connect(self.shutdown_kernel)
+                qapp_instance = QtWidgets.QApplication.instance()
+                if qapp_instance is not None:
+                    qapp_instance.aboutToQuit.connect(self.shutdown_kernel)
 
             def shutdown_kernel(self):
                 self.kernel_client.stop_channels()
                 self.kernel_manager.shutdown_kernel()
+
         self.jupyter_console = JupyterConsoleWidget()
         self.jupyter_console.set_default_style("linux")
         self.jupyter_console_dock = QDockWidget("Jupyter Console")
         self.jupyter_console_dock.setWidget(self.jupyter_console)
         self.jupyter_console.kernel_manager.kernel.shell.push(
-            dict(mw=self._app, pg=pg, np=np, pl=pl, pp=pprint.pprint, pdir=pdir)
+            dict(
+                mw=self._app,
+                pg=pg,
+                np=np,
+                pl=pl,
+                pp=pprint.pprint,
+                pdir=pdir,
+                qtc=QtCore,
+                qtw=QtWidgets,
+                qtg=QtGui,
+            )
         )
         self.jupyter_console.execute("whos")
 
@@ -335,14 +354,14 @@ class UIHandler(QObject):
             if isinstance(val, float):
                 vals[key] = round(val, 3)
 
-        return _t.PeakDetectionParameters(method=method, input_values=vals)
+        return _t.PeakDetectionParameters(method=method, method_parameters=vals)
 
     def set_peak_detection_parameters(self, params: _t.PeakDetectionParameters) -> None:
         # sourcery skip: extract-method
         method = params["method"]
         self._app.combo_box_peak_detection_method.setValue(method)
 
-        vals = params["input_values"]
+        vals = params["method_parameters"]
 
         match method:
             case "elgendi_ppg":

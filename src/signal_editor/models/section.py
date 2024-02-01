@@ -16,18 +16,6 @@ from .processing import filter_elgendi, filter_signal, scale_signal
 from .result import FocusedResult, ManualPeakEdits
 
 
-def _get_summary(data: pl.Series) -> dict[str, t.Any]:
-    return {
-        "min": data.min(),
-        "max": data.max(),
-        "mean": data.mean(),
-        "std": data.std(),
-        "median": data.median(),
-        "skew": data.skew(),
-        "kurtosis": data.kurtosis(),
-    }
-
-
 class SectionIndices(t.NamedTuple):
     start: int
     stop: int
@@ -59,30 +47,51 @@ def _to_uint_array(value: npt.NDArray[np.uint32] | pl.Series) -> npt.NDArray[np.
     return value.cast(pl.UInt32).to_numpy(writable=True) if isinstance(value, pl.Series) else value
 
 
+@attrs.define(slots=True, frozen=True, repr=True)
+class SectionIdentifier:
+    sig_name: str = attrs.field()
+    section_id: SectionID = attrs.field()
+    absolute_bounds: SectionIndices = attrs.field(converter=_to_section_indices)
+    sampling_rate: int = attrs.field(converter=int)
+
+    def as_dict(self) -> _t.SectionIdentifierDict:
+        return _t.SectionIdentifierDict(**attrs.asdict(self))
+
+
 def _to_float_array(value: npt.NDArray[np.float64] | pl.Series) -> npt.NDArray[np.float64]:
     return value.cast(pl.Float64).to_numpy(writable=True) if isinstance(value, pl.Series) else value
 
 
 @attrs.define(slots=True, frozen=True, repr=True)
 class SectionResult:
-    sig_name: str = attrs.field()
-    section_id: SectionID = attrs.field()
-    absolute_bounds: SectionIndices = attrs.field(converter=_to_section_indices)
+    identifier: _t.SectionIdentifierDict = attrs.field()
     data: npt.NDArray[np.void] = attrs.field(converter=_to_structured_array)
-    sampling_rate: int = attrs.field(converter=int)
-    peaks: npt.NDArray[np.uint32] = attrs.field(converter=_to_uint_array)
-    peak_interval_stats: dict[str, float] = attrs.field()
-    peak_edits: ManualPeakEdits = attrs.field()
+    peaks_section: npt.NDArray[np.uint32] = attrs.field(converter=_to_uint_array)
+    peaks_global: npt.NDArray[np.uint32] = attrs.field(converter=_to_uint_array)
+    peak_edits: _t.ManualPeakEditsDict = attrs.field()
     rate: npt.NDArray[np.float64] = attrs.field(converter=_to_float_array)
-    rate_stats: dict[str, float] = attrs.field()
     rate_interpolated: npt.NDArray[np.float64] = attrs.field(converter=_to_float_array)
     processing_parameters: _t.ProcessingParameters = attrs.field()
-    focused_result: npt.NDArray[np.void] = attrs.field(converter=_to_structured_array)
+    # summary_statistics: dict[str, _t.SummaryDict] = attrs.field()
+    # sampling_rate: int = attrs.field(converter=int)
+    # section_id: SectionID = attrs.field()
+    # absolute_bounds: SectionIndices = attrs.field(converter=_to_section_indices)
+    # sig_name: str = attrs.field()
+    # peak_interval_stats: _t.SummaryDict = attrs.field()
+    # rate_stats: _t.SummaryDict = attrs.field()
+    # focused_result: npt.NDArray[np.void] = attrs.field(converter=_to_structured_array)
 
     def as_dict(self) -> _t.SectionResultDict:
-        out = _t.SectionResultDict(**attrs.asdict(self))
-        out["peak_edits"] = self.peak_edits.as_dict()
-        return out
+        return {
+            "identifier": self.identifier,
+            "data": self.data,
+            "peaks_section": self.peaks_section,
+            "peaks_global": self.peaks_global,
+            "peak_edits": self.peak_edits,
+            "rate": self.rate,
+            "rate_interpolated": self.rate_interpolated,
+            "processing_parameters": self.processing_parameters,
+        }
 
 
 class Section:
@@ -112,7 +121,7 @@ class Section:
         self._sampling_rate = sampling_rate
         self._is_active = set_active
         abs_index_col = data.get_column("index")
-        self._abs_bounds = SectionIndices(abs_index_col[0], abs_index_col[-1])
+        self._abs_bounds = SectionIndices(start=abs_index_col[0], stop=abs_index_col[-1])
         self._rate = np.empty(0, dtype=np.float64)
         self._rate_interp = np.empty(0, dtype=np.float64)
         self._parameters_used = _t.ProcessingParameters(
@@ -138,8 +147,6 @@ class Section:
             f"peaks={self.peaks}, "
             f"rate={self.rate}, "
             f"rate_interp={self.rate_interp}, "
-            f"rate_stats={self.rate_stats}, "
-            f"interval_stats={self.interval_stats}"
             ")"
         )
 
@@ -206,20 +213,16 @@ class Section:
         return self.data.get_column("is_peak").arg_true()
 
     @property
+    def peaks_global(self) -> pl.Series:
+        return self.data.get_column("index").gather(self.peaks)
+
+    @property
     def rate(self) -> npt.NDArray[np.float64]:
         return self._rate
 
     @property
     def rate_interp(self) -> npt.NDArray[np.float64]:
         return self._rate_interp
-
-    @property
-    def rate_stats(self) -> dict[str, float]:
-        return _get_summary(pl.Series("rate", self.rate, pl.Float64))
-
-    @property
-    def interval_stats(self) -> dict[str, float]:
-        return _get_summary(pl.Series("peak_intervals", self.peaks.diff()))
 
     def left_shrink(self, new_stop_index: int) -> "Section":
         """
@@ -270,38 +273,54 @@ class Section:
         if pipeline == "custom":
             if method == "None":
                 filtered = self.raw_data.to_numpy()
+                filter_params = "None"
             else:
-                filtered = filter_signal(self.raw_data.to_numpy(), self.sfreq, **kwargs)
+                filtered, filter_params = filter_signal(
+                    self.raw_data.to_numpy(), self.sfreq, **kwargs
+                )
         elif pipeline == "ppg_elgendi":
             filtered = filter_elgendi(self.raw_data.to_numpy(), self.sfreq)
+            filter_params = _t.SignalFilterParameters(
+                highcut=8,
+                lowcut=0.5,
+                method="butterworth",
+                order=3,
+                window_size="default",
+                powerline=50,
+            )
         else:
             raise ValueError(f"Unknown pipeline: {pipeline}")
-        filter_parameters = _t.SignalFilterParameters(**kwargs)
         self._parameters_used["pipeline"] = pipeline
-        self._parameters_used["filter_parameters"] = filter_parameters
+        self._parameters_used["filter_parameters"] = filter_params
         pl_filtered = pl.Series(self._proc_sig_name, filtered, pl.Float64)
         self.data = self.data.with_columns((pl_filtered).alias(self._proc_sig_name))
 
-    def scale_data(self, robust: bool = False, window_size: int | None = None) -> None:
+    def scale_data(
+        self,
+        robust: bool = False,
+        window_size: int | None = None,
+        method: t.Literal["zscore", "mad", "None"] = "None",
+    ) -> None:
         scaled = scale_signal(self.proc_data, robust, window_size)
 
         self._parameters_used["standardize_parameters"] = _t.StandardizeParameters(
             robust=robust,
             window_size=window_size,
+            method=method,
         )
         self.data = self.data.with_columns((scaled).alias(self._proc_sig_name))
 
     def detect_peaks(
         self,
         method: _t.PeakDetectionMethod,
-        input_values: _t.PeakDetectionInputValues,
+        method_parameters: _t.PeakDetectionInputValues,
     ) -> None:
         sampling_rate = self.sfreq
         self._parameters_used["peak_detection_parameters"] = _t.PeakDetectionParameters(
             method=method,
-            input_values=input_values,
+            method_parameters=method_parameters,
         )
-        peaks = find_peaks(self.proc_data.to_numpy(), sampling_rate, method, input_values)
+        peaks = find_peaks(self.proc_data.to_numpy(), sampling_rate, method, method_parameters)
         self.set_peaks(peaks)
 
     def calculate_rate(self) -> None:
@@ -380,6 +399,14 @@ class Section:
             self._peak_edits.removed.extend(peaks)
 
     def get_peak_edits(self) -> ManualPeakEdits:
+        """
+        Get the manual peak edits for this section.
+
+        Returns
+        -------
+        ManualPeakEdits
+            A `ManualPeakEdits` object with lists `added` and `removed` containing the sorted and deduplicated indices.
+        """
         self._peak_edits.sort_and_deduplicate()
         return self._peak_edits
 
@@ -397,11 +424,11 @@ class Section:
             .collect()
         )
 
-    def get_section_info(self) -> _t.SectionIdentifier:
-        return _t.SectionIdentifier(
+    def get_section_info(self) -> SectionIdentifier:
+        return SectionIdentifier(
             sig_name=self.sig_name,
             section_id=self.section_id,
-            absolute_bounds=self._abs_bounds,
+            absolute_bounds=self.base_bounds,
             sampling_rate=self.sfreq,
         )
 
@@ -416,15 +443,17 @@ class Section:
                 "Need at least 3 peaks to calculate focused results. No result created."
             )
 
-        outer_indices = self.data.get_column("index").gather(peaks)
-        time = outer_indices / self.sfreq
+        global_peaks = self.data.get_column("index").gather(peaks)
+        time_global = global_peaks / self.sfreq
+        time_section = peaks / self.sfreq
         intervals = peaks.diff().fill_null(0).to_numpy()
         temperature = self.data.get_column("temperature").gather(peaks).to_numpy()
 
         return FocusedResult(
-            peaks_section=peaks.to_numpy(),
-            peaks_original=outer_indices.to_numpy(),
-            time_s=time.to_numpy(),
+            peaks_section_index=peaks.to_numpy(),
+            peaks_global_index=global_peaks.to_numpy(),
+            seconds_since_section_start=time_section.to_numpy(),
+            seconds_since_global_start=time_global.to_numpy(),
             peak_intervals=intervals,
             temperature=temperature,
             rate_bpm=self.rate,
@@ -433,20 +462,35 @@ class Section:
     def get_section_result(self) -> SectionResult:
         self.add_is_manual_column()
 
+        data = (
+            self.data.lazy()
+            .with_columns(
+                (pl.col("index") / self.sfreq).alias("sec_since_global_start"),
+                (pl.col("section_index") / self.sfreq).alias("sec_since_section_start"),
+            )
+            .select(
+                pl.col("index").alias("global_index"),
+                ps.by_name("section_index", "sec_since_global_start", "sec_since_section_start"),
+                ~ps.by_name(
+                    "index",
+                    "global_index",
+                    "section_index",
+                    "sec_since_global_start",
+                    "sec_since_section_start",
+                ),
+            )
+            .collect()
+        )
+
         return SectionResult(
-            sig_name=self.sig_name,
-            section_id=self.section_id,
-            absolute_bounds=self._abs_bounds,
-            data=self.data,
-            sampling_rate=self.sfreq,
-            peaks=self.peaks,
-            peak_interval_stats=self.interval_stats,
-            peak_edits=self.get_peak_edits(),
+            identifier=self.get_section_info().as_dict(),
+            data=data,
+            peaks_section=self.peaks,
+            peaks_global=self.peaks_global,
+            peak_edits=self.get_peak_edits().as_dict(),
             rate=self.rate,
-            rate_stats=self.rate_stats,
             rate_interpolated=self.rate_interp,
             processing_parameters=self.processing_parameters,
-            focused_result=self.get_focused_result().to_structured_array(),
         )
 
 

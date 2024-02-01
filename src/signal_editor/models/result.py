@@ -47,10 +47,16 @@ class ManualPeakEdits:
         self.removed.clear()
 
     def new_added(self, value: int) -> None:
-        self.added.append(value)
+        if value in self.removed:
+            self.removed.remove(value)
+        else:
+            self.added.append(value)
 
     def new_removed(self, value: int) -> None:
-        self.removed.append(value)
+        if value in self.added:
+            self.added.remove(value)
+        else:
+            self.removed.append(value)
 
     def sort_and_deduplicate(self) -> None:
         self.added = sorted(set(self.added))
@@ -72,9 +78,12 @@ def _to_uint_array(array: npt.NDArray[np.int_]) -> npt.NDArray[np.uint32]:
 
 @attrs.define(slots=True, frozen=True)
 class FocusedResult:
-    peaks_section: npt.NDArray[np.uint32] = attrs.field()
-    peaks_original: npt.NDArray[np.uint32] = attrs.field()
-    time_s: npt.NDArray[np.float64] = attrs.field()  # time values of the original signal
+    peaks_section_index: npt.NDArray[np.uint32] = attrs.field()
+    peaks_global_index: npt.NDArray[np.uint32] = attrs.field()
+    seconds_since_global_start: npt.NDArray[
+        np.float64
+    ] = attrs.field()  # time values of the original signal
+    seconds_since_section_start: npt.NDArray[np.float64] = attrs.field()
     peak_intervals: npt.NDArray[np.uint32] = attrs.field(converter=_to_uint_array)
     temperature: npt.NDArray[np.float64] = attrs.field()
     rate_bpm: npt.NDArray[np.float64] = attrs.field()
@@ -107,7 +116,7 @@ class CompleteResult:
     def as_dict(self) -> _t.CompleteResultDict:
         return {
             "identifier": self.identifier.as_dict(),
-            "processed_dataframe": self.processed_dataframe.to_numpy(structured=True),
+            "global_dataframe": self.processed_dataframe.to_numpy(structured=True),
             "complete_section_results": {
                 s_id: s_res.as_dict() for s_id, s_res in self.complete_section_results.items()
             },

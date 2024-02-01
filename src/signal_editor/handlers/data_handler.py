@@ -1,10 +1,10 @@
 import datetime
 import re
 import typing as t
-from datetime import date
 from pathlib import Path
 
 import attrs
+import dateutil.parser as dt_parser
 import polars as pl
 import polars.selectors as ps
 from PySide6 import QtCore, QtWidgets
@@ -24,7 +24,7 @@ def parse_file_name(
     file_name: str,
     date_pattern: str = r"\d{8}",
     id_pattern: str = r"(?:P[AM]|F)\d{1,2}",
-) -> tuple[date, str, _t.OxygenCondition]:
+) -> tuple[datetime.date, str, _t.OxygenCondition]:
     """
     Parses the file name for the date, id, and oxygen condition.
 
@@ -39,29 +39,32 @@ def parse_file_name(
 
     Returns
     -------
-    tuple[date, str, _t.OxygenCondition]
+    tuple[datetime.date, str, _t.OxygenCondition]
         The date, id, and oxygen condition parsed from the file name, or 'unknown' if
         the respective pattern was not found.
     """
     date_match = re.search(date_pattern, file_name)
     id_match = re.search(id_pattern, file_name)
+    oxy_condition: t.Literal["hypoxic", "normoxic", "unknown"] = "unknown"
+
     if "hyp" in file_name:
         oxy_condition = "hypoxic"
     elif "norm" in file_name:
         oxy_condition = "normoxic"
-    else:
-        oxy_condition = "unknown"
 
     if not date_match:
-        date_ddmmyyyy = date.today()
+        try:
+            parsed_date = dt_parser.parse(file_name, fuzzy=True, dayfirst=True).date()
+        except (ValueError, dt_parser.ParserError):
+            parsed_date = datetime.date(year=2000, month=1, day=1)
     else:
-        date_ddmmyyyy = date(
+        parsed_date = datetime.date(
             year=int(date_match[0][4:8], base=10),
             month=int(date_match[0][2:4], base=10),
             day=int(date_match[0][:2], base=10),
         )
     id_str = str(id_match[0]) if id_match else "unknown"
-    return date_ddmmyyyy, id_str, oxy_condition
+    return parsed_date, id_str, oxy_condition
 
 
 def infer_sampling_rate(
@@ -268,7 +271,7 @@ class DataHandler(QtCore.QObject):
     def set_animal_id(self, animal_id: str) -> None:
         if self._metadata is None:
             self._metadata = _t.FileMetadata(
-                date_recorded=date.today(), animal_id=animal_id, oxygen_condition="unknown"
+                date_recorded=datetime.date.today(), animal_id=animal_id, oxygen_condition="unknown"
             )
         else:
             self._metadata["animal_id"] = animal_id
@@ -277,7 +280,9 @@ class DataHandler(QtCore.QObject):
     def set_oxy_condition(self, oxy_condition: _t.OxygenCondition) -> None:
         if self._metadata is None:
             self._metadata = _t.FileMetadata(
-                date_recorded=date.today(), animal_id="unknown", oxygen_condition=oxy_condition
+                date_recorded=datetime.date.today(),
+                animal_id="unknown",
+                oxygen_condition=oxy_condition,
             )
         else:
             self._metadata["oxygen_condition"] = oxy_condition
@@ -301,8 +306,8 @@ class DataHandler(QtCore.QObject):
         match suffix:
             # ? Part of state saving/loading, either remove or update to work with v0.3.0 changes
             # case ".pkl":
-                # self._app.restore_state(path)
-                # return
+            # self._app.restore_state(path)
+            # return
             case ".csv":
                 df = pl.read_csv(path)
             case ".edf":
@@ -467,7 +472,7 @@ class DataHandler(QtCore.QObject):
             for section_id, section in self.sections.items()
             if section_id != self.base_section.section_id
         }
-        
+
     def get_complete_result(self) -> CompleteResult:
         return CompleteResult(
             identifier=self.get_result_identifier(),

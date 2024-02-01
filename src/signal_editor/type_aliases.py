@@ -116,6 +116,7 @@ class SignalFilterParameters(t.TypedDict):
 class StandardizeParameters(t.TypedDict):
     robust: bool
     window_size: int | None
+    method: t.NotRequired[t.Literal["mad", "zscore", "None"]]
 
 
 class PeakDetectionElgendiPPG(t.TypedDict):
@@ -155,7 +156,7 @@ class PeakDetectionXQRS(t.TypedDict):
 
 class PeakDetectionParameters(t.TypedDict):
     method: PeakDetectionMethod
-    input_values: PeakDetectionInputValues
+    method_parameters: PeakDetectionInputValues
 
 
 class ProcessingParameters(t.TypedDict):
@@ -173,7 +174,7 @@ class StateDict(t.TypedDict):
     data_state: "DataState"
 
 
-class SectionIdentifier(t.TypedDict):
+class SectionIdentifierDict(t.TypedDict):
     sig_name: str
     section_id: "SectionID"
     absolute_bounds: "SectionIndices"
@@ -185,20 +186,25 @@ class ManualPeakEditsDict(t.TypedDict):
     removed: list[int]
 
 
+class SummaryDict(t.TypedDict):
+    min: np.float_ | float
+    max: np.float_ | float
+    mean: np.float_ | float
+    std: np.float_ | float
+    median: np.float_ | float
+    skew: np.float_ | float
+    kurtosis: np.float_ | float
+
+
 class SectionResultDict(t.TypedDict):
-    sig_name: str
-    section_id: "SectionID"
-    absolute_bounds: "SectionIndices"
-    sampling_rate: int
+    identifier: SectionIdentifierDict
     data: npt.NDArray[np.void]
-    peaks: npt.NDArray[np.uint32]
-    peak_interval_stats: dict[str, float]
+    peaks_section: npt.NDArray[np.uint32]
+    peaks_global: npt.NDArray[np.uint32]
     peak_edits: ManualPeakEditsDict
     rate: npt.NDArray[np.float64]
-    rate_stats: dict[str, float]
     rate_interpolated: npt.NDArray[np.float64]
     processing_parameters: ProcessingParameters
-    focused_result: npt.NDArray[np.void]
 
 
 class ResultIdentifierDict(t.TypedDict):
@@ -211,6 +217,6 @@ class ResultIdentifierDict(t.TypedDict):
 
 class CompleteResultDict(t.TypedDict):
     identifier: ResultIdentifierDict
-    processed_dataframe: npt.NDArray[np.void]
+    global_dataframe: npt.NDArray[np.void]
     complete_section_results: dict["SectionID", SectionResultDict]
     focused_section_results: dict["SectionID", npt.NDArray[np.void]]

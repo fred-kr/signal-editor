@@ -21,7 +21,7 @@ class PolarsTableModel(QAbstractTableModel):
         self._df = (
             dataframe.lazy()
             .with_columns(
-                ps.contains("time").cast(pl.Decimal(12, 3)),
+                ps.contains(["time", "second"]).cast(pl.Decimal(12, 4)),
                 ps.contains("temp").cast(pl.Decimal(3, 1)),
             )
             .collect()
@@ -33,7 +33,7 @@ class PolarsTableModel(QAbstractTableModel):
         self._df = (
             dataframe.lazy()
             .with_columns(
-                ps.contains("time").cast(pl.Decimal(12, 3)),
+                ps.contains(["time", "second"]).cast(pl.Decimal(12, 4)),
                 ps.contains("temp").cast(pl.Decimal(3, 1)),
             )
             .collect()

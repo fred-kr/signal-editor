@@ -103,7 +103,7 @@ def filter_signal(
     sig: NDArray[np.float64],
     sampling_rate: int,
     **kwargs: Unpack[_t.SignalFilterParameters],
-) -> NDArray[np.float64]:
+) -> tuple[NDArray[np.float64], _t.SignalFilterParameters]:
     method = kwargs["method"]
     if method == "fir":
         max_attempts = 5  # Define a maximum number of attempts for FIR filtering
@@ -124,4 +124,4 @@ def filter_signal(
     else:
         out = nk.signal_filter(sig, sampling_rate=sampling_rate, **kwargs)  # type: ignore
 
-    return np.asarray(out, dtype=np.float64)
+    return np.asarray(out, dtype=np.float64), kwargs

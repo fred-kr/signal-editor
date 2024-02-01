@@ -246,6 +246,7 @@ INITIAL_STATE_MAP = {
         "enabled": True,
     },
     "btn_compute_results": {"enabled": True},
+    "btn_save_to_hdf5": {"enabled": False},
     "tab_container_result_views": {
         "currentIndex": 0,
     },

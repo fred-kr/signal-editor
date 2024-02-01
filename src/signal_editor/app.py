@@ -1,13 +1,10 @@
 import cProfile
 import os
-import pickle
 import sys
 import typing as t
 from datetime import datetime
 from pathlib import Path
 
-import h5py
-import numpy as np
 import polars as pl
 import pyqtgraph as pg
 from loguru import logger
@@ -37,7 +34,7 @@ from .handlers.helpers.table_helper import TableHelper
 from .handlers.plot_handler import PlotHandler
 from .handlers.style_handler import ThemeSwitcher
 from .handlers.ui_handler import UIHandler
-from .models.io import write_hdf5
+from .models.io import result_dict_to_hdf5
 from .models.polars_df import DescriptiveStatsModel, PolarsTableModel
 from .models.result import CompleteResult
 from .models.section import SectionID, SectionIndices
@@ -55,7 +52,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
     sig_data_loaded = Signal()
     sig_data_processed = Signal()
     sig_peaks_detected = Signal()
-    sig_data_restored = Signal()
     sig_section_confirmed = Signal(int, int)
     sig_update_view_range = Signal(int)
 
@@ -80,8 +76,8 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         """
         # General application actions
         self.action_exit.triggered.connect(self.close)
-        self.action_load_state.triggered.connect(self.restore_state)
-        self.action_save_state.triggered.connect(self.save_state)
+        # self.action_load_state.triggered.connect(self.restore_state)
+        # self.action_save_state.triggered.connect(self.save_state)
         self.action_select_file.triggered.connect(self.select_data_file)
         self.action_light_switch.toggled.connect(self.theme_switcher.switch_theme)
         self.action_open_config_file.triggered.connect(self.open_config_file)
@@ -116,7 +112,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
         self.btn_load_selection.clicked.connect(self.handle_load_data)
         self.sig_data_loaded.connect(self._on_data_loaded)
-        self.sig_data_restored.connect(self.refresh_app)
+        # self.sig_data_restored.connect(self.refresh_app)
         self.btn_compute_results.clicked.connect(self.update_results)
         self.action_get_section_result.triggered.connect(self._on_section_done)
 
@@ -281,14 +277,27 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             self.sig_show_message.emit(msg, "info")
             return
         self.statusbar.showMessage("Updating data with values from section...")
+        self.ui.progress_bar.reset()
+        self.ui.progress_bar.show()
+        self.ui.progress_bar.setValue(10)
         self.data.save_cas()
+        self.ui.progress_bar.setValue(50)
         self.update_cas_focused_result()
+        self.ui.progress_bar.setValue(100)
+        self.statusbar.showMessage("Focused result ready for export, see 'Results' tab.")
+        self.ui.progress_bar.hide()
 
     @Slot()
     def update_results(self) -> None:
-        self.statusbar.showMessage("Computing results...")
+        self.ui.progress_bar.reset()
+        self.ui.progress_bar.show()
+        self.statusbar.showMessage("Computing result for all sections...")
+        self.ui.progress_bar.setValue(10)
         self._result = self.data.get_complete_result()
-        self.statusbar.showMessage("Results computed.")
+        self.ui.progress_bar.setValue(50)
+        self.btn_save_to_hdf5.setEnabled(True)
+        self.ui.progress_bar.setValue(100)
+        self.statusbar.showMessage("Complete result ready for export, see 'Results' tab.")
 
     @Slot(int)
     def _on_active_section_changed(self, index: int) -> None:
@@ -418,10 +427,6 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.spin_box_sample_rate.setValue(value)
         self.spin_box_sample_rate.blockSignals(False)
 
-    def read_hdf5(self, file_path: str | Path) -> None:
-        with h5py.File(file_path, "r") as f:
-            self.restore_state(f)
-
     @Slot()
     def run_hdf5view(self) -> None:
         """
@@ -449,8 +454,12 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
             "HDF5 Files (*.hdf5 *.h5)",
         )[0]:
             complete_results = self.data.get_complete_result()
-            write_hdf5(file_path, complete_results)
-
+            try:
+                result_dict_to_hdf5(file_path, complete_results.as_dict())
+            except Exception as e:
+                msg = f"Failed to write to HDF5 file: {e}"
+                self.sig_show_message.emit(msg, "error")
+                return
             self.sig_show_message.emit(f"Saved results to {file_path}.", "info")
             self.unsaved_changes = False
 
@@ -478,29 +487,37 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         if not ok:
             return
 
-        results = self.data.get_focused_results()
-        # Define a mapping from output format to the corresponding write function
-        write_functions: dict[str, t.Callable[[pl.DataFrame, str | Path], t.Any]] = {
-            "csv": lambda df, path: df.write_csv(f"{path}.csv"),
-            "xlsx": lambda df, path: df.write_excel(f"{path}.xlsx"),
-            "txt": lambda df, path: df.write_csv(f"{path}.txt", separator="\t"),
-        }
-        if item == "Only export currently active section":
-            foc_df = self.data.cas.get_focused_result().to_polars()
-            write_functions[output_format](foc_df, result_location)
+        try:
+            results = self.data.get_focused_results()
 
-        elif item == "Create a new file for each section":
-            for s_id, foc_res in results.items():
-                foc_df = foc_res.to_polars()
-                write_functions[output_format](foc_df, f"{result_location}_{s_id}")
+            write_functions: dict[str, t.Callable[[pl.DataFrame, str | Path], t.Any]] = {
+                "csv": lambda df, path: df.write_csv(f"{path}.csv"),
+                "xlsx": lambda df, path: df.write_excel(f"{path}.xlsx"),
+                "txt": lambda df, path: df.write_csv(f"{path}.txt", separator="\t"),
+            }
+            if item == "Only export currently active section":
+                foc_df = self.data.cas.get_focused_result().to_polars()
+                write_functions[output_format](foc_df, result_location)
 
-        elif item == "Concatenate all sections and write to a single file":
-            result_dfs = [
-                foc_res.to_polars().with_columns(pl.lit(s_id).alias("section_id"))
-                for s_id, foc_res in results.items()
-            ]
-            result_df = pl.concat(result_dfs)
-            write_functions[output_format](result_df, f"{result_location}_all")
+            elif item == "Create a new file for each section":
+                for s_id, foc_res in results.items():
+                    foc_df = foc_res.to_polars()
+                    write_functions[output_format](foc_df, f"{result_location}_{s_id}")
+
+            elif item == "Concatenate all sections and write to a single file":
+                result_dfs = [
+                    foc_res.to_polars().with_columns(pl.lit(s_id).alias("section_id"))
+                    for s_id, foc_res in results.items()
+                ]
+                result_df = pl.concat(result_dfs)
+                write_functions[output_format](result_df, f"{result_location}_all")
+        except Exception as e:
+            msg = f"Failed to export focused result: {e}"
+            self.sig_show_message.emit(msg, "error")
+            return
+
+        msg = "Export successful."
+        self.sig_show_message.emit(msg, "info")
 
     @Slot()
     def select_output_location(self) -> None:
@@ -548,14 +565,13 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         except RuntimeWarning as w:
             self.sig_show_message.emit(w, "error")
             return
-
         if not hasattr(self, "cas_focused_table"):
             model = PolarsTableModel(cas_foc_res.to_polars())
             self.cas_focused_table = TableHelper(self.table_view_focused_result, model)
         else:
             self.cas_focused_table.update_cas_df(cas_foc_res.to_polars())
         self.label_focused_result_shown.setText(self.data.cas.section_id)
-        self.statusbar.clearMessage()
+        self.statusbar.showMessage("Focused result created successfully.", 5000)
 
     @Slot()
     def select_data_file(self) -> None:
@@ -612,15 +628,20 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         with pg.BusyCursor():
             filter_params = self.ui.get_filter_parameters()
             standardize_params = self.ui.get_standardize_parameters()
+            standardize_params["method"] = self.scale_method
 
             if (
                 self.pipeline == "custom"
                 and self.filter_method == "None"
                 and self.scale_method == "None"
             ):
-                self.data.cas.data = self.data.cas.data.with_columns(
-                    pl.col(self.sig_name).alias(self.proc_sig_name),
-                    pl.repeat(False, self.data.cas.data.height).alias("is_peak"),
+                self.data.cas.data = (
+                    self.data.cas.data.lazy()
+                    .with_columns(
+                        pl.col(self.sig_name).alias(self.proc_sig_name),
+                        pl.lit(False).alias("is_peak"),
+                    )
+                    .collect()
                 )
             else:
                 self.data.cas.filter_data(
@@ -643,10 +664,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.statusbar.showMessage("Detecting peaks...")
         self.btn_detect_peaks.processing("Working...")
         peak_params = self.ui.get_peak_detection_parameters()
-        if peak_params["method"] == "wfdb_xqrs":
-            with pg.BusyCursor():
-                self.data.cas.detect_peaks(**peak_params)
-        else:
+        with pg.BusyCursor():
             self.data.cas.detect_peaks(**peak_params)
         self.sig_peaks_detected.emit()
         self.unsaved_changes = True
@@ -696,7 +714,7 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         if hasattr(self, "hdf5view_process") and self.hdf5view_process:
             self.hdf5view_process.kill()
             self.hdf5view_process = None
-        if os.environ.get("DEV_MODE", "0") == "1":
+        if os.environ.get("ENABLE_CONSOLE", "0") == "1":
             self.ui.jupyter_console_dock.close()
 
         super().closeEvent(event)
@@ -732,147 +750,8 @@ class SignalEditor(QMainWindow, Ui_MainWindow):
         self.config.sample_rate = self.data.sfreq
         self.config.write_config()
 
-    @Slot()
-    def save_state(self) -> None:
-        snapshot_name = self.config.make_app_state_name(datetime.now())
-        if file_path := QFileDialog.getSaveFileName(
-            self,
-            caption="Save State",
-            dir=Path.joinpath(self.config.output_dir, snapshot_name).as_posix(),
-            filter="Pickle Files (*.pkl)",
-        )[0]:
-            state_dict = _t.StateDict(
-                signal_name=self.sig_name,
-                source_file_path=self.file_info.filePath(),
-                output_dir=self.config.output_dir.as_posix(),
-                data_state=self.data.get_state(),
-            )
 
-            with open(file_path, "wb") as f:
-                pickle.dump(state_dict, f)
-        else:
-            msg = "Action 'Save state' cancelled by user."
-            self.sig_show_message.emit(msg, "warning")
-
-    @Slot(bool)
-    def restore_state(self, checked: bool = False, file_path: str | Path | None = None) -> None:
-        if not file_path:
-            file_path, _ = QFileDialog.getOpenFileName(
-                self,
-                caption="Restore State",
-                dir=self.config.output_dir.as_posix(),
-                filter="Pickle Files (*.pkl);;Result Files (*.hdf5 *.h5);;All Files (*.pkl *.hdf5 *.h5)",
-            )
-        if not file_path:
-            return
-        if Path(file_path).suffix == ".pkl":
-            try:
-                self.restore_from_pickle(file_path)
-            except Exception as e:
-                msg = f"Failed to restore state: {e}"
-                self.sig_show_message.emit(msg, "warning")
-        elif Path(file_path).suffix in [".hdf5", ".h5"]:
-            msg = "Restore not yet implemented for HDF5 files."
-            self.sig_show_message.emit(msg, "info")
-            # TODO: implement way to load the result files for viewing
-            # try:
-            #     self.restore_from_hdf5(file_path)
-            # except Exception as e:
-            #     msg = f"Failed to restore state: {e}"
-            #     self.sig_show_message.emit(msg, "warning")
-
-    def restore_processing_parameters(
-        self,
-        processing_params: _t.ProcessingParameters,
-    ) -> None:
-        self.spin_box_sample_rate.setValue(processing_params["sampling_rate"])
-        self.combo_box_preprocess_pipeline.setValue(processing_params["pipeline"])
-
-        filt_params = processing_params["filter_parameters"]
-        if filt_params is not None:
-            lowcut = filt_params.get("lowcut") or 0.5
-            highcut = filt_params.get("highcut") or 8.0
-            order = filt_params.get("order") or 2
-            window_size = filt_params.get("window_size") or "default"
-            powerline = filt_params.get("powerline") or 50.0
-        else:
-            lowcut, highcut, order, window_size, powerline = 0.5, 8.0, 2, "default", 50.0
-        self.dbl_spin_box_lowcut.setValue(lowcut)
-        self.dbl_spin_box_highcut.setValue(highcut)
-        self.spin_box_order.setValue(order)
-        if window_size == "default":
-            filter_window = int(np.round(processing_params["sampling_rate"] / 3))
-            if filter_window % 2 == 0:
-                filter_window += 1
-        else:
-            filter_window = window_size
-        self.spin_box_window_size.setValue(filter_window)
-        self.dbl_spin_box_powerline.setValue(powerline)
-
-        standardize_params = processing_params["standardize_parameters"]
-        if standardize_params is not None:
-            robust = standardize_params.get("robust") or False
-            scale_window_size = standardize_params.get("window_size") or None
-            method = "mad" if robust else "zscore"
-        else:
-            robust, scale_window_size = False, None
-            method = "None"
-        self.combo_box_scale_method.setValue(method)
-        if scale_window_size is None:
-            self.container_scale_window_inputs.setChecked(False)
-            value = self.spin_box_scale_window_size.minimum()
-        else:
-            self.container_scale_window_inputs.setChecked(True)
-            value = scale_window_size
-        self.spin_box_scale_window_size.setValue(value)
-
-        peak_detection_params = processing_params["peak_detection_parameters"]
-        if peak_detection_params is not None:
-            peak_method = peak_detection_params.get("method") or "elgendi_ppg"
-            input_values = peak_detection_params.get("input_values") or _t.PeakDetectionElgendiPPG(
-                peakwindow=0.111,
-                beatwindow=0.667,
-                beatoffset=0.02,
-                mindelay=0.3,
-            )
-        else:
-            peak_method = "elgendi_ppg"
-            input_values = _t.PeakDetectionElgendiPPG(
-                peakwindow=0.111,
-                beatwindow=0.667,
-                beatoffset=0.02,
-                mindelay=0.3,
-            )
-
-        params = _t.PeakDetectionParameters(method=peak_method, input_values=input_values)
-        self.ui.set_peak_detection_parameters(params)
-
-    def restore_from_pickle(self, file_path: str | Path) -> None:
-        with open(file_path, "rb") as f:
-            state: _t.StateDict = pickle.load(f)
-
-        self.data.restore_state(state["data_state"])
-
-        self.file_info.setFile(state["source_file_path"])
-
-        self.config.output_dir = Path(state["output_dir"])
-        self.line_edit_output_dir.setText(state["output_dir"])
-        self.config.data_dir = Path(state["source_file_path"]).parent
-
-        self.ui.update_data_select_ui()
-        self.line_edit_active_file.setText(self.file_info.fileName())
-
-        self.restore_processing_parameters(self.data.cas.processing_parameters)
-
-        self.sig_data_restored.emit()
-
-    @Slot()
-    def refresh_app(self) -> None:
-        # TODO: implement
-        ...
-
-
-def main(dev_mode: bool = False, antialias: bool = False) -> None:
+def main(dev_mode: bool = False, antialias: bool = False, enable_console: bool = False) -> None:
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"
         os.environ["DEV_MODE"] = "1"
@@ -880,6 +759,7 @@ def main(dev_mode: bool = False, antialias: bool = False) -> None:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=false"
         os.environ["DEV_MODE"] = "0"
 
+    os.environ["ENABLE_CONSOLE"] = "1" if enable_console else "0"
     pg.setConfigOptions(
         useOpenGL=True,
         enableExperimental=True,
