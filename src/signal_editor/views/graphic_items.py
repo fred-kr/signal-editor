@@ -254,3 +254,22 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         self.invalidate()
         self.updateSpots(newData)
         self.sigPlotChanged.emit(self)
+
+
+class TimeAxisItem(pg.AxisItem):
+    def tickStrings(self, values: list[float] | None, scale: int | None, spacing: int) -> list[str]:
+        if values is None:
+            return []
+        # if scale:
+            # values = [v / scale for v in values]
+        return [self.seconds_to_timestamp(value) for value in values]
+
+    @staticmethod
+    def seconds_to_timestamp(seconds: float) -> str:
+        # Extract hours, minutes, and remaining seconds
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        seconds_int = int(seconds % 60)
+        # milliseconds = int((seconds - int(seconds)) * 1000)
+
+        return f"{hours:02d}:{minutes:02d}:{seconds_int:02d}"

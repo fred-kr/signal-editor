@@ -29,6 +29,7 @@ qtconsole = "^5.5.1"
 pdir2 = "^1.1.0"
 attrs = "^23.2.0"
 tables = "^3.9.2"
+pyqtgraph-stubs = {path = "../pyqtgraph-stubs"}
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.21.0"

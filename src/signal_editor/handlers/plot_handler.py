@@ -4,12 +4,11 @@ import numpy as np
 import polars as pl
 import pyqtgraph as pg
 from numpy.typing import NDArray
-from PySide6 import QtGui
-from PySide6.QtCore import QObject, QPointF, Signal, Slot
-from PySide6.QtWidgets import QVBoxLayout
+from PySide6 import QtCore, QtGui, QtWidgets
 
+from .. import constants as c
 from ..models.result import ManualPeakEdits
-from ..views.custom_widgets import CustomScatterPlotItem, CustomViewBox
+from ..views.graphic_items import CustomScatterPlotItem, CustomViewBox
 
 if t.TYPE_CHECKING:
     from pyqtgraph.GraphicsScene import mouseEvents
@@ -18,33 +17,19 @@ if t.TYPE_CHECKING:
     from ..models.section import SectionIndices
 
 
-SECTION_STYLES = {
-    "included": {
-        "brush": (0, 200, 100, 75),
-        "pen": {"color": "darkgoldenrod", "width": 1},
-        "hoverBrush": (0, 200, 100, 50),
-        "hoverPen": {"color": "gold", "width": 3.5},
-    },
-    "excluded": {
-        "brush": (200, 0, 100, 75),
-        "pen": {"color": "darkgoldenrod", "width": 1},
-        "hoverBrush": (200, 0, 100, 50),
-        "hoverPen": {"color": "gold", "width": 3.5},
-    },
-}
-
-
-class PlotHandler(QObject):
+class PlotHandler(QtCore.QObject):
     """
     Handles plot creation and interactions.
     """
 
-    sig_peaks_edited = Signal(str, list)
-    sig_signal_drawn = Signal(int)
-    sig_peaks_drawn = Signal()
-    sig_rate_drawn = Signal()
+    sig_peaks_edited = QtCore.Signal(str, list)
+    sig_signal_drawn = QtCore.Signal(int)
+    sig_peaks_drawn = QtCore.Signal()
+    sig_rate_drawn = QtCore.Signal()
 
-    def __init__(self, app: "SignalEditor", parent: QObject | None = None) -> None:
+    scatter_search_radius: int = 20
+
+    def __init__(self, app: "SignalEditor", parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self._app = app
         self._manual_peak_edits: dict[str, ManualPeakEdits] = {}
@@ -110,7 +95,7 @@ class PlotHandler(QObject):
         return self._manual_peak_edits
 
     def _setup_plot_widgets(self) -> None:
-        widget_layout = QVBoxLayout()
+        widget_layout = QtWidgets.QVBoxLayout()
         main_plot_widget = pg.PlotWidget(viewBox=CustomViewBox(name="main_plot"), useOpenGL=True)
         rate_plot_widget = pg.PlotWidget(viewBox=pg.ViewBox(name="rate_plot"), useOpenGL=True)
         widget_layout.addWidget(main_plot_widget)
@@ -147,37 +132,37 @@ class PlotHandler(QObject):
         rate_plot_title = "<b>Rate (interpolated)</b>"
         rate_left_label = "<b>bpm</b>"
 
+        # top_label = "<b>Time (s)</b>"
         bottom_label = "<b>Index (n samples)</b>"
 
         main_plot_item = self._pw_main.getPlotItem()
         rate_plot_item = self._pw_rate.getPlotItem()
+        # main_plot_item.setAxisItems({"top": TimeAxisItem(orientation="top")})
+        # main_plot_item.getAxis("top").setLabel(text=top_label)
 
         main_plot_item.setLabels(title=main_plot_title, left=main_left_label, bottom=bottom_label)
         rate_plot_item.setLabels(title=rate_plot_title, left=rate_left_label, bottom=bottom_label)
 
-    @Slot(object)
-    def _on_mouse_moved(self, pos: QPointF) -> None:
+    @QtCore.Slot(object)
+    def _on_mouse_moved(self, pos: QtCore.QPointF) -> None:
         if not hasattr(self._app, "data"):
             return
         try:
             cols = self._app.data.cas.data.select("index", "section_index", "temperature")
         except Exception:
             return
-        pos_data_coords = self._pw_main.plotItem.vb.mapSceneToView(pos)  # type: ignore
-        index = np.clip(pos_data_coords.x(), 0, cols.height - 1, dtype=np.int32, casting="unsafe")  # type: ignore
+        pos_data_coords = self._pw_main.plotItem.vb.mapSceneToView(pos)
+        index = np.clip(pos_data_coords.x(), 0, cols.height - 1, dtype=np.int32, casting="unsafe")
         vals = cols.filter(pl.col("section_index") == index)
         temp_text = f"<span style='color: yellow; font-size: 12pt; font-weight: bold;'>Temperature: {vals.get_column("temperature")[0]:.1f} °C</span>"
         self._temperature_label.setText(temp_text)
-        # self._app.ui.label_cursor_pos.setText(
-        #     f"Cursor position (scene): {pos.x():.2f}, {pos.y():.2f}; Base Index: {vals.get_column("index")[0]}; Section Index: {vals.get_column("section_index")[0]}"
-        # )
 
-    @Slot(int)
+    @QtCore.Slot(int)
     def reset_view_range(self, len_data: int) -> None:
         for vb in self.view_boxes:
             vb.setRange(xRange=(0, len_data), disableAutoRange=False)
 
-    @Slot(int)
+    @QtCore.Slot(int)
     def update_view_limits(self, len_data: int) -> None:
         for vb in self.view_boxes:
             vb.setLimits(
@@ -188,7 +173,7 @@ class PlotHandler(QObject):
             )
         self.reset_view_range(len_data)
 
-    @Slot()
+    @QtCore.Slot()
     def reset_plots(self) -> None:
         for pw in [self._pw_main, self._pw_rate]:
             pw.getPlotItem().clear()
@@ -203,7 +188,7 @@ class PlotHandler(QObject):
 
         self._setup_plot_items()
 
-    @Slot(bool)
+    @QtCore.Slot(bool)
     def toggle_region_overview(self, show: bool) -> None:
         for region in self.combined_regions:
             region.setVisible(show)
@@ -234,8 +219,8 @@ class PlotHandler(QObject):
         section_type: t.Literal["included", "excluded"],
         bounds: "tuple[int, int] | SectionIndices",
     ) -> None:
-        section_style = SECTION_STYLES[section_type]
-        view_x = self._pw_main.getPlotItem().getViewBox().viewRange()[0]
+        section_style = c.SECTION_STYLES[section_type]
+        view_x = self._pw_main.plotItem.vb.viewRange()[0]
         span = view_x[1] - view_x[0]
         initial_limits = (view_x[0] + span * 0.25, view_x[0] + span * 0.75)
         self.remove_section_selector()
@@ -263,7 +248,7 @@ class PlotHandler(QObject):
             if hasattr(self, "_selector_type"):
                 del self._selector_type
 
-    @Slot(int, int)
+    @QtCore.Slot(int, int)
     def mark_section(self, lower: int, upper: int) -> None:
         if not hasattr(self, "_selector_type"):
             return
@@ -409,7 +394,7 @@ class PlotHandler(QObject):
             legend.addItem(rate_mean_item, name=f"Mean Rate: {int(rate_mean_val)} bpm")
         self.sig_rate_drawn.emit()
 
-    @Slot(object, object, object)
+    @QtCore.Slot(object, object, object)
     def remove_scatter(
         self,
         sender: CustomScatterPlotItem,
@@ -432,7 +417,7 @@ class PlotHandler(QObject):
 
             self.sig_peaks_edited.emit("remove", [peak_edit_x])
 
-    @Slot(object, object)
+    @QtCore.Slot(object, object)
     def add_scatter(self, sender: pg.PlotCurveItem, ev: "mouseEvents.MouseClickEvent") -> None:
         ev.accept()
         click_x = int(ev.pos().x())
@@ -449,10 +434,8 @@ class PlotHandler(QObject):
         if x_data is None or y_data is None:
             return
 
-        search_radius = 20
-
-        left_index = np.searchsorted(x_data, click_x - search_radius, side="left")
-        right_index = np.searchsorted(x_data, click_x + search_radius, side="right")
+        left_index = np.searchsorted(x_data, click_x - self.scatter_search_radius, side="left")
+        right_index = np.searchsorted(x_data, click_x + self.scatter_search_radius, side="right")
 
         valid_x_values = x_data[left_index:right_index]
         valid_y_values = y_data[left_index:right_index]
@@ -477,39 +460,7 @@ class PlotHandler(QObject):
         scatter_item.addPoints(x=x_new, y=y_new)
         self.sig_peaks_edited.emit("add", [int(x_new)])
 
-    # @Slot(object, object)
-    # def add_scatter2(self, sender: pg.PlotCurveItem, ev: "mouseEvents.MouseClickEvent") -> None:
-    #     ev.accept()
-    #     click_x = int(ev.pos().x())
-    #     sender.mouseShape()
-
-    #     signal_item = self._signal_item
-    #     scatter_item = self._scatter_item
-
-    #     if signal_item is None or scatter_item is None:
-    #         return
-
-    #     x_data = signal_item.xData
-    #     y_data = signal_item.yData
-    #     if x_data is None or y_data is None:
-    #         return
-
-    #     search_radius = 20
-    #     valid_indices = np.where(np.abs(x_data - click_x) <= search_radius)[0]
-
-    #     valid_y_values = y_data[valid_indices]
-
-    #     use_index = valid_indices[np.argmin(np.abs(x_data[valid_indices] - click_x))]
-    #     use_val = valid_y_values[np.argmin(np.abs(x_data[valid_indices] - click_x))]
-
-    #     if use_index in scatter_item.data["x"]:
-    #         return
-
-    #     x_new, y_new = x_data[use_index], use_val
-    #     scatter_item.addPoints(x=x_new, y=y_new)
-    #     self.sig_peaks_edited.emit("add", [int(x_new)])
-
-    @Slot()
+    @QtCore.Slot()
     def remove_selected_scatter(self) -> None:
         vb = self._pw_main.getPlotItem().getViewBox()
         if vb.mapped_peak_selection is None:
@@ -534,7 +485,7 @@ class PlotHandler(QObject):
         self.sig_peaks_edited.emit("remove", scatter_x[~mask].astype(int).tolist())
         vb.selection_box = None
 
-    @Slot()
+    @QtCore.Slot()
     def show_selection_rect(self) -> None:
         vb = self._pw_main.getPlotItem().getViewBox()
         if vb.selection_box is None:

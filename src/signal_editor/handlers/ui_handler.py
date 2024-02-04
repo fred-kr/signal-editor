@@ -7,17 +7,7 @@ import pdir
 import polars as pl
 import polars.selectors as ps
 import pyqtgraph as pg
-from PySide6 import QtWidgets
-from PySide6.QtCore import (
-    QDate,
-    QObject,
-    Slot,
-)
-from PySide6.QtWidgets import (
-    QComboBox,
-    QDockWidget,
-    QMenu,
-)
+from PySide6 import QtCore, QtWidgets
 
 from .. import type_aliases as _t
 from ..handlers.plot_handler import PlotHandler
@@ -33,7 +23,7 @@ if t.TYPE_CHECKING:
     from ..app import SignalEditor
 
 
-class UIHandler(QObject):
+class UIHandler(QtCore.QObject):
     def __init__(self, app: "SignalEditor", plot: PlotHandler) -> None:
         super(UIHandler, self).__init__()
         self._app = app
@@ -98,9 +88,9 @@ class UIHandler(QObject):
         self._app.action_remove_section.setEnabled(False)
         self._app.container_section_confirm_cancel.hide()
 
-        export_menu = QMenu(self._app.btn_export_focused)
+        export_menu = QtWidgets.QMenu(self._app.btn_export_focused)
         export_menu.addAction("CSV", lambda: self._app.export_focused_result("csv"))
-        export_menu.addAction("txt (tab-delimited)", lambda: self._app.export_focused_result("txt"))
+        export_menu.addAction("Text (tab-delimited)", lambda: self._app.export_focused_result("txt"))
         export_menu.addAction("Excel", lambda: self._app.export_focused_result("xlsx"))
         self._app.btn_export_focused.setMenu(export_menu)
 
@@ -137,14 +127,14 @@ class UIHandler(QObject):
             combo_box.setItems(value)
 
     @staticmethod
-    def _blocked_set_combo_box_items(combo_box: QComboBox, items: list[str]) -> None:
+    def _blocked_set_combo_box_items(combo_box: QtWidgets.QComboBox, items: list[str]) -> None:
         combo_box.blockSignals(True)
         combo_box.clear()
         combo_box.addItems(items)
         combo_box.setCurrentIndex(0)
         combo_box.blockSignals(False)
 
-    @Slot()
+    @QtCore.Slot()
     def update_data_select_ui(self) -> None:
         self._app.container_file_info.setEnabled(True)
         self._app.btn_load_selection.setEnabled(True)
@@ -159,16 +149,16 @@ class UIHandler(QObject):
             meas_date = metadata["date_recorded"]
 
             self._app.date_edit_file_info.setDate(
-                QDate(meas_date.year, meas_date.month, meas_date.day)
+                QtCore.QDate(meas_date.year, meas_date.month, meas_date.day)
             )
             self._app.line_edit_subject_id.setText(metadata["animal_id"])
             self._app.combo_box_oxygen_condition.setValue(metadata["oxygen_condition"])
         except Exception:
-            self._app.date_edit_file_info.setDate(QDate.currentDate())
+            self._app.date_edit_file_info.setDate(QtCore.QDate.currentDate())
             self._app.line_edit_subject_id.setText("unknown")
             self._app.combo_box_oxygen_condition.setValue("unknown")
 
-    @Slot()
+    @QtCore.Slot()
     def reset_widget_state(self) -> None:
         mw = self._app
         mw.tabs_main.setCurrentIndex(0)
@@ -181,7 +171,7 @@ class UIHandler(QObject):
         self.plot.reset_plots()
         mw.statusbar.showMessage("Ready")
 
-    @Slot(int)
+    @QtCore.Slot(int)
     def on_main_tab_changed(self, index: int) -> None:
         show_section_dock = index == 1 and self._app.action_toggle_section_sidebar.isChecked()
         self._app.toolbar_plots.setVisible(index == 1)
@@ -217,7 +207,7 @@ class UIHandler(QObject):
 
         self.jupyter_console = JupyterConsoleWidget()
         self.jupyter_console.set_default_style("linux")
-        self.jupyter_console_dock = QDockWidget("Jupyter Console")
+        self.jupyter_console_dock = QtWidgets.QDockWidget("Jupyter Console")
         self.jupyter_console_dock.setWidget(self.jupyter_console)
         self.jupyter_console.kernel_manager.kernel.shell.push(
             dict(
@@ -234,7 +224,7 @@ class UIHandler(QObject):
         )
         self.jupyter_console.execute("whos")
 
-    @Slot()
+    @QtCore.Slot()
     def show_jupyter_console_widget(self) -> None:
         if self.jupyter_console_dock.isVisible():
             self.jupyter_console_dock.close()
@@ -242,7 +232,7 @@ class UIHandler(QObject):
             self.jupyter_console_dock.show()
             self.jupyter_console_dock.resize(900, 600)
 
-    @Slot(str)
+    @QtCore.Slot(str)
     def handle_filter_method_changed(self, text: str) -> None:
         method = self._app.filter_method
 
@@ -258,7 +248,7 @@ class UIHandler(QObject):
         self._app.spin_box_order.setValue(3)
         self._app.slider_order.setValue(3)
 
-    @Slot()
+    @QtCore.Slot()
     def handle_preprocess_pipeline_changed(self) -> None:
         pipeline_value = self._app.pipeline
         if pipeline_value == "custom":

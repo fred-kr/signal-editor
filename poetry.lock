@@ -2008,6 +2008,24 @@ reference = "master"
 resolved_reference = "261a32515fac2ffd5071801ef4b69720828b5142"
 
 [[package]]
+name = "pyqtgraph-stubs"
+version = "0.1.0"
+description = ""
+optional = false
+python-versions = ">=3.12,<3.13"
+files = []
+develop = false
+
+[package.dependencies]
+numpy = "^1.26.3"
+pyqtgraph = "^0.13.3"
+pyside6 = "^6.6.1"
+
+[package.source]
+type = "directory"
+url = "../pyqtgraph-stubs"
+
+[[package]]
 name = "pyside6"
 version = "6.6.1"
 description = "Python bindings for the Qt cross-platform application and UI framework"
@@ -2963,4 +2981,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12,<3.13"
-content-hash = "1bd305d22a5c265f1984cc0690f44cf072a26035235cc9f5ca8d44910befaef2"
+content-hash = "e231ca642cbe0c60fe17455bd7263f595ad855a0f74173ad96e520cfe22afda3"

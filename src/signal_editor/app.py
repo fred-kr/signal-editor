@@ -58,8 +58,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         # General application actions
         self.action_exit.triggered.connect(self.close)
-        # self.action_load_state.triggered.connect(self.restore_state)
-        # self.action_save_state.triggered.connect(self.save_state)
         self.action_select_file.triggered.connect(self.select_data_file)
         self.action_light_switch.toggled.connect(self.theme_switcher.switch_theme)
         self.action_open_config_file.triggered.connect(self.open_config_file)
@@ -81,7 +79,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_section_remove.clicked.connect(self._remove_section)
         self.action_remove_section.triggered.connect(self._remove_section)
         self.action_add_section.triggered.connect(self._maybe_new_included_section)
-        # TODO: implement removing values from the base signal
 
         # File I/O
         self.btn_browse_output_dir.clicked.connect(self.select_output_location)
@@ -160,10 +157,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
     @property
     def sig_name(self) -> str:
         return self.combo_box_signal_column.currentText()
-
-    @property
-    def proc_sig_name(self) -> str:
-        return f"{self.sig_name}_processed"
 
     @property
     def section_name(self) -> SectionID:
@@ -615,7 +608,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.data.cas.data = (
                     self.data.cas.data.lazy()
                     .with_columns(
-                        pl.col(self.sig_name).alias(self.proc_sig_name),
+                        pl.col(self.sig_name).alias(f"{self.sig_name}_processed"),
                         pl.lit(False).alias("is_peak"),
                     )
                     .collect()
@@ -682,6 +675,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         scatter_item = self.plot.scatter_item
         if scatter_item is None:
             return
+
         self.data.cas.update_peaks(action, indices)
         self.sig_peaks_detected.emit()
 

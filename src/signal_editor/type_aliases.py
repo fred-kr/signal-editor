@@ -1,12 +1,13 @@
 import datetime
 import typing as t
 
+import polars as pl
 import numpy as np
 import numpy.typing as npt
 
 if t.TYPE_CHECKING:
     from .handlers.data_handler import DataState
-    from .models.section import SectionID, SectionIndices
+    from .models.section import SectionID, SectionIndices, SectionContainer
 
 
 type SignalName = t.Literal["hbr", "ventilation"]
@@ -172,6 +173,14 @@ class StateDict(t.TypedDict):
     source_file_path: str
     output_dir: str
     data_state: "DataState"
+
+
+class DataStateDict(t.TypedDict):
+    raw_df: pl.DataFrame | None
+    base_df: pl.DataFrame | None
+    sections: "SectionContainer"
+    sampling_rate: int
+    metadata: FileMetadata | None
 
 
 class SectionIdentifierDict(t.TypedDict):

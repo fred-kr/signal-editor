@@ -8,12 +8,17 @@ import dateutil.parser as dt_parser
 import polars as pl
 import polars.selectors as ps
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import Signal, Slot
 
 from .. import type_aliases as _t
+from ..models import (
+    CompleteResult,
+    ResultIdentifier,
+    Section,
+    SectionContainer,
+    SectionID,
+    SectionIndices,
+)
 from ..models.io import read_edf
-from ..models.result import CompleteResult, ResultIdentifier
-from ..models.section import Section, SectionContainer, SectionID, SectionIndices
 
 if t.TYPE_CHECKING:
     from ..app import SignalEditor
@@ -101,7 +106,7 @@ class DataState:
     sampling_rate: int = attrs.field(default=-1)
     metadata: _t.FileMetadata | None = attrs.field(default=None)
 
-    def as_dict(self) -> dict[str, t.Any]:
+    def as_dict(self) -> _t.DataStateDict:
         return {
             "raw_df": self.raw_df,
             "base_df": self.base_df,
@@ -112,11 +117,11 @@ class DataState:
 
 
 class DataHandler(QtCore.QObject):
-    sig_new_raw = Signal()
-    sig_sfreq_changed = Signal(int)
-    sig_cas_changed = Signal(bool)
-    sig_section_added = Signal(str)
-    sig_section_removed = Signal(str)
+    sig_new_raw = QtCore.Signal()
+    sig_sfreq_changed = QtCore.Signal(int)
+    sig_cas_changed = QtCore.Signal(bool)
+    sig_section_added = QtCore.Signal(str)
+    sig_section_removed = QtCore.Signal(str)
 
     def __init__(self, app: "SignalEditor", parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
@@ -185,7 +190,7 @@ class DataHandler(QtCore.QObject):
         self._sampling_rate = value
         self.sig_sfreq_changed.emit(value)
 
-    @Slot(int)
+    @QtCore.Slot(int)
     def update_sfreq(self, value: int) -> None:
         for section in self.sections.values():
             section.update_sfreq(value)
@@ -216,7 +221,7 @@ class DataHandler(QtCore.QObject):
             self.base_section,
         )
 
-    @Slot(str)
+    @QtCore.Slot(str)
     def set_cas(self, section_id: SectionID) -> None:
         for section in self.sections.values():
             section.set_active(section.section_id == section_id)
@@ -255,7 +260,7 @@ class DataHandler(QtCore.QObject):
             raise RuntimeError("No signal data loaded")
         return f"{self._sig_name}_processed"
 
-    @Slot(QtCore.QDate)
+    @QtCore.Slot(QtCore.QDate)
     def set_date(self, date: QtCore.QDate) -> None:
         py_date = t.cast(datetime.date, date.toPython())
         if self._metadata is None:
@@ -267,7 +272,7 @@ class DataHandler(QtCore.QObject):
         else:
             self._metadata["date_recorded"] = py_date
 
-    @Slot(str)
+    @QtCore.Slot(str)
     def set_animal_id(self, animal_id: str) -> None:
         if self._metadata is None:
             self._metadata = _t.FileMetadata(
@@ -276,7 +281,7 @@ class DataHandler(QtCore.QObject):
         else:
             self._metadata["animal_id"] = animal_id
 
-    @Slot(str)
+    @QtCore.Slot(str)
     def set_oxy_condition(self, oxy_condition: _t.OxygenCondition) -> None:
         if self._metadata is None:
             self._metadata = _t.FileMetadata(
@@ -376,7 +381,7 @@ class DataHandler(QtCore.QObject):
         self._sections[base_section.section_id] = base_section
         self.sig_section_added.emit(base_section.section_id)
 
-    @Slot()
+    @QtCore.Slot()
     def reset(self) -> None:
         self._raw_df = None
         self._base_df = None
@@ -387,7 +392,7 @@ class DataHandler(QtCore.QObject):
         self._sig_name = None
         Section.reset_id_counter()
 
-    @Slot()
+    @QtCore.Slot()
     def clear_sections(self) -> None:
         self._sections.clear()
         self._excluded_sections.clear()
@@ -399,7 +404,7 @@ class DataHandler(QtCore.QObject):
             self.base_df.lazy().update(section_df.lazy(), on="index", how="left").collect()
         )
 
-    @Slot(int, int)
+    @QtCore.Slot(int, int)
     def remove_slice(self, start: int, stop: int) -> None:
         self._base_df = (
             self.base_df.lazy().filter(~(pl.col("index").is_between(start, stop))).collect()
