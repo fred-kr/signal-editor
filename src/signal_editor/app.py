@@ -7,10 +7,11 @@ from pathlib import Path
 
 import polars as pl
 import pyqtgraph as pg
-from PySide6 import QtCore, QtGui, QtWidgets
 from loguru import logger
+from PySide6 import QtCore, QtGui, QtWidgets
 
 from signal_editor.io import result_dict_to_hdf5
+
 from . import type_aliases as _t
 from .handlers import (
     ConfigHandler,
@@ -138,11 +139,20 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_section_add.setMenu(add_section_menu)
         self.data.set_sfreq(self.config.sample_rate)
         self._result: CompleteResult | None = None
+        self._setup_tables()
+
+    def _setup_tables(self) -> None:
+        self.table_context_menu = QtWidgets.QMenu(self.table_view_cas)
+        self.table_context_menu.addAction("Load More", self._update_cas_table)
+        self.table_view_cas.customContextMenuRequested.connect(
+            lambda: self.table_context_menu.exec(QtGui.QCursor.pos())
+        )
         for table in [
             self.table_view_cas,
             self.table_view_cas_description,
             self.table_view_focused_result,
         ]:
+            table.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
             self.tables.add_table(table.objectName(), table)
 
     # region Dev
@@ -524,14 +534,13 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             self.config.output_dir = Path(path)
 
     @QtCore.Slot()
-    def update_data_tables(self) -> None:
-        """
-        Update the data preview table and the data info table with the current data.
-        """
-        # Table names: 'section_data', 'section_data_description', 'section_focused_result'
+    def _update_cas_table(self) -> None:
+        self.tables.set_model_data(self.table_view_cas, self.data.cas.data.lazy())
 
-        section_df = self.data.cas.data
-        section_df_desc = section_df.describe()
+    @QtCore.Slot()
+    def update_data_tables(self) -> None:
+        section_df = self.data.cas.data.lazy()
+        section_df_desc = self.data.cas.data.describe().lazy()
 
         self.tables.set_model_data(self.table_view_cas, section_df)
         self.tables.set_model_data(self.table_view_cas_description, section_df_desc)
@@ -544,13 +553,13 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         """
         self.statusbar.showMessage("Creating focused result for current section...")
         try:
-            cas_foc_res = self.data.cas.get_focused_result().to_polars()
+            cas_foc_res = self.data.cas.get_focused_result().to_polars().lazy()
         except RuntimeWarning:
             self.btn_compute_results.failure()
             msg = "At least one section has no peaks. Either remove the sections, or finish processing them."
             self.sig_show_message.emit(msg, "info")
             return
-        self.tables.set_model_data(self.table_view_focused_result.objectName(), cas_foc_res)
+        self.tables.set_model_data(self.table_view_focused_result, cas_foc_res)
         self.label_focused_result_shown.setText(self.data.cas.section_id)
         self.btn_compute_results.success()
         self.statusbar.showMessage("Focused result created successfully.", 5000)
@@ -650,11 +659,10 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             self.data.cas.detect_peaks(**peak_params)
         self.sig_peaks_detected.emit()
         self.unsaved_changes = True
-        self.btn_detect_peaks.success(limitedTime=False)
+        self.btn_detect_peaks.success()
         self.statusbar.showMessage(
             f"Peak detection finished. Found {self.data.cas.peaks.len()} peaks."
         )
-        self.btn_detect_peaks.reset()
 
     @QtCore.Slot(bool)
     def handle_draw_signal(self, has_peaks: bool = False) -> None:
@@ -684,9 +692,9 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
     def handle_scatter_clicked(
         self, action: t.Literal["add", "remove"], indices: list[int]
     ) -> None:
-        scatter_item = self.plot.scatter_item
-        if scatter_item is None:
-            return
+        # scatter_item = self.plot.scatter_item
+        # if scatter_item is None:
+        #     return
 
         self.data.cas.update_peaks(action, indices)
         self.sig_peaks_detected.emit()

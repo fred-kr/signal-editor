@@ -45,6 +45,22 @@ class CustomViewBox(pg.ViewBox):
         self.addItem(selection_box, ignoreBounds=True)
         return
 
+    @staticmethod
+    def get_button_type(
+        ev: mouseEvents.MouseDragEvent,
+    ) -> t.Literal["middle", "left", "left+control", "right", "unknown"]:
+        if ev.button() == Qt.MouseButton.MiddleButton:
+            return "middle"
+        elif ev.button() == Qt.MouseButton.LeftButton:
+            if ev.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                return "left+control"
+            else:
+                return "left"
+        elif ev.button() == Qt.MouseButton.RightButton:
+            return "right"
+        else:
+            return "unknown"
+
     @t.override
     def mouseDragEvent(
         self, ev: mouseEvents.MouseDragEvent, axis: int | float | None = None
@@ -60,32 +76,16 @@ class CustomViewBox(pg.ViewBox):
         if axis is not None:
             mask[1 - axis] = 0.0
 
-        def is_middle_button(ev: mouseEvents.MouseDragEvent) -> bool:
-            return ev.button() == Qt.MouseButton.MiddleButton
+        button_type = self.get_button_type(ev)
 
-        def is_left_button_with_control(ev: mouseEvents.MouseDragEvent) -> bool:
-            return (
-                ev.button() == Qt.MouseButton.LeftButton
-                and ev.modifiers() & Qt.KeyboardModifier.ControlModifier
-            )
-
-        def is_left_button(ev: mouseEvents.MouseDragEvent) -> bool:
-            return ev.button() == Qt.MouseButton.LeftButton
-
-        def is_right_button(ev: mouseEvents.MouseDragEvent) -> bool:
-            return ev.button() & Qt.MouseButton.RightButton
-
-        def create_selection(ev: mouseEvents.MouseDragEvent) -> QtGui.QPolygonF:
-            r = QRectF(ev.pos(), ev.buttonDownPos())
-            return self.mapToView(r)
-
-        if is_middle_button(ev) or is_left_button_with_control(ev):
+        if button_type in {"middle", "left+control"}:
             if ev.isFinish():
-                self.mapped_peak_selection = create_selection(ev)
+                r = QtCore.QRectF(ev.pos(), ev.buttonDownPos())
+                self.mapped_peak_selection = self.mapToView(r)
             else:
                 self.updateSelectionBox(ev.pos(), ev.buttonDownPos())
                 self.mapped_peak_selection = None
-        elif is_left_button(ev):
+        elif button_type == "left":
             if self.state["mouseMode"] == pg.ViewBox.RectMode and axis is None:
                 if ev.isFinish():
                     self.rbScaleBox.hide()
@@ -107,7 +107,7 @@ class CustomViewBox(pg.ViewBox):
                 if x is not None or y is not None:
                     self.translateBy(x=x, y=y)
                 self.sigRangeChangedManually.emit(self.state["mouseEnabled"])
-        elif is_right_button(ev):
+        elif button_type == "right":
             if self.state["aspectLocked"] is not False:
                 mask[0] = 0
 
@@ -140,7 +140,6 @@ class CustomViewBox(pg.ViewBox):
 
 
 class CustomScatterPlotItem(pg.ScatterPlotItem):
-    @t.override
     def addPoints(
         self,
         *args: t.Any,
@@ -261,7 +260,7 @@ class TimeAxisItem(pg.AxisItem):
         if values is None:
             return []
         # if scale:
-            # values = [v / scale for v in values]
+        # values = [v / scale for v in values]
         return [self.seconds_to_timestamp(value) for value in values]
 
     @staticmethod
