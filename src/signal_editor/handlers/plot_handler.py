@@ -3,8 +3,8 @@ import typing as t
 import numpy as np
 import polars as pl
 import pyqtgraph as pg
-from numpy.typing import NDArray
 from PySide6 import QtCore, QtGui, QtWidgets
+from numpy.typing import NDArray
 
 from .. import constants as c
 from ..models.result import ManualPeakEdits
@@ -14,7 +14,6 @@ if t.TYPE_CHECKING:
     from pyqtgraph.GraphicsScene import mouseEvents
 
     from ..app import SignalEditor
-    from ..models.section import SectionIndices
 
 
 class PlotHandler(QtCore.QObject):
@@ -117,6 +116,8 @@ class PlotHandler(QtCore.QObject):
             pl_item.addLegend(colCount=2)
             pl_item.addLegend().anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(5, -5))
             pl_item.setMouseEnabled(x=True, y=False)
+            pl_item.showAxis("top", show=True)
+            pl_item.getAxis("top").setScale(1/200)
             vb.enableAutoRange("y")
             vb.setAutoVisible(y=True)
 
@@ -132,16 +133,14 @@ class PlotHandler(QtCore.QObject):
         rate_plot_title = "<b>Rate (interpolated)</b>"
         rate_left_label = "<b>bpm</b>"
 
-        # top_label = "<b>Time (s)</b>"
-        bottom_label = "<b>Index (n samples)</b>"
+        top_label = "<b>Time</b>"
+        bottom_label = "<b>Index</b>"
 
         main_plot_item = self._pw_main.getPlotItem()
         rate_plot_item = self._pw_rate.getPlotItem()
-        # main_plot_item.setAxisItems({"top": TimeAxisItem(orientation="top")})
-        # main_plot_item.getAxis("top").setLabel(text=top_label)
 
-        main_plot_item.setLabels(title=main_plot_title, left=main_left_label, bottom=bottom_label)
-        rate_plot_item.setLabels(title=rate_plot_title, left=rate_left_label, bottom=bottom_label)
+        main_plot_item.setLabels(title=main_plot_title, left=main_left_label, bottom=bottom_label, top=(top_label, "seconds"))
+        rate_plot_item.setLabels(title=rate_plot_title, left=rate_left_label, bottom=bottom_label, top=(top_label, "seconds"))
 
     @QtCore.Slot(object)
     def _on_mouse_moved(self, pos: QtCore.QPointF) -> None:
@@ -267,7 +266,8 @@ class PlotHandler(QtCore.QObject):
             pen=dict(color=(r, g, b, 255), width=1),
             movable=False,
         )
-        marked_region.hide()
+        if not self._app.action_section_overview.isChecked():
+            marked_region.hide()
         marked_region.setZValue(10)
         region_list.append(marked_region)
         self._pw_main.addItem(marked_region)

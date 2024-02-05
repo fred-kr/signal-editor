@@ -6,7 +6,7 @@ import polars as pl
 from loguru import logger
 from numpy.typing import NDArray
 
-from .. import type_aliases as _t
+from signal_editor import type_aliases as _t
 
 
 def _mad_value(sig: pl.Series) -> float:

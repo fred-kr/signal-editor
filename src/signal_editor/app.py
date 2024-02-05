@@ -7,26 +7,31 @@ from pathlib import Path
 
 import polars as pl
 import pyqtgraph as pg
-from loguru import logger
 from PySide6 import QtCore, QtGui, QtWidgets
+from loguru import logger
 
+from signal_editor.io import result_dict_to_hdf5
 from . import type_aliases as _t
-from .handlers import ConfigHandler, DataHandler, PlotHandler, StyleHandler, TableHelper, UIHandler
+from .handlers import (
+    ConfigHandler,
+    DataHandler,
+    PlotHandler,
+    StyleHandler,
+    TableHandler,
+    UIHandler,
+)
 from .models import (
     CompleteResult,
-    DescriptiveStatsModel,
-    PolarsTableModel,
     SectionID,
     SectionIndices,
 )
-from .models.io import result_dict_to_hdf5
 from .views.main_window import Ui_MainWindow
 
 
 def readable_section_id(section_id: SectionID) -> str:
     number = int(section_id[-3:])
     sig_name = section_id.split("_")[1]
-    return f"Active Data: QtCore.Signal={sig_name.upper()}, Section={number:03d}"
+    return f"Active Data: Signal={sig_name.upper()}, Section={number:03d}"
 
 
 class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
@@ -40,16 +45,19 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setupUi(self)
-        self.setWindowTitle("QtCore.Signal Editor")
+        self.setWindowTitle("Signal Editor")
+        self._read_settings()
         self.unsaved_changes: bool = False
         self.config = ConfigHandler("config.ini")
         self.theme_switcher = StyleHandler()
         self.plot = PlotHandler(self)
         self.data = DataHandler(self)
-        self._read_settings()
         self.ui = UIHandler(self, self.plot)
         self.file_info: QtCore.QFileInfo = QtCore.QFileInfo()
+        self._read_config()
         self._connect_signals()
+        self._result: CompleteResult | None = None
+        self.tables = TableHandler()
         self._on_init_finished()
 
     def _connect_signals(self) -> None:
@@ -100,7 +108,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_detect_peaks.clicked.connect(self.detect_peaks)
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
         self.plot.sig_peaks_drawn.connect(self.handle_draw_rate)
-        self.sig_data_processed.connect(self.update_cas_table)
+        self.sig_data_processed.connect(self.update_data_tables)
         self.sig_peaks_detected.connect(self._on_peaks_detected)
         self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
         self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected_scatter)
@@ -130,6 +138,12 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_section_add.setMenu(add_section_menu)
         self.data.set_sfreq(self.config.sample_rate)
         self._result: CompleteResult | None = None
+        for table in [
+            self.table_view_cas,
+            self.table_view_cas_description,
+            self.table_view_focused_result,
+        ]:
+            self.tables.add_table(table.objectName(), table)
 
     # region Dev
     def _add_profiler(self) -> None:
@@ -156,30 +170,37 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
     # region Properties
     @property
     def sig_name(self) -> str:
+        """Returns the name of the currently selected signal column."""
         return self.combo_box_signal_column.currentText()
 
     @property
-    def section_name(self) -> SectionID:
-        return SectionID(self.combo_box_section_select.currentText())
+    def cas_id(self) -> SectionID:
+        """Returns the ID of the currently active section (CAS)."""
+        return self.data.cas.section_id
 
     @property
     def scale_method(self) -> _t.ScaleMethod:
+        """Returns the currently selected scale method."""
         return t.cast(_t.ScaleMethod, self.combo_box_scale_method.value())
 
     @property
     def pipeline(self) -> _t.Pipeline:
+        """Returns the currently selected preprocessing pipeline."""
         return t.cast(_t.Pipeline, self.combo_box_preprocess_pipeline.value())
 
     @property
     def filter_method(self) -> _t.FilterMethod:
+        """Returns the currently selected method for filtering the signal values."""
         return t.cast(_t.FilterMethod, self.combo_box_filter_method.value())
 
     @property
     def peak_detection_method(self) -> _t.PeakDetectionMethod:
+        """Returns the currently selected peak detection method / algorithm."""
         return t.cast(_t.PeakDetectionMethod, self.combo_box_peak_detection_method.value())
 
     @property
     def xqrs_peak_direction(self) -> _t.WFDBPeakDirection:
+        """Returns the currently selected direction value to use for the XQRS peak detection algorithm."""
         return t.cast(_t.WFDBPeakDirection, self.peak_xqrs_peak_dir.value())
 
     # endregion Properties
@@ -242,13 +263,13 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.data.clear_sections()
         self.data.create_base_df(self.sig_name)
         self.plot.clear_regions()
-        self.update_cas_table()
+        self.update_data_tables()
         self._result = None
 
     @QtCore.Slot()
     def _on_section_done(self) -> None:
         if self.data.cas.peaks.len() == 0:
-            msg = f"No peaks detected for section {self.section_name}. Cannot compute results without peaks."
+            msg = f"No peaks detected for section '{self.cas_id}'. Cannot compute results without peaks."
             self.sig_show_message.emit(msg, "info")
             return
         self.statusbar.showMessage("Updating data with values from section...")
@@ -257,7 +278,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ui.progress_bar.setValue(10)
         self.data.save_cas()
         self.ui.progress_bar.setValue(50)
-        self.update_cas_focused_result()
+        self.update_result_tables()
         self.ui.progress_bar.setValue(100)
         self.statusbar.showMessage("Focused result ready for export, see 'Results' tab.")
         self.ui.progress_bar.hide()
@@ -296,7 +317,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             return
         self.data.set_cas(section_id)
-        self.update_cas_table()
+        self.update_data_tables()
         self.ui.label_currently_showing.setText(readable_section_id(section_id))
         if index != 0:
             self.action_add_section.setEnabled(False)
@@ -392,13 +413,13 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             self.action_toggle_section_sidebar.setChecked(True)
             self.tabs_main.setCurrentIndex(1)
         self.handle_draw_signal()
-        self.update_cas_table()
+        self.update_data_tables()
 
     @QtCore.Slot()
     def _on_peaks_detected(self) -> None:
         self.handle_draw_peaks()
         self.handle_draw_rate()
-        self.update_cas_table()
+        self.update_data_tables()
 
     @QtCore.Slot()
     def _emit_data_range_info(self) -> None:
@@ -438,7 +459,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             self.sig_name, self.file_info.completeBaseName()
         )
         self.config.output_dir.mkdir(exist_ok=True)
-        result_location = Path.joinpath(self.config.output_dir, result_file_name)
+        result_location = Path.joinpath(Path(self.line_edit_output_dir.text()), result_file_name)
         output_options = [
             "Only export currently active section",
             "Create a new file for each section",
@@ -503,44 +524,35 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             self.config.output_dir = Path(path)
 
     @QtCore.Slot()
-    def update_cas_table(self) -> None:
+    def update_data_tables(self) -> None:
         """
         Update the data preview table and the data info table with the current data.
         """
-        cas_df = self.data.cas.data
-        cas_desc_df = cas_df.describe()
+        # Table names: 'section_data', 'section_data_description', 'section_focused_result'
 
-        if not hasattr(self, "cas_table"):
-            model = PolarsTableModel(cas_df)
-            self.cas_table = TableHelper(self.table_view_cas, model)
-        else:
-            self.cas_table.update_cas_df(cas_df)
+        section_df = self.data.cas.data
+        section_df_desc = section_df.describe()
 
-        if not hasattr(self, "cas_desc_table"):
-            info = DescriptiveStatsModel(cas_desc_df, orig_dtypes=self.data.cas.data.dtypes)
-            self.cas_desc_table = TableHelper(self.table_view_cas_description, info)
-        else:
-            self.cas_desc_table.update_cas_desc_df(cas_desc_df, cas_df.dtypes)
+        self.tables.set_model_data(self.table_view_cas, section_df)
+        self.tables.set_model_data(self.table_view_cas_description, section_df_desc)
 
     @QtCore.Slot()
-    def update_cas_focused_result(self) -> None:
+    def update_result_tables(self) -> None:
         """
         Computes the current active sections focused result and displays it in the 'Focused' table
         in the 'Results' tab, where the user can export it to a file.
         """
         self.statusbar.showMessage("Creating focused result for current section...")
         try:
-            cas_foc_res = self.data.cas.get_focused_result()
+            cas_foc_res = self.data.cas.get_focused_result().to_polars()
         except RuntimeWarning:
+            self.btn_compute_results.failure()
             msg = "At least one section has no peaks. Either remove the sections, or finish processing them."
             self.sig_show_message.emit(msg, "info")
             return
-        if not hasattr(self, "cas_focused_table"):
-            model = PolarsTableModel(cas_foc_res.to_polars())
-            self.cas_focused_table = TableHelper(self.table_view_focused_result, model)
-        else:
-            self.cas_focused_table.update_cas_df(cas_foc_res.to_polars())
+        self.tables.set_model_data(self.table_view_focused_result.objectName(), cas_foc_res)
         self.label_focused_result_shown.setText(self.data.cas.section_id)
+        self.btn_compute_results.success()
         self.statusbar.showMessage("Focused result created successfully.", 5000)
 
     @QtCore.Slot()
@@ -651,7 +663,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             self.handle_draw_peaks()
 
         for region in self.plot.combined_regions:
-            if self.section_name.endswith("000") and self.action_section_overview.isChecked():
+            if self.cas_id.endswith("000") and self.action_section_overview.isChecked():
                 if region not in self.plot.main_plot_widget.getPlotItem().items:
                     self.plot.main_plot_widget.addItem(region)
                 region.show()
@@ -682,13 +694,14 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
     @QtCore.Slot(QtGui.QCloseEvent)
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         self._write_settings()
+        self._write_config()
         if os.environ.get("ENABLE_CONSOLE", "0") == "1":
             self.ui.jupyter_console_dock.close()
 
         super().closeEvent(event)
 
     def _read_settings(self) -> None:
-        settings = QtCore.QSettings("AWI", "QtCore.Signal Editor")
+        settings = QtCore.QSettings("AWI", "Signal Editor")
         geometry: QtCore.QByteArray = t.cast(
             QtCore.QByteArray,
             settings.value("geometry", QtCore.QByteArray(), type=QtCore.QByteArray),
@@ -697,6 +710,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         if geometry.size():
             self.restoreGeometry(geometry)
 
+    def _read_config(self) -> None:
         self.data_dir = self.config.data_dir
 
         self.output_dir = self.config.output_dir
@@ -704,11 +718,12 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.theme_switcher.set_style(self.config.style)
 
     def _write_settings(self) -> None:
-        settings = QtCore.QSettings("AWI", "QtCore.Signal Editor")
+        settings = QtCore.QSettings("AWI", "Signal Editor")
 
         geometry = self.saveGeometry()
         settings.setValue("geometry", geometry)
 
+    def _write_config(self) -> None:
         data_dir = self.file_info.dir().path()
         output_dir = self.line_edit_output_dir.text()
 

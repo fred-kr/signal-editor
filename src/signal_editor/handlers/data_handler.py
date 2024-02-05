@@ -9,6 +9,7 @@ import polars as pl
 import polars.selectors as ps
 from PySide6 import QtCore, QtWidgets
 
+from signal_editor.io import read_edf
 from .. import type_aliases as _t
 from ..models import (
     CompleteResult,
@@ -18,7 +19,6 @@ from ..models import (
     SectionID,
     SectionIndices,
 )
-from ..models.io import read_edf
 
 if t.TYPE_CHECKING:
     from ..app import SignalEditor

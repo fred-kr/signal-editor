@@ -2,8 +2,8 @@ from .config_handler import ConfigHandler
 from .data_handler import DataHandler
 from .plot_handler import PlotHandler
 from .style_handler import StyleHandler
+from .table_handler import TableHandler
 from .ui_handler import UIHandler
-from .helpers.table_helper import TableHelper
 
 __all__ = [
     "ConfigHandler",
@@ -11,5 +11,5 @@ __all__ = [
     "PlotHandler",
     "StyleHandler",
     "UIHandler",
-    "TableHelper",
+    "TableHandler",
 ]

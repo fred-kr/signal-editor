@@ -10,10 +10,10 @@ import numpy.typing as npt
 import polars as pl
 import polars.selectors as ps
 
-from .. import type_aliases as _t
-from .peaks import find_peaks
-from .processing import filter_elgendi, filter_signal, scale_signal
+from signal_editor.peaks import find_peaks
+from signal_editor.processing import filter_elgendi, filter_signal, scale_signal
 from .result import FocusedResult, ManualPeakEdits
+from .. import type_aliases as _t
 
 
 class SectionIndices(t.NamedTuple):
@@ -24,13 +24,26 @@ class SectionIndices(t.NamedTuple):
         return f"{self.start}, {self.stop}"
 
 
+# class SectionID(str):
+#     def __new__(cls, value: str) -> "SectionID":
+#         if not re.match(r"^SEC_[a-zA-Z0-9]+_[0-9]{3}$", value):
+#             raise ValueError(
+#                 f"SectionID must be of the form 'SEC_<signal_name>_000', got '{value}'"
+#             )
+#         return super().__new__(cls, value)
+
+
 class SectionID(str):
-    def __new__(cls, value: str) -> "SectionID":
+    def __init__(self, value: str):
         if not re.match(r"^SEC_[a-zA-Z0-9]+_[0-9]{3}$", value):
             raise ValueError(
                 f"SectionID must be of the form 'SEC_<signal_name>_000', got '{value}'"
             )
-        return super().__new__(cls, value)
+        super().__init__()
+
+    @classmethod
+    def create(cls, value: str) -> "SectionID":
+        return cls(value)
 
 
 def _to_section_indices(value: SectionIndices | tuple[int, int]) -> SectionIndices:
@@ -38,9 +51,7 @@ def _to_section_indices(value: SectionIndices | tuple[int, int]) -> SectionIndic
 
 
 def _to_structured_array(value: npt.NDArray[np.void] | pl.DataFrame) -> npt.NDArray[np.void]:
-    if isinstance(value, pl.DataFrame):
-        return value.to_numpy(structured=True)
-    return value
+    return value.to_numpy(True) if isinstance(value, pl.DataFrame) else value
 
 
 def _to_uint_array(value: npt.NDArray[np.uint32] | pl.Series) -> npt.NDArray[np.uint32]:
@@ -106,6 +117,7 @@ class Section:
             data.with_row_index("section_index")
             .lazy()
             .select(ps.by_name("index", "section_index"), ~ps.by_name("index", "section_index"))
+            .set_sorted(["index", "section_index"])
             .collect()
         )
         self.sig_name = sig_name
@@ -490,6 +502,9 @@ class SectionContainer(OrderedDict[SectionID, Section]):
     def __setitem__(self, key: SectionID, value: Section) -> None:
         super().__setitem__(key, value)
         self.move_to_end(key)
+
+    def __getitem__(self, key: SectionID) -> Section:
+        return super().__getitem__(key)
 
     def __str__(self) -> str:
         return pformat(self.__dict__, indent=4, width=100, compact=True)

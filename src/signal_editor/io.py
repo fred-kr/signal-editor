@@ -6,7 +6,7 @@ import mne.io
 import polars as pl
 import tables as tb
 
-from .. import type_aliases as _t
+from signal_editor import type_aliases as _t
 
 
 def read_edf(
@@ -69,13 +69,15 @@ def read_edf(
 
 
 def unpack_dict_to_attrs(
-    data: _t.ResultIdentifierDict
-    | _t.SignalFilterParameters
-    | _t.StandardizeParameters
-    | _t.PeakDetectionParameters
-    | _t.SummaryDict
-    | dict[str, str | object]
-    | None,
+    data: (
+        _t.ResultIdentifierDict
+        | _t.SignalFilterParameters
+        | _t.StandardizeParameters
+        | _t.PeakDetectionParameters
+        | _t.SummaryDict
+        | dict[str, str | object]
+        | None
+    ),
     file: tb.File,
     node: tb.Node | str,
 ) -> None:

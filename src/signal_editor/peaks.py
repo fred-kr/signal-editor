@@ -6,7 +6,7 @@ import numpy.typing as npt
 import wfdb.processing as wfproc
 from scipy import ndimage, signal
 
-from .. import type_aliases as _t
+from signal_editor import type_aliases as _t
 
 MIN_DIST = 20
 
@@ -346,7 +346,9 @@ def find_peaks(
             sampling_rate=sampling_rate,
             method=method,
             correct_artifacts=input_values.get("correct_artifacts", False),
-        )[1]["ECG_R_Peaks"]  # type: ignore
+        )[1][
+            "ECG_R_Peaks"
+        ]  # type: ignore
     else:
         raise ValueError(f"Unknown peak detection method: {method}")
 
