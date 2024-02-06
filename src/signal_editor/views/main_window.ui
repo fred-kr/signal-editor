@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>2379</width>
-    <height>1219</height>
+    <width>2209</width>
+    <height>1019</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -26,8 +26,11 @@
   <property name="toolButtonStyle">
    <enum>Qt::ToolButtonFollowStyle</enum>
   </property>
+  <property name="dockNestingEnabled">
+   <bool>false</bool>
+  </property>
   <property name="dockOptions">
-   <set>QMainWindow::AllowNestedDocks|QMainWindow::AnimatedDocks|QMainWindow::VerticalTabs</set>
+   <set>QMainWindow::AnimatedDocks|QMainWindow::VerticalTabs</set>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout_24">
@@ -325,7 +328,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>2379</width>
+     <width>2209</width>
      <height>22</height>
     </rect>
    </property>
@@ -492,12 +495,24 @@
          </item>
          <item row="1" column="0" colspan="2">
           <widget class="QFrame" name="container_data_selection">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="frameShape">
             <enum>QFrame::StyledPanel</enum>
            </property>
            <layout class="QGridLayout" name="gridLayout_15">
             <item row="2" column="0" colspan="3">
              <widget class="QWidget" name="container_data_required_info" native="true">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
               <layout class="QFormLayout" name="formLayout">
                <property name="fieldGrowthPolicy">
                 <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
@@ -623,6 +638,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
           <spacer name="verticalSpacer_2">
            <property name="orientation">
             <enum>Qt::Vertical</enum>
+           </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Expanding</enum>
            </property>
            <property name="sizeHint" stdset="0">
             <size>
@@ -2497,7 +2515,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
              <x>0</x>
              <y>0</y>
              <width>193</width>
-             <height>883</height>
+             <height>683</height>
             </rect>
            </property>
            <attribute name="label">
@@ -2581,8 +2599,8 @@ li.checked::marker { content: &quot;\2612&quot;; }
             <rect>
              <x>0</x>
              <y>0</y>
-             <width>175</width>
-             <height>100</height>
+             <width>193</width>
+             <height>683</height>
             </rect>
            </property>
            <attribute name="label">

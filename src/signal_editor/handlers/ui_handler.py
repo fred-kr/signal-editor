@@ -1,10 +1,10 @@
 import os
-import pprint
 import typing as t
-
 import numpy as np
-import pdir
 import polars as pl
+import pprint
+
+
 import polars.selectors as ps
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
@@ -191,6 +191,7 @@ class UIHandler(QtCore.QObject):
             import jupyter_client
             from PySide6 import QtCore, QtGui, QtWidgets
             from qtconsole import inprocess
+            import pdir
         except ImportError:
             return
 

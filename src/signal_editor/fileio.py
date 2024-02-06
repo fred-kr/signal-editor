@@ -253,3 +253,99 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                     h5f,
                     f"/complete_section_results/complete_result_{section_id}/processing_parameters/peak_detection_parameters",
                 )
+
+
+# def unpack_dict_to_attrs_h5(
+#     data: (
+#         _t.ResultIdentifierDict
+#         | _t.SignalFilterParameters
+#         | _t.StandardizeParameters
+#         | _t.PeakDetectionParameters
+#         | _t.SummaryDict
+#         | dict[str, str | object]
+#         | None
+#     ),
+#     node: h5py.Group,
+# ) -> None:
+#     """
+#     Unpacks a dictionary of attributes and sets them as node attributes in an h5py file.
+
+#     Parameters
+#     ----------
+#     data : _t.ResultIdentifierDict | _t.SignalFilterParameters | _t.StandardizeParameters | _t.PeakDetectionParameters | _t.SummaryDict | None
+#         A dictionary containing the attributes to be set as node attributes. Can be one of the following types:
+#         - _t.ResultIdentifierDict: A dictionary containing result identifier attributes.
+#         - _t.SignalFilterParameters: A dictionary containing signal filter parameters.
+#         - _t.StandardizeParameters: A dictionary containing standardize parameters.
+#         - _t.PeakDetectionParameters: A dictionary containing peak detection parameters.
+#         - _t.SummaryDict: A dictionary containing summary attributes.
+#         - None: If data is None, the function returns without performing any action.
+
+#     file : h5py.File
+#         The h5py file object.
+
+#     node : h5py.Group | str
+#         The node in the h5py file where the attributes will be set. Can be either an h5py Group object or a string representing the path to the node.
+#     """
+#     if data is None:
+#         return
+#     for key, value in data.items():
+#         node.attrs.create(key, value)
+
+
+# def result_dict_to_hdf5_h5(file_path: str | Path, data: _t.CompleteResultDict) -> None:
+#     file_path = Path(file_path).resolve().as_posix()
+
+#     with h5py.File(file_path, "w") as f:
+#         default_grp = f.create_group(Path(file_path).stem)
+#         unpack_dict_to_attrs_h5(data["identifier"], default_grp)
+
+#         focused_results_grp = default_grp.create_group("focused_results")
+#         for section_id, focused_result in data["focused_section_results"].items():
+#             focused_results_grp.create_dataset(
+#                 f"focused_result_{section_id}",
+#                 data=focused_result,
+#             )
+
+#         complete_results_grp = default_grp.create_group("complete_results")
+#         for section_id, section_result in data["complete_section_results"].items():
+#             complete_result_grp = complete_results_grp.create_group(f"complete_result_{section_id}")
+#             complete_result_grp.create_dataset(
+#                 "section_dataframe",
+#                 data=section_result["data"],
+#             )
+
+#             peaks_grp = complete_result_grp.create_group("peaks")
+#             peaks_grp.create_dataset("peak_indices_section", data=section_result["peaks_section"])
+#             peaks_grp.create_dataset("peak_indices_global", data=section_result["peaks_global"])
+#             peaks_grp.create_dataset("manually_added_peak_indices", data=section_result["peak_edits"]["added"])
+#             peaks_grp.create_dataset("manually_removed_peak_indices", data=section_result["peak_edits"]["removed"])
+
+#             rate_grp = complete_result_grp.create_group("rate")
+#             rate_grp.create_dataset("not_interpolated", data=section_result["rate"])
+#             rate_grp.create_dataset("interpolated", data=section_result["rate_interpolated"])
+
+#             processing_parameters_grp = complete_result_grp.create_group("processing_parameters")
+#             processing_parameters_grp.attrs.create("sampling_rate", section_result["processing_parameters"]["sampling_rate"])
+#             processing_parameters_grp.attrs.create("pipeline", section_result["processing_parameters"]["pipeline"])
+#             processing_parameters_grp.
+
+
+#             # Processing Parameters
+#             processing_parameters_group = complete_result_group.create_group("processing_parameters")
+#             processing_parameters_group.attrs.create("sampling_rate", section_result["processing_parameters"]["sampling_rate"])
+#             processing_parameters_group.attrs.create("pipeline", section_result["processing_parameters"]["pipeline"])
+
+#             filter_parameters_group = processing_parameters_group.create_group("filter_parameters")
+#             unpack_dict_to_attrs(section_result["processing_parameters"]["filter_parameters"], filter_parameters_group.attrs)
+
+#             standardize_parameters_group = processing_parameters_group.create_group("standardize_parameters")
+#             unpack_dict_to_attrs(section_result["processing_parameters"]["standardize_parameters"], standardize_parameters_group.attrs)
+
+#             peak_detection_parameters_group = processing_parameters_group.create_group("peak_detection_parameters")
+#             _peak_params = section_result["processing_parameters"]["peak_detection_parameters"]
+#             if _peak_params is not None:
+#                 _method = _peak_params["method"]
+#                 _method_params = _peak_params["method_parameters"]
+#                 flattened_peak_detection_parameters = {"method": _method, **_method_params}
+#                 unpack_dict_to_attrs(flattened_peak_detection_parameters, peak_detection_parameters_group.attrs)

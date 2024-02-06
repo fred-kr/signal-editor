@@ -97,6 +97,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_export_focused.clicked.connect(self.export_focused_result)
 
         # Data Handling
+        self.btn_show_more_rows.clicked.connect(self._update_cas_table)
         self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
         self.btn_load_selection.clicked.connect(self.handle_load_data)
         self.sig_data_loaded.connect(self._on_data_loaded)
@@ -754,6 +755,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
 
 
 def main(dev_mode: bool = False, antialias: bool = False, enable_console: bool = False) -> None:
+    pl.Config.activate_decimals(True)
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"
         os.environ["DEV_MODE"] = "1"
