@@ -1,6 +1,3 @@
-import typing as t
-
-
 SECTION_STYLES = {
     "included": {
         "brush": (0, 200, 100, 75),

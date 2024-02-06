@@ -6,7 +6,7 @@ import mne.io
 import polars as pl
 import tables as tb
 
-from signal_editor import type_aliases as _t
+from . import type_aliases as _t
 
 
 def read_edf(

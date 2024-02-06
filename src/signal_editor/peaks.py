@@ -169,14 +169,15 @@ def _find_local_minima(
     return np.nonzero(sig == min_vals)[0]
 
 
-def find_extrema(sig: npt.NDArray[np.float64], radius: int, direction: t.Literal["up", "down"]) -> npt.NDArray[np.intp]:
+def find_extrema(
+    sig: npt.NDArray[np.float64], radius: int, direction: t.Literal["up", "down"]
+) -> npt.NDArray[np.intp]:
     if direction == "up":
         return _find_local_maxima(sig, radius)
     elif direction == "down":
         return _find_local_minima(sig, radius)
     else:
         raise ValueError(f"Unknown direction: {direction}")
-
 
 
 def _shift_peaks(

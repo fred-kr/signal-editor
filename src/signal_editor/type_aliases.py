@@ -1,13 +1,13 @@
 import datetime
 import typing as t
 
-import polars as pl
 import numpy as np
 import numpy.typing as npt
+import polars as pl
 
 if t.TYPE_CHECKING:
-    from .handlers.data_handler import DataState
-    from .models.section import SectionID, SectionIndices, SectionContainer
+    from .handlers import DataState
+    from .models import SectionContainer, SectionID, SectionIndices
 
 
 type SignalName = t.Literal["hbr", "ventilation"]

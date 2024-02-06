@@ -203,20 +203,6 @@ class PlotHandler(QtCore.QObject):
         for region in self.combined_regions:
             region.setVisible(show)
 
-    # def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
-    #     def remove_region_from_list(
-    #         region_list: list[pg.LinearRegionItem], bounds: "tuple[int, int] | SectionIndices"
-    #     ) -> None:
-    #         for region in region_list:
-    #             region_bounds = region.getRegion()
-    #             if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
-    #                 region_list.remove(region)
-    #                 self._pw_main.removeItem(region)
-    #                 break
-
-    #     remove_region_from_list(self._included_regions, bounds)
-    #     remove_region_from_list(self._excluded_regions, bounds)
-
     def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
         for region_list in [self._included_regions, self._excluded_regions]:
             for region in region_list:

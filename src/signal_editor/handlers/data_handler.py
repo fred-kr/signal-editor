@@ -9,8 +9,8 @@ import polars as pl
 import polars.selectors as ps
 from PySide6 import QtCore, QtWidgets
 
-from signal_editor.io import read_edf
 from .. import type_aliases as _t
+from ..fileio import read_edf
 from ..models import (
     CompleteResult,
     ResultIdentifier,

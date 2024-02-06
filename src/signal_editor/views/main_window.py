@@ -1403,12 +1403,12 @@ class Ui_MainWindow(object):
 
         self.layout_container_peak_detection_sidebar.addWidget(self.btn_info_peak_detect, 0, 3, 1, 1, Qt.AlignRight)
 
-        self.pushButton = QPushButton(self.container_peak_detection_sidebar)
-        self.pushButton.setObjectName(u"pushButton")
-        sizePolicy8.setHeightForWidth(self.pushButton.sizePolicy().hasHeightForWidth())
-        self.pushButton.setSizePolicy(sizePolicy8)
+        self.btn_reset_peak_detection_values = QPushButton(self.container_peak_detection_sidebar)
+        self.btn_reset_peak_detection_values.setObjectName(u"btn_reset_peak_detection_values")
+        sizePolicy8.setHeightForWidth(self.btn_reset_peak_detection_values.sizePolicy().hasHeightForWidth())
+        self.btn_reset_peak_detection_values.setSizePolicy(sizePolicy8)
 
-        self.layout_container_peak_detection_sidebar.addWidget(self.pushButton, 3, 3, 1, 1)
+        self.layout_container_peak_detection_sidebar.addWidget(self.btn_reset_peak_detection_values, 3, 3, 1, 1)
 
         self.line_3 = QFrame(self.container_peak_detection_sidebar)
         self.line_3.setObjectName(u"line_3")
@@ -1997,9 +1997,9 @@ class Ui_MainWindow(object):
 #endif // QT_CONFIG(whatsthis)
         self.btn_detect_peaks.setText(QCoreApplication.translate("MainWindow", u"2. Run peak detection", None))
 #if QT_CONFIG(tooltip)
-        self.pushButton.setToolTip(QCoreApplication.translate("MainWindow", u"Reset parameters for the current peak detection algorithm back to their initial values", None))
+        self.btn_reset_peak_detection_values.setToolTip(QCoreApplication.translate("MainWindow", u"Reset parameters for the current peak detection algorithm back to their initial values", None))
 #endif // QT_CONFIG(tooltip)
-        self.pushButton.setText(QCoreApplication.translate("MainWindow", u"Reset Values", None))
+        self.btn_reset_peak_detection_values.setText(QCoreApplication.translate("MainWindow", u"Reset Values", None))
 #if QT_CONFIG(tooltip)
         self.btn_compute_results.setToolTip(QCoreApplication.translate("MainWindow", u"<html><head/><body><p>Either creates a new result or updates the existing result with the edits of the current section.</p></body></html>", None))
 #endif // QT_CONFIG(tooltip)

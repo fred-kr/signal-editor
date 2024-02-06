@@ -1,7 +1,7 @@
 import polars as pl
 from PySide6 import QtCore, QtWidgets
 
-from ..models.polars_df import PolarsDFModel
+from ..models import PolarsDFModel
 
 
 class TableHandler:

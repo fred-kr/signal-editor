@@ -10,7 +10,7 @@ import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
 from .. import type_aliases as _t
-from ..handlers.plot_handler import PlotHandler
+from ..handlers import PlotHandler
 from ..views._ui_state_maps import (
     COMBO_BOX_ITEMS,
     FILTER_INPUT_STATES,
@@ -43,6 +43,9 @@ class UIHandler(QtCore.QObject):
         self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
         if os.environ.get("ENABLE_CONSOLE", "0") == "1":
             self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
+        self._app.btn_reset_peak_detection_values.clicked.connect(
+            self.set_initial_peak_detection_parameters
+        )
 
     def setup_ui(self) -> None:
         self._set_combo_box_items()
@@ -86,7 +89,9 @@ class UIHandler(QtCore.QObject):
 
         export_menu = QtWidgets.QMenu(self._app.btn_export_focused)
         export_menu.addAction("CSV", lambda: self._app.export_focused_result("csv"))
-        export_menu.addAction("Text (tab-delimited)", lambda: self._app.export_focused_result("txt"))
+        export_menu.addAction(
+            "Text (tab-delimited)", lambda: self._app.export_focused_result("txt")
+        )
         export_menu.addAction("Excel", lambda: self._app.export_focused_result("xlsx"))
         self._app.btn_export_focused.setMenu(export_menu)
 
@@ -121,6 +126,14 @@ class UIHandler(QtCore.QObject):
             combo_box: pg.ComboBox = getattr(self._app, key)
             combo_box.clear()
             combo_box.setItems(value)
+
+    @QtCore.Slot()
+    def set_initial_peak_detection_parameters(self) -> None:
+        for widget_name, properties in INITIAL_PEAK_STATES.items():
+            for property_name, value in properties.items():
+                getattr(self._app, widget_name).__getattribute__(
+                    INITIAL_STATE_METHODS_MAP[property_name]
+                )(value)
 
     @staticmethod
     def _blocked_set_combo_box_items(combo_box: QtWidgets.QComboBox, items: list[str]) -> None:
@@ -335,6 +348,8 @@ class UIHandler(QtCore.QObject):
                     search_radius=self._app.peak_xqrs_search_radius.value(),
                     peak_dir=self._app.xqrs_peak_direction,
                 )
+            case _:
+                raise NotImplementedError(f"Peak detection method {method} not yet implemented.")
 
         for key, val in vals.items():
             if isinstance(val, float):
@@ -379,3 +394,5 @@ class UIHandler(QtCore.QObject):
                 vals = t.cast(_t.PeakDetectionXQRS, vals)
                 self._app.peak_xqrs_search_radius.setValue(vals["search_radius"])
                 self._app.peak_xqrs_peak_dir.setValue(vals["peak_dir"])
+            case _:
+                raise NotImplementedError(f"Peak detection method {method} not yet implemented.")

@@ -11,9 +11,8 @@ import pyqtgraph as pg
 from loguru import logger
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from signal_editor.io import result_dict_to_hdf5
-
 from . import type_aliases as _t
+from .fileio import result_dict_to_hdf5
 from .handlers import (
     ConfigHandler,
     DataHandler,

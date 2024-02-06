@@ -10,10 +10,9 @@ import numpy.typing as npt
 import polars as pl
 import polars.selectors as ps
 
-from signal_editor.peaks import find_peaks
-from signal_editor.processing import filter_elgendi, filter_signal, scale_signal
-
 from .. import type_aliases as _t
+from ..peaks import find_peaks
+from ..processing import filter_elgendi, filter_signal, scale_signal
 from .result import FocusedResult, ManualPeakEdits
 
 
@@ -394,7 +393,6 @@ class Section:
         else:
             self._peak_edits.removed.extend(peaks)
 
-    
     def get_peak_edits(self) -> ManualPeakEdits:
         """
         Get the manual peak edits for this section.
