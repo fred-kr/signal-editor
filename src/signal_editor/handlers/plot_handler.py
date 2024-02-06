@@ -1,7 +1,7 @@
 import typing as t
-import numpy.typing as npt
 
 import numpy as np
+import numpy.typing as npt
 import polars as pl
 import pyqtgraph as pg
 from PySide6 import QtCore, QtGui, QtWidgets
@@ -15,39 +15,6 @@ if t.TYPE_CHECKING:
 
     from ..app import SignalEditor
     from ..models.section import SectionIndices
-
-
-class WorkerSignals(QtCore.QObject):
-    finished = QtCore.Signal()
-    result = QtCore.Signal()
-    error = QtCore.Signal(tuple)
-
-
-class Worker(QtCore.QRunnable):
-    """Worker thread."""
-
-    def __init__(
-        self,
-        fn: t.Callable[
-            [int, CustomScatterPlotItem], tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]
-        ],
-        point: int,
-        scatter_plot: CustomScatterPlotItem,
-    ) -> None:
-        super().__init__()
-        self.fn = fn
-        self.point = point
-        self.scatter_plot = scatter_plot
-        self.signals = WorkerSignals()
-
-    @QtCore.Slot()
-    def run(self) -> None:
-        try:
-            self.fn(self.point, self.scatter_plot)
-        except Exception as e:
-            self.signals.error.emit((type(e), e, e.__traceback__))
-        finally:
-            self.signals.finished.emit()
 
 
 class PlotHandler(QtCore.QObject):
@@ -65,7 +32,6 @@ class PlotHandler(QtCore.QObject):
     def __init__(self, app: "SignalEditor", parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self._app = app
-        self.threadpool = QtCore.QThreadPool()
         self._manual_peak_edits: dict[str, ManualPeakEdits] = {}
         self._line_clicked_tolerance: int = self._app.config.click_tolerance
 
@@ -134,7 +100,7 @@ class PlotHandler(QtCore.QObject):
         rate_plot_widget = pg.PlotWidget(viewBox=pg.ViewBox(name="rate_plot"), useOpenGL=True)
         widget_layout.addWidget(main_plot_widget)
         widget_layout.addWidget(rate_plot_widget)
-        
+
         self._app.container_plots.setLayout(widget_layout)
         self._pw_main = main_plot_widget
         self._pw_rate = rate_plot_widget
@@ -229,7 +195,6 @@ class PlotHandler(QtCore.QObject):
         self._rate_item = None
         self._rate_mean_item = None
         self._temperature_label.setText("")
-        self.threadpool.clear()
 
         self._setup_plot_items()
 
@@ -456,23 +421,14 @@ class PlotHandler(QtCore.QObject):
         scatter_plot = self._scatter_item
         if scatter_plot is None:
             return
-        scatter_plot.opts["hoverable"] = False
-        worker = Worker(self._remove_scatter, to_remove_index, scatter_plot)
-        worker.signals.finished.connect(
-            lambda: self.sig_peaks_edited.emit("remove", [to_remove_val])
-        )
-        worker.signals.finished.connect(lambda: scatter_plot.opts.update({"hoverable": True}))
-        self.threadpool.start(worker)
-        worker.setAutoDelete(False)
+        self._remove_scatter(to_remove_index, scatter_plot)
+        self.sig_peaks_edited.emit("remove", [to_remove_val])
 
-    def _remove_scatter(
-        self, to_remove_index: int, scatter_plot: CustomScatterPlotItem
-    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    def _remove_scatter(self, to_remove_index: int, scatter_plot: CustomScatterPlotItem) -> None:
         scatter_data = scatter_plot.data
         new_points_x = np.delete(scatter_data["x"], to_remove_index)
         new_points_y = np.delete(scatter_data["y"], to_remove_index)
         scatter_plot.setData(x=new_points_x, y=new_points_y)
-    
 
     @QtCore.Slot(object, object)
     def add_scatter(self, sender: pg.PlotCurveItem, ev: "mouseEvents.MouseClickEvent") -> None:

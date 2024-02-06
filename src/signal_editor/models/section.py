@@ -12,8 +12,9 @@ import polars.selectors as ps
 
 from signal_editor.peaks import find_peaks
 from signal_editor.processing import filter_elgendi, filter_signal, scale_signal
-from .result import FocusedResult, ManualPeakEdits
+
 from .. import type_aliases as _t
+from .result import FocusedResult, ManualPeakEdits
 
 
 class SectionIndices(t.NamedTuple):
@@ -22,15 +23,6 @@ class SectionIndices(t.NamedTuple):
 
     def __str__(self) -> str:
         return f"{self.start}, {self.stop}"
-
-
-# class SectionID(str):
-#     def __new__(cls, value: str) -> "SectionID":
-#         if not re.match(r"^SEC_[a-zA-Z0-9]+_[0-9]{3}$", value):
-#             raise ValueError(
-#                 f"SectionID must be of the form 'SEC_<signal_name>_000', got '{value}'"
-#             )
-#         return super().__new__(cls, value)
 
 
 class SectionID(str):

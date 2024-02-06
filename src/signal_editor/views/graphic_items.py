@@ -14,6 +14,10 @@ class ScatterPlotItemError(Exception):
 
 
 class CustomViewBox(pg.ViewBox):
+    """
+    Custom `pyqtgraph.ViewBox` subclass that makes plot editing easier.
+    """
+
     sig_selection_changed = Signal(QtGui.QPolygonF)
 
     def __init__(self, *args: t.Any, **kargs: t.Any) -> None:

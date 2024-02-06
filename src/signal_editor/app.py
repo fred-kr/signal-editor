@@ -692,10 +692,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
     def handle_scatter_clicked(
         self, action: t.Literal["add", "remove"], indices: list[int]
     ) -> None:
-        # scatter_item = self.plot.scatter_item
-        # if scatter_item is None:
-        #     return
-
         self.data.cas.update_peaks(action, indices)
         self.sig_peaks_detected.emit()
 
