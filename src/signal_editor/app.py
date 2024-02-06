@@ -5,6 +5,7 @@ import typing as t
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 import pyqtgraph as pg
 from loguru import logger
@@ -26,6 +27,7 @@ from .models import (
     SectionID,
     SectionIndices,
 )
+from .peaks import find_extrema
 from .views.main_window import Ui_MainWindow
 
 
@@ -90,7 +92,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.action_add_section.triggered.connect(self._maybe_new_included_section)
 
         # File I/O
-        self.btn_browse_output_dir.clicked.connect(self.select_output_location)
         self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
         self.btn_select_file.clicked.connect(self.select_data_file)
         self.action_save_to_hdf5.triggered.connect(self.save_to_hdf5)
@@ -111,8 +112,9 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.plot.sig_peaks_drawn.connect(self.handle_draw_rate)
         self.sig_data_processed.connect(self.update_data_tables)
         self.sig_peaks_detected.connect(self._on_peaks_detected)
-        self.action_remove_peak_rect.triggered.connect(self.plot.show_selection_rect)
         self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected_scatter)
+        self.action_detect_in_selection.triggered.connect(self.handle_intrasection_peak_detection)
+        self.action_hide_selection_box.triggered.connect(self.plot.show_selection_rect)
 
         # Plot / View actions
         self.action_reset_view.triggered.connect(self._emit_data_range_info)
@@ -125,7 +127,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.combo_box_oxygen_condition.currentTextChanged.connect(self.data.set_oxy_condition)
 
     def _on_init_finished(self) -> None:
-        self.line_edit_output_dir.setText(self.config.output_dir.as_posix())
         self.theme_switcher.set_style(self.config.style)
         if os.environ.get("DEV_MODE", "0") == "1":
             self._add_profiler()
@@ -244,6 +245,29 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(file))
 
     # region Sections
+    @QtCore.Slot()
+    def handle_intrasection_peak_detection(self) -> None:
+        selection_rect = self.plot.get_selection_rect()
+        left, right = int(selection_rect.left()), int(selection_rect.right())
+        top, bottom = selection_rect.top(), selection_rect.bottom()
+        self.plot.show_selection_rect()
+        # Decide direction based on which of top/bottom is closer to the mean. If top is closer, look for minima, if bottom is closer, look for maxima
+        radius = self.spin_box_intrasection_peak_detection.value()
+        edge_buffer = self.spin_box_selection_edge_buffer.value()
+        left, right = left + edge_buffer, right - edge_buffer
+        data = self.data.cas.proc_data[left:right].to_numpy()
+        data_mean = np.mean(data)
+        if abs(top - data_mean) < abs(bottom - data_mean):
+            peaks = find_extrema(data, radius=radius, direction="up")
+        else:
+            peaks = find_extrema(data, radius=radius, direction="down")
+
+        peaks = peaks + left
+        # Remove peaks at the beginning and end of the section if they are too close to the edges
+
+        self.data.cas.update_peaks("add", peaks.tolist())
+        self.sig_peaks_detected.emit()
+
     @QtCore.Slot(str)
     def add_section_to_widget(self, section_id: SectionID) -> None:
         self.list_widget_sections.addItem(section_id)
@@ -469,7 +493,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             self.sig_name, self.file_info.completeBaseName()
         )
         self.config.output_dir.mkdir(exist_ok=True)
-        result_location = Path.joinpath(Path(self.line_edit_output_dir.text()), result_file_name)
         output_options = [
             "Only export currently active section",
             "Create a new file for each section",
@@ -487,22 +510,30 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         if not ok:
             return
 
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Select Output Location",
+            Path.joinpath(self.config.output_dir, result_file_name).as_posix(),
+            f"{output_format.upper()} Files (*.{output_format})",
+        )
+
+        self.config.output_dir = Path(file_name).parent
         try:
             results = self.data.get_focused_results()
 
             write_functions: dict[str, t.Callable[[pl.DataFrame, str | Path], t.Any]] = {
-                "csv": lambda df, path: df.write_csv(f"{path}.csv"),
-                "xlsx": lambda df, path: df.write_excel(f"{path}.xlsx"),
-                "txt": lambda df, path: df.write_csv(f"{path}.txt", separator="\t"),
+                "csv": lambda df, path: df.write_csv(path),
+                "xlsx": lambda df, path: df.write_excel(path),
+                "txt": lambda df, path: df.write_csv(path, separator="\t"),
             }
             if item == "Only export currently active section":
                 foc_df = self.data.cas.get_focused_result().to_polars()
-                write_functions[output_format](foc_df, result_location)
+                write_functions[output_format](foc_df, file_name)
 
             elif item == "Create a new file for each section":
                 for s_id, foc_res in results.items():
                     foc_df = foc_res.to_polars()
-                    write_functions[output_format](foc_df, f"{result_location}_{s_id}")
+                    write_functions[output_format](foc_df, f"{file_name}_{s_id}")
 
             elif item == "Concatenate all sections and write to a single file":
                 result_dfs = [
@@ -510,7 +541,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
                     for s_id, foc_res in results.items()
                 ]
                 result_df = pl.concat(result_dfs)
-                write_functions[output_format](result_df, f"{result_location}_all")
+                write_functions[output_format](result_df, f"{file_name}_all")
         except Exception as e:
             msg = f"Failed to export focused result: {e}"
             self.sig_show_message.emit(msg, "error")
@@ -518,20 +549,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
 
         msg = "Export successful."
         self.sig_show_message.emit(msg, "info")
-
-    @QtCore.Slot()
-    def select_output_location(self) -> None:
-        """
-        Prompt user to select a directory for storing the exported results.
-        """
-        if path := QtWidgets.QFileDialog.getExistingDirectory(
-            self,
-            caption="Select Output Directory",
-            dir=self.config.output_dir.as_posix(),
-            options=QtWidgets.QFileDialog.Option.ShowDirsOnly,
-        ):
-            self.line_edit_output_dir.setText(path)
-            self.config.output_dir = Path(path)
 
     @QtCore.Slot()
     def _update_cas_table(self) -> None:
@@ -729,10 +746,8 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def _write_config(self) -> None:
         data_dir = self.file_info.dir().path()
-        output_dir = self.line_edit_output_dir.text()
 
         self.config.data_dir = Path(data_dir)
-        self.config.output_dir = Path(output_dir)
 
         self.config.style = self.theme_switcher.active_style
         self.config.sample_rate = self.data.sfreq

@@ -23,7 +23,7 @@ class CustomViewBox(pg.ViewBox):
     def __init__(self, *args: t.Any, **kargs: t.Any) -> None:
         pg.ViewBox.__init__(self, *args, **kargs)
         self._selection_box: QtWidgets.QGraphicsRectItem | None = None
-        self.mapped_peak_selection: QtGui.QPolygonF | None = None
+        self.mapped_selection_rect: QtGui.QPolygonF | None = None
 
     @property
     def selection_box(self) -> QtWidgets.QGraphicsRectItem:
@@ -85,10 +85,10 @@ class CustomViewBox(pg.ViewBox):
         if button_type in {"middle", "left+control"}:
             if ev.isFinish():
                 r = QtCore.QRectF(ev.pos(), ev.buttonDownPos())
-                self.mapped_peak_selection = self.mapToView(r)
+                self.mapped_selection_rect = self.mapToView(r)
             else:
                 self.updateSelectionBox(ev.pos(), ev.buttonDownPos())
-                self.mapped_peak_selection = None
+                self.mapped_selection_rect = None
         elif button_type == "left":
             if self.state["mouseMode"] == pg.ViewBox.RectMode and axis is None:
                 if ev.isFinish():
@@ -263,8 +263,6 @@ class TimeAxisItem(pg.AxisItem):
     def tickStrings(self, values: list[float] | None, scale: int | None, spacing: int) -> list[str]:
         if values is None:
             return []
-        # if scale:
-        # values = [v / scale for v in values]
         return [self.seconds_to_timestamp(value) for value in values]
 
     @staticmethod

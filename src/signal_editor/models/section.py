@@ -368,7 +368,7 @@ class Section:
         self._peak_edits.clear()
         self.calculate_rate()
 
-    def update_peaks(self, action: t.Literal["add", "remove"], peaks: list[int]) -> None:
+    def update_peaks(self, action: t.Literal["add", "remove"], peaks: t.Sequence[int]) -> None:
         """
         Update the `is_peak` column based on the given action and indices.
         Only modifies the values at the given indices, while leaving the rest unchanged.
@@ -394,6 +394,7 @@ class Section:
         else:
             self._peak_edits.removed.extend(peaks)
 
+    
     def get_peak_edits(self) -> ManualPeakEdits:
         """
         Get the manual peak edits for this section.

@@ -23,7 +23,7 @@ type Pipeline = t.Literal[
     "ecg_engzeemod2012",
 ]
 type PeakDetectionMethod = t.Literal[
-    "elgendi_ppg", "local", "neurokit2", "promac", "wfdb_xqrs", "pantompkins"
+    "elgendi_ppg", "local", "neurokit2", "promac", "wfdb_xqrs", "pantompkins", "local_min"
 ]
 type WFDBPeakDirection = t.Literal[
     "up",

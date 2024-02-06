@@ -1,4 +1,4 @@
-from typing import Any, Callable, Literal
+import typing as t
 
 import neurokit2 as nk
 import numpy as np
@@ -6,7 +6,7 @@ import numpy.typing as npt
 import wfdb.processing as wfproc
 from scipy import ndimage, signal
 
-from signal_editor import type_aliases as _t
+from . import type_aliases as _t
 
 MIN_DIST = 20
 
@@ -21,7 +21,7 @@ def _signal_smoothing_median(
 
 
 def _signal_smoothing(
-    sig: npt.NDArray[np.floating[Any]], kernel: _t.SmoothingKernels, size: int = 5
+    sig: npt.NDArray[np.floating[t.Any]], kernel: _t.SmoothingKernels, size: int = 5
 ) -> npt.NDArray[np.float64]:
     window: npt.NDArray[np.float64] = signal.get_window(kernel, size)  # type: ignore
     w: npt.NDArray[np.float64] = window / window.sum()  # type: ignore
@@ -36,7 +36,7 @@ def _signal_smoothing(
 
 def _signal_smooth(
     sig: npt.NDArray[np.float64],
-    method: Literal["convolution", "loess"] = "convolution",
+    method: t.Literal["convolution", "loess"] = "convolution",
     kernel: _t.SmoothingKernels = "boxzen",
     size: int = 10,
     alpha: float = 0.1,
@@ -147,7 +147,7 @@ def _find_ppg_peaks_elgendi(
     return np.array(peaks, dtype=np.int32)
 
 
-def _find_local_peaks(
+def _find_local_maxima(
     sig: npt.NDArray[np.float64],
     radius: int,
 ) -> npt.NDArray[np.intp]:
@@ -156,6 +156,27 @@ def _find_local_peaks(
 
     max_vals = ndimage.maximum_filter(sig, size=2 * radius + 1, mode="constant")
     return np.nonzero(sig == max_vals)[0]
+
+
+def _find_local_minima(
+    sig: npt.NDArray[np.float64],
+    radius: int,
+) -> npt.NDArray[np.intp]:
+    if len(sig) == 0 or np.min(sig) == np.max(sig):
+        return np.empty(0, dtype=np.int32)
+
+    min_vals = ndimage.minimum_filter(sig, size=2 * radius + 1, mode="constant")
+    return np.nonzero(sig == min_vals)[0]
+
+
+def find_extrema(sig: npt.NDArray[np.float64], radius: int, direction: t.Literal["up", "down"]) -> npt.NDArray[np.intp]:
+    if direction == "up":
+        return _find_local_maxima(sig, radius)
+    elif direction == "down":
+        return _find_local_minima(sig, radius)
+    else:
+        raise ValueError(f"Unknown direction: {direction}")
+
 
 
 def _shift_peaks(
@@ -185,7 +206,7 @@ def _adjust_peak_positions(
     sig: npt.NDArray[np.float32 | np.float64],
     peaks: npt.NDArray[np.int32],
     radius: int,
-    direction: Literal["up", "down", "both", "compare"],
+    direction: t.Literal["up", "down", "both", "compare"],
 ) -> npt.NDArray[np.int32]:
     if direction == "up":
         return _shift_peaks(sig, peaks, radius, dir_is_up=True)
@@ -205,7 +226,7 @@ def _adjust_peak_positions(
         raise ValueError(f"Unknown direction: {direction}")
 
 
-def _get_comparison_fn(find_peak_fn: Callable[..., np.int_]) -> Callable[..., np.bool_]:
+def _get_comparison_fn(find_peak_fn: t.Callable[..., np.int_]) -> t.Callable[..., np.bool_]:
     if find_peak_fn == np.argmax:
         return np.less_equal
     elif find_peak_fn == np.argmin:
@@ -217,7 +238,7 @@ def _get_comparison_fn(find_peak_fn: Callable[..., np.int_]) -> Callable[..., np
 def _handle_close_peaks(
     sig: npt.NDArray[np.float64],
     peak_idx: npt.NDArray[np.int32],
-    find_peak_fn: Callable[..., np.int_],
+    find_peak_fn: t.Callable[..., np.int_],
 ) -> npt.NDArray[np.int32]:
     qrs_diffs = np.diff(peak_idx)
     close_inds = np.where(qrs_diffs <= MIN_DIST)[0]
@@ -239,7 +260,7 @@ def _remove_outliers(
     sig: npt.NDArray[np.float64],
     peak_idx: npt.NDArray[np.int32],
     n_std: float,
-    find_peak_fn: Callable[[npt.NDArray[np.float32 | np.float64]], int],
+    find_peak_fn: t.Callable[[npt.NDArray[np.float32 | np.float64]], int],
 ) -> npt.NDArray[np.int32]:
     comparison_ops = {np.argmax: (np.less_equal, -1), np.argmin: (np.greater_equal, 1)}
 
@@ -283,7 +304,7 @@ def _find_peaks_xqrs(
     sig: npt.NDArray[np.float64],
     sampling_rate: int,
     radius: int,
-    peak_dir: Literal["up", "down", "both", "compare"] = "up",
+    peak_dir: t.Literal["up", "down", "both", "compare"] = "up",
 ) -> npt.NDArray[np.int32]:
     xqrs_out = wfproc.XQRS(sig=sig, fs=sampling_rate)
     xqrs_out.detect()
@@ -322,35 +343,34 @@ def find_peaks(
     ValueError
         If the specified method is not supported.
     """
-    if method == "local":
-        return _find_local_peaks(sig, radius=input_values.get("radius", sampling_rate // 2))
-    elif method == "elgendi_ppg":
-        return _find_ppg_peaks_elgendi(
-            sig,
-            sampling_rate,
-            peakwindow=input_values.get("peakwindow", 0.111),
-            beatwindow=input_values.get("beatwindow", 0.667),
-            beatoffset=input_values.get("beatoffset", 0.02),
-            mindelay=input_values.get("mindelay", 0.3),
-        )
-    elif method == "wfdb_xqrs":
-        return _find_peaks_xqrs(
-            sig,
-            sampling_rate,
-            radius=input_values.get("search_radius", sampling_rate // 2),
-            peak_dir=input_values.get("peak_dir", "up"),
-        )
-    elif method in ["neurokit2", "promac", "pantompkins"]:
-        return nk.ecg_peaks(
-            ecg_cleaned=sig,
-            sampling_rate=sampling_rate,
-            method=method,
-            correct_artifacts=input_values.get("correct_artifacts", False),
-        )[1][
-            "ECG_R_Peaks"
-        ]  # type: ignore
-    else:
-        raise ValueError(f"Unknown peak detection method: {method}")
+    match method:
+        case "local":
+            return _find_local_maxima(sig, radius=input_values.get("radius", sampling_rate // 2))
+        case "local_min":
+            return _find_local_minima(sig, radius=input_values.get("radius", sampling_rate // 2))
+        case "elgendi_ppg":
+            return _find_ppg_peaks_elgendi(
+                sig,
+                sampling_rate,
+                peakwindow=input_values.get("peakwindow", 0.111),
+                beatwindow=input_values.get("beatwindow", 0.667),
+                beatoffset=input_values.get("beatoffset", 0.02),
+                mindelay=input_values.get("mindelay", 0.3),
+            )
+        case "wfdb_xqrs":
+            return _find_peaks_xqrs(
+                sig,
+                sampling_rate,
+                radius=input_values.get("search_radius", sampling_rate // 2),
+                peak_dir=input_values.get("peak_dir", "up"),
+            )
+        case "neurokit2" | "promac" | "pantompkins":
+            return nk.ecg_peaks(
+                ecg_cleaned=sig,
+                sampling_rate=sampling_rate,
+                method=method,
+                correct_artifacts=input_values.get("correct_artifacts", False),
+            )[1]["ECG_R_Peaks"]  # type: ignore
 
 
 # region Unused functions

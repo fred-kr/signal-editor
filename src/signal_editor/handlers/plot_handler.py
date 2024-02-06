@@ -82,7 +82,7 @@ class PlotHandler(QtCore.QObject):
         return self._pw_rate
 
     @property
-    def view_boxes(self) -> tuple[CustomViewBox, pg.ViewBox]:
+    def view_boxes(self) -> tuple[CustomViewBox | pg.ViewBox, pg.ViewBox]:
         return self._pw_main.getPlotItem().getViewBox(), self._pw_rate.getPlotItem().getViewBox()
 
     @property
@@ -144,13 +144,13 @@ class PlotHandler(QtCore.QObject):
             title=main_plot_title,
             left=main_left_label,
             bottom=bottom_label,
-            top=(top_label, "seconds"),
+            top=(top_label, " seconds"),
         )
         rate_plot_item.setLabels(
             title=rate_plot_title,
             left=rate_left_label,
             bottom=bottom_label,
-            top=(top_label, "seconds"),
+            top=(top_label, " seconds"),
         )
 
     @QtCore.Slot(object)
@@ -203,19 +203,28 @@ class PlotHandler(QtCore.QObject):
         for region in self.combined_regions:
             region.setVisible(show)
 
+    # def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
+    #     def remove_region_from_list(
+    #         region_list: list[pg.LinearRegionItem], bounds: "tuple[int, int] | SectionIndices"
+    #     ) -> None:
+    #         for region in region_list:
+    #             region_bounds = region.getRegion()
+    #             if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
+    #                 region_list.remove(region)
+    #                 self._pw_main.removeItem(region)
+    #                 break
+
+    #     remove_region_from_list(self._included_regions, bounds)
+    #     remove_region_from_list(self._excluded_regions, bounds)
+
     def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
-        def remove_region_from_list(
-            region_list: list[pg.LinearRegionItem], bounds: "tuple[int, int] | SectionIndices"
-        ) -> None:
+        for region_list in [self._included_regions, self._excluded_regions]:
             for region in region_list:
                 region_bounds = region.getRegion()
                 if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
                     region_list.remove(region)
                     self._pw_main.removeItem(region)
                     break
-
-        remove_region_from_list(self._included_regions, bounds)
-        remove_region_from_list(self._excluded_regions, bounds)
 
     def clear_regions(self) -> None:
         for region in self.combined_regions:
@@ -475,14 +484,14 @@ class PlotHandler(QtCore.QObject):
 
     @QtCore.Slot()
     def remove_selected_scatter(self) -> None:
-        vb = self._pw_main.getPlotItem().getViewBox()
-        if vb.mapped_peak_selection is None:
+        vb: CustomViewBox = self._pw_main.getPlotItem().getViewBox()
+        if vb.mapped_selection_rect is None:
             return
         scatter_item = self._scatter_item
         if scatter_item is None:
             return
 
-        rect_x, rect_y, rect_width, rect_height = vb.mapped_peak_selection.boundingRect().getRect()
+        rect_x, rect_y, rect_width, rect_height = vb.mapped_selection_rect.boundingRect().getRect()
 
         scatter_x, scatter_y = scatter_item.getData()
         if scatter_x.size == 0 or scatter_y.size == 0:
@@ -500,8 +509,13 @@ class PlotHandler(QtCore.QObject):
 
     @QtCore.Slot()
     def show_selection_rect(self) -> None:
-        vb = self._pw_main.getPlotItem().getViewBox()
+        vb: CustomViewBox = self._pw_main.getPlotItem().getViewBox()
         if vb.selection_box is None:
             return
         vb.selection_box.setVisible(not vb.selection_box.isVisible())
         vb.selection_box.setEnabled(not vb.selection_box.isEnabled())
+
+    def get_selection_rect(self) -> QtCore.QRectF:
+        vb: CustomViewBox = self._pw_main.plotItem.vb
+        if vb.mapped_selection_rect is not None:
+            return vb.mapped_selection_rect.boundingRect()
