@@ -6,6 +6,8 @@ import numpy.typing as npt
 import polars as pl
 
 if t.TYPE_CHECKING:
+    from PySide6 import QtCore, QtGui
+
     from .handlers import DataState
     from .models import SectionContainer, SectionID, SectionIndices
 
@@ -100,7 +102,7 @@ type NKECGAlgorithms = t.Literal[
 
 
 class FileMetadata(t.TypedDict):
-    date_recorded: datetime.date
+    date_recorded: datetime.date | None
     animal_id: str
     oxygen_condition: OxygenCondition
 
@@ -219,7 +221,7 @@ class SectionResultDict(t.TypedDict):
 class ResultIdentifierDict(t.TypedDict):
     signal_name: str
     source_file_name: str
-    date_recorded: datetime.date
+    date_recorded: datetime.date | None
     animal_id: str
     oxygen_condition: OxygenCondition
 
@@ -229,3 +231,34 @@ class CompleteResultDict(t.TypedDict):
     global_dataframe: npt.NDArray[np.void]
     complete_section_results: dict["SectionID", SectionResultDict]
     focused_section_results: dict["SectionID", npt.NDArray[np.void]]
+
+
+class SpotDict(t.TypedDict, total=False):
+    pos: "tuple[float, float] | QtCore.QPointF"
+    size: float
+    pen: "QtGui.QPen | str | None"
+    brush: "QtGui.QBrush | str | None"
+    symbol: str
+
+
+class SpotItemSetDataKwargs(t.TypedDict, total=False):
+    spots: list[SpotDict]
+    x: npt.ArrayLike
+    y: npt.ArrayLike
+    pos: npt.ArrayLike | list[tuple[float, float]]
+    pxMode: bool
+    symbol: str
+    pen: "QtGui.QPen | str | None"
+    brush: "QtGui.QBrush | str | None"
+    size: float
+    data: list[object]
+    hoverable: bool
+    tip: str | None
+    hoverSymbol: str
+    hoverSize: float
+    hoverPen: "QtGui.QPen | str | None"
+    hoverBrush: "QtGui.QBrush | str | None"
+    useCache: bool
+    antialias: bool
+    compositionMode: "QtGui.QPainter.CompositionMode | None"
+    name: str | None

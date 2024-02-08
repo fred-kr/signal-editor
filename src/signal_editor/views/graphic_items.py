@@ -2,9 +2,10 @@ import typing as t
 
 import numpy as np
 import pyqtgraph as pg
-from pyqtgraph.GraphicsScene import mouseEvents
 from PySide6 import QtCore, QtGui, QtWidgets
-from PySide6.QtCore import QRectF, Qt, Signal
+
+if t.TYPE_CHECKING:
+    from pyqtgraph.GraphicsScene import mouseEvents
 
 
 class ScatterPlotItemError(Exception):
@@ -17,8 +18,6 @@ class CustomViewBox(pg.ViewBox):
     """
     Custom `pyqtgraph.ViewBox` subclass that makes plot editing easier.
     """
-
-    sig_selection_changed = Signal(QtGui.QPolygonF)
 
     def __init__(self, *args: t.Any, **kargs: t.Any) -> None:
         pg.ViewBox.__init__(self, *args, **kargs)
@@ -51,23 +50,23 @@ class CustomViewBox(pg.ViewBox):
 
     @staticmethod
     def get_button_type(
-        ev: mouseEvents.MouseDragEvent,
+        ev: "mouseEvents.MouseDragEvent",
     ) -> t.Literal["middle", "left", "left+control", "right", "unknown"]:
-        if ev.button() == Qt.MouseButton.MiddleButton:
+        if ev.button() == QtCore.Qt.MouseButton.MiddleButton:
             return "middle"
-        elif ev.button() == Qt.MouseButton.LeftButton:
-            if ev.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        elif ev.button() == QtCore.Qt.MouseButton.LeftButton:
+            if ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier:
                 return "left+control"
             else:
                 return "left"
-        elif ev.button() == Qt.MouseButton.RightButton:
+        elif ev.button() == QtCore.Qt.MouseButton.RightButton:
             return "right"
         else:
             return "unknown"
 
     @t.override
     def mouseDragEvent(
-        self, ev: mouseEvents.MouseDragEvent, axis: int | float | None = None
+        self, ev: "mouseEvents.MouseDragEvent", axis: int | float | None = None
     ) -> None:
         ev.accept()
 
@@ -93,7 +92,7 @@ class CustomViewBox(pg.ViewBox):
             if self.state["mouseMode"] == pg.ViewBox.RectMode and axis is None:
                 if ev.isFinish():
                     self.rbScaleBox.hide()
-                    ax = QRectF(pg.Point(ev.buttonDownPos(ev.button())), pg.Point(pos))
+                    ax = QtCore.QRectF(pg.Point(ev.buttonDownPos(ev.button())), pg.Point(pos))
                     ax = self.childGroup.mapRectFromParent(ax)
                     self.showAxRect(ax)
                     self.axHistoryPointer += 1
@@ -129,13 +128,13 @@ class CustomViewBox(pg.ViewBox):
             x = s[0] if mouseEnabled[0] == 1 else None
             y = s[1] if mouseEnabled[1] == 1 else None
 
-            center = pg.Point(tr.map(ev.buttonDownPos(Qt.MouseButton.RightButton)))
+            center = pg.Point(tr.map(ev.buttonDownPos(QtCore.Qt.MouseButton.RightButton)))
             self._resetTarget()
             self.scaleBy(x=x, y=y, center=center)
             self.sigRangeChangedManually.emit(self.state["mouseEnabled"])
 
     def updateSelectionBox(self, pos1: pg.Point, pos2: pg.Point) -> None:
-        rect = QRectF(pos1, pos2)
+        rect = QtCore.QRectF(pos1, pos2)
         rect = self.childGroup.mapRectFromParent(rect)
         self.selection_box.setPos(rect.topLeft())
         tr = QtGui.QTransform.fromScale(rect.width(), rect.height())
@@ -144,16 +143,14 @@ class CustomViewBox(pg.ViewBox):
 
 
 class CustomScatterPlotItem(pg.ScatterPlotItem):
-    def addPoints(
-        self,
-        *args: t.Any,
-        **kargs: t.Any,
-    ) -> None:
+    def addPoints(self, *args: t.Any, **kargs: t.Any) -> None:
+        # Extract the required parameters
         spots = kargs.get("spots")
         x = kargs.get("x")
         y = kargs.get("y")
         pos = kargs.get("pos")
 
+        # Handle variable input arguments
         if len(args) == 1:
             kargs["spots"] = args[0]
         elif len(args) == 2:
@@ -162,6 +159,7 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         elif len(args) > 2:
             raise ScatterPlotItemError("Only accepts up to two non-keyword arguments.")
 
+        # Handle 'pos' parameter
         if pos is not None:
             if isinstance(pos, np.ndarray):
                 kargs["x"] = pos[:, 0]
@@ -172,6 +170,7 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
                 kargs["x"] = x
                 kargs["y"] = y
 
+        # Calculate number of points
         numPts = (
             len(spots)
             if spots is not None
@@ -182,17 +181,16 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
             else 0
         )
 
+        # Initialize new data array
         self.data["item"][...] = None
-
         oldData = self.data
         self.data = np.empty(len(oldData) + numPts, dtype=self.data.dtype)
-
         self.data[: len(oldData)] = oldData
-
         newData = self.data[len(oldData) :]
         newData["size"] = -1
         newData["visible"] = True
 
+        # Handle 'spots' parameter
         if spots is not None:
             for i, spot in enumerate(spots):
                 for k, v in spot.items():
@@ -212,10 +210,12 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
                         newData[i][k] = v
                     else:
                         raise ScatterPlotItemError(f"Unknown spot parameter: {k}")
+        # Handle 'y' parameter
         elif y is not None:
             newData["x"] = x
             newData["y"] = y
 
+        # Update the scatter plot item properties based on keyword arguments
         for k, v in kargs.items():
             if k == "name":
                 self.opts["name"] = v
@@ -230,6 +230,7 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
             elif k == "useCache":
                 self.opts["useCache"] = v
 
+        # Set point-specific properties
         for k in ["pen", "brush", "symbol", "size"]:
             if k in kargs:
                 setMethod = getattr(self, f"set{k[0].upper()}{k[1:]}")
@@ -248,12 +249,30 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
                     vh = pg.mkBrush(vh)
                 self.opts[kh] = vh
 
+        # Set point data
         if "data" in kargs:
             self.setPointData(kargs["data"], dataSet=newData)
 
+        # Update the scatter plot item
         self.prepareGeometryChange()
         self.informViewBoundsChanged()
         self.bounds = [None, None]
         self.invalidate()
         self.updateSpots(newData)
         self.sigPlotChanged.emit(self)
+
+
+class TimeAxisItem(pg.AxisItem):
+    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
+        pg.AxisItem.__init__(self, *args, **kwargs)
+        self.setLabel("Time (hh:mm:ss)")
+
+    def tickStrings(self, values: list[float], scale: float, spacing: float) -> list[str]:
+        strings: list[str] = []
+        for v in values:
+            vs = v * scale
+            minutes, seconds = divmod(int(vs), 60)
+            hours, minutes = divmod(minutes, 60)
+            vstr = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+            strings.append(vstr)
+        return strings

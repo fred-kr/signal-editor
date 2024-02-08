@@ -318,7 +318,7 @@ def find_peaks(
     sig: npt.NDArray[np.float64],
     sampling_rate: int,
     method: _t.PeakDetectionMethod,
-    input_values: _t.PeakDetectionInputValues,
+    method_parameters: _t.PeakDetectionInputValues,
 ) -> npt.NDArray[np.int32]:
     """
     Finds peaks in a signal using the specified method.
@@ -339,38 +339,38 @@ def find_peaks(
     npt.NDArray[np.int32]
         An array of peak indices as a 1-dimensional NumPy array.
 
-    Raises
-    ------
-    ValueError
-        If the specified method is not supported.
     """
     match method:
         case "local":
-            return _find_local_maxima(sig, radius=input_values.get("radius", sampling_rate // 2))
+            return _find_local_maxima(
+                sig, radius=method_parameters.get("radius", sampling_rate // 2)
+            )
         case "local_min":
-            return _find_local_minima(sig, radius=input_values.get("radius", sampling_rate // 2))
+            return _find_local_minima(
+                sig, radius=method_parameters.get("radius", sampling_rate // 2)
+            )
         case "elgendi_ppg":
             return _find_ppg_peaks_elgendi(
                 sig,
                 sampling_rate,
-                peakwindow=input_values.get("peakwindow", 0.111),
-                beatwindow=input_values.get("beatwindow", 0.667),
-                beatoffset=input_values.get("beatoffset", 0.02),
-                mindelay=input_values.get("mindelay", 0.3),
+                peakwindow=method_parameters.get("peakwindow", 0.111),
+                beatwindow=method_parameters.get("beatwindow", 0.667),
+                beatoffset=method_parameters.get("beatoffset", 0.02),
+                mindelay=method_parameters.get("mindelay", 0.3),
             )
         case "wfdb_xqrs":
             return _find_peaks_xqrs(
                 sig,
                 sampling_rate,
-                radius=input_values.get("search_radius", sampling_rate // 2),
-                peak_dir=input_values.get("peak_dir", "up"),
+                radius=method_parameters.get("search_radius", sampling_rate // 2),
+                peak_dir=method_parameters.get("peak_dir", "up"),
             )
         case "neurokit2" | "promac" | "pantompkins":
             return nk.ecg_peaks(
                 ecg_cleaned=sig,
                 sampling_rate=sampling_rate,
                 method=method,
-                correct_artifacts=input_values.get("correct_artifacts", False),
+                correct_artifacts=method_parameters.get("correct_artifacts", False),
             )[1]["ECG_R_Peaks"]  # type: ignore
 
 

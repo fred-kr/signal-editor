@@ -219,46 +219,6 @@ class Section:
     def rate_interp(self) -> npt.NDArray[np.float64]:
         return self._rate_interp
 
-    def left_shrink(self, new_stop_index: int) -> "Section":
-        """
-        Create a new section from this section's start index (inclusive) to the given stop index (exclusive).
-
-        Before:
-            >>> 0|--------------------|len(self.data)
-        After:
-            >>> 0|------|new_stop_index
-
-        Parameters
-        ----------
-        new_stop_index : int
-            The new stop index for the section.
-        """
-        if new_stop_index > self.sect_bounds.stop:
-            raise ValueError("New stop index must be smaller than current stop index")
-
-        new_data = self.data.filter(pl.col("index") < new_stop_index).drop("section_index")
-        return Section(new_data, self.sig_name, self.sfreq, set_active=self.is_active)
-
-    def right_shrink(self, new_start_index: int) -> "Section":
-        """
-        Create a new section from the given start index (exclusive) to this section's stop index (inclusive).
-
-        Before:
-            >>> 0|--------------------|len(self.data)
-        After:
-            >>> new_start_index|------|len(self.data)
-
-        Parameters
-        ----------
-        new_start_index : int
-            The new start index for the section.
-        """
-        if new_start_index < self.sect_bounds.start:
-            raise ValueError("New start index must be larger than current start index")
-
-        new_data = self.data.filter(pl.col("index") > new_start_index).drop("section_index")
-        return Section(new_data, self.sig_name, self.sfreq, set_active=self.is_active)
-
     def filter_data(
         self,
         pipeline: _t.Pipeline,
@@ -382,16 +342,23 @@ class Section:
         pl_peaks = pl.Series("peaks", peaks, pl.Int32)
         then_value = action == "add"
 
-        self.data = self.data.with_columns(
+        updated_data = self.data.with_columns(
             pl.when(pl.col("section_index").is_in(pl_peaks))
             .then(then_value)
             .otherwise(pl.col("is_peak"))
             .alias("is_peak")
         )
+
+        changed_indices = pl.arg_where(
+            updated_data.get_column("is_peak") != self.data.get_column("is_peak"), eager=True
+        )
+
+        self.data = updated_data
+
         if action == "add":
-            self._peak_edits.added.extend(peaks)
+            self._peak_edits.new_added(changed_indices)
         else:
-            self._peak_edits.removed.extend(peaks)
+            self._peak_edits.new_removed(changed_indices)
 
     def get_peak_edits(self) -> ManualPeakEdits:
         """

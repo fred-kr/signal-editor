@@ -1572,13 +1572,13 @@ class Ui_MainWindow(object):
 
         self.formLayout_2.setWidget(0, QFormLayout.LabelRole, self.label_19)
 
-        self.spin_box_intrasection_peak_detection = QSpinBox(self.page_editing_options)
-        self.spin_box_intrasection_peak_detection.setObjectName(u"spin_box_intrasection_peak_detection")
-        self.spin_box_intrasection_peak_detection.setMinimum(5)
-        self.spin_box_intrasection_peak_detection.setMaximum(99999)
-        self.spin_box_intrasection_peak_detection.setValue(50)
+        self.spin_box_selection_window_size = QSpinBox(self.page_editing_options)
+        self.spin_box_selection_window_size.setObjectName(u"spin_box_selection_window_size")
+        self.spin_box_selection_window_size.setMinimum(5)
+        self.spin_box_selection_window_size.setMaximum(99999)
+        self.spin_box_selection_window_size.setValue(50)
 
-        self.formLayout_2.setWidget(0, QFormLayout.FieldRole, self.spin_box_intrasection_peak_detection)
+        self.formLayout_2.setWidget(0, QFormLayout.FieldRole, self.spin_box_selection_window_size)
 
         self.selectionEdgeBufferLabel = QLabel(self.page_editing_options)
         self.selectionEdgeBufferLabel.setObjectName(u"selectionEdgeBufferLabel")
@@ -1591,6 +1591,19 @@ class Ui_MainWindow(object):
         self.spin_box_selection_edge_buffer.setValue(10)
 
         self.formLayout_2.setWidget(1, QFormLayout.FieldRole, self.spin_box_selection_edge_buffer)
+
+        self.lookForLabel = QLabel(self.page_editing_options)
+        self.lookForLabel.setObjectName(u"lookForLabel")
+
+        self.formLayout_2.setWidget(2, QFormLayout.LabelRole, self.lookForLabel)
+
+        self.combo_box_selection_peak_type = QComboBox(self.page_editing_options)
+        self.combo_box_selection_peak_type.addItem("")
+        self.combo_box_selection_peak_type.addItem("")
+        self.combo_box_selection_peak_type.addItem("")
+        self.combo_box_selection_peak_type.setObjectName(u"combo_box_selection_peak_type")
+
+        self.formLayout_2.setWidget(2, QFormLayout.FieldRole, self.combo_box_selection_peak_type)
 
         self.tool_box_editing.addItem(self.page_editing_options, u"Editing Options")
 
@@ -2027,11 +2040,16 @@ class Ui_MainWindow(object):
         self.dock_widget_sections.setWindowTitle(QCoreApplication.translate("MainWindow", u"Section Controls", None))
         self.label_6.setText(QCoreApplication.translate("MainWindow", u"Currently showing:", None))
         self.tool_box_editing.setItemText(self.tool_box_editing.indexOf(self.page_section_list), QCoreApplication.translate("MainWindow", u"Section List", None))
-        self.label_19.setText(QCoreApplication.translate("MainWindow", u"Detect Peaks in Selection Radius", None))
-        self.selectionEdgeBufferLabel.setText(QCoreApplication.translate("MainWindow", u"Selection Edge Buffer", None))
+        self.label_19.setText(QCoreApplication.translate("MainWindow", u"Window Size (Selection):", None))
+        self.selectionEdgeBufferLabel.setText(QCoreApplication.translate("MainWindow", u"Edge Buffer Size (Selection):", None))
 #if QT_CONFIG(tooltip)
         self.spin_box_selection_edge_buffer.setToolTip(QCoreApplication.translate("MainWindow", u"Ignore peaks if theyre closer than this value to the beginning or end of the selection area", None))
 #endif // QT_CONFIG(tooltip)
+        self.lookForLabel.setText(QCoreApplication.translate("MainWindow", u"Look for:", None))
+        self.combo_box_selection_peak_type.setItemText(0, QCoreApplication.translate("MainWindow", u"Auto", None))
+        self.combo_box_selection_peak_type.setItemText(1, QCoreApplication.translate("MainWindow", u"Maxima", None))
+        self.combo_box_selection_peak_type.setItemText(2, QCoreApplication.translate("MainWindow", u"Minima", None))
+
         self.tool_box_editing.setItemText(self.tool_box_editing.indexOf(self.page_editing_options), QCoreApplication.translate("MainWindow", u"Editing Options", None))
         self.btn_section_add.setText(QCoreApplication.translate("MainWindow", u"Add Section", None))
         self.btn_section_confirm.setText(QCoreApplication.translate("MainWindow", u"Confirm", None))

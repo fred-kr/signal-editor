@@ -130,7 +130,6 @@ class DataHandler(QtCore.QObject):
         self._raw_df: pl.DataFrame | None = None
         self._base_df: pl.DataFrame | None = None
         self._sections: SectionContainer = SectionContainer()
-        self._excluded_sections: list[SectionIndices] = []
         self._sampling_rate: int = -1
         self._metadata: _t.FileMetadata | None = None
         self._sig_name: str | None = None
@@ -229,16 +228,8 @@ class DataHandler(QtCore.QObject):
         self.sig_cas_changed.emit(has_peaks)
 
     @property
-    def excluded_sections(self) -> list[SectionIndices]:
-        return self._excluded_sections
-
-    @excluded_sections.setter
-    def excluded_sections(self, value: list[SectionIndices]) -> None:
-        self._excluded_sections = value
-
-    @property
-    def combined_section_ids(self) -> list[SectionID | SectionIndices]:
-        return list(self.sections.keys())[1:] + self.excluded_sections
+    def removable_section_ids(self) -> list[SectionID]:
+        return list(self.sections.keys())[1:]
 
     @property
     def metadata(self) -> _t.FileMetadata:
@@ -263,6 +254,8 @@ class DataHandler(QtCore.QObject):
     @QtCore.Slot(QtCore.QDate)
     def set_date(self, date: QtCore.QDate) -> None:
         py_date = t.cast(datetime.date, date.toPython())
+        if py_date.year == 2000 and py_date.month == 1 and py_date.day == 1:
+            py_date = None
         if self._metadata is None:
             self._metadata = _t.FileMetadata(
                 date_recorded=py_date,
@@ -276,7 +269,7 @@ class DataHandler(QtCore.QObject):
     def set_animal_id(self, animal_id: str) -> None:
         if self._metadata is None:
             self._metadata = _t.FileMetadata(
-                date_recorded=datetime.date.today(), animal_id=animal_id, oxygen_condition="unknown"
+                date_recorded=None, animal_id=animal_id, oxygen_condition="unknown"
             )
         else:
             self._metadata["animal_id"] = animal_id
@@ -285,7 +278,7 @@ class DataHandler(QtCore.QObject):
     def set_oxy_condition(self, oxy_condition: _t.OxygenCondition) -> None:
         if self._metadata is None:
             self._metadata = _t.FileMetadata(
-                date_recorded=datetime.date.today(),
+                date_recorded=None,
                 animal_id="unknown",
                 oxygen_condition=oxy_condition,
             )
@@ -299,8 +292,8 @@ class DataHandler(QtCore.QObject):
             self._app.sig_show_message.emit(info_msg, "error")
             return
         suffix = path.suffix
-        if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx", ".pkl"}:
-            info_msg = "Supported file types are .csv, .txt, .xlsx, .feather, .pkl and .edf"
+        if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx"}:
+            info_msg = "Supported file types are .csv, .txt, .xlsx, .feather and .edf"
             self._app.sig_show_message.emit(info_msg, "info")
             return
 
@@ -309,10 +302,6 @@ class DataHandler(QtCore.QObject):
         animal_id = None
         oxy_condition = None
         match suffix:
-            # ? Part of state saving/loading, either remove or update to work with v0.3.0 changes
-            # case ".pkl":
-            # self._app.restore_state(path)
-            # return
             case ".csv":
                 df = pl.read_csv(path)
             case ".edf":
@@ -373,6 +362,7 @@ class DataHandler(QtCore.QObject):
                 pl.lit(False).alias("is_peak"),
             )
             .with_row_index()
+            .set_sorted("index")
             .collect()
             .rechunk()
         )
@@ -386,7 +376,6 @@ class DataHandler(QtCore.QObject):
         self._raw_df = None
         self._base_df = None
         self._sections = SectionContainer()
-        self._excluded_sections = []
         self.set_sfreq(-1)
         self._metadata = None
         self._sig_name = None
@@ -395,19 +384,12 @@ class DataHandler(QtCore.QObject):
     @QtCore.Slot()
     def clear_sections(self) -> None:
         self._sections.clear()
-        self._excluded_sections.clear()
         Section.reset_id_counter()
         self._base_df = None
 
     def update_base(self, section_df: pl.DataFrame) -> None:
         self._base_df = (
             self.base_df.lazy().update(section_df.lazy(), on="index", how="left").collect()
-        )
-
-    @QtCore.Slot(int, int)
-    def remove_slice(self, start: int, stop: int) -> None:
-        self._base_df = (
-            self.base_df.lazy().filter(~(pl.col("index").is_between(start, stop))).collect()
         )
 
     def new_section(self, start: int, stop: int) -> None:
@@ -423,11 +405,11 @@ class DataHandler(QtCore.QObject):
         self.sig_section_removed.emit(section_id)
 
     def get_section(self, section_id: SectionID) -> Section:
-        return self.sections.get(section_id, self.base_section)
+        return self.sections[section_id]
 
     def save_sections_to_base(self) -> None:
         """
-        Updates the base data frame with the data from every current section. Later sections overwrite earlier ones if they overlap.
+        Updates the base data frame with the data from every section. Later sections overwrite earlier ones if they overlap.
         """
         section_dfs = [section.data for section in self.sections.values()]
         for section_df in section_dfs:

@@ -2625,12 +2625,12 @@ li.checked::marker { content: &quot;\2612&quot;; }
             <item row="0" column="0">
              <widget class="QLabel" name="label_19">
               <property name="text">
-               <string>Detect Peaks in Selection Radius</string>
+               <string>Window Size (Selection):</string>
               </property>
              </widget>
             </item>
             <item row="0" column="1">
-             <widget class="QSpinBox" name="spin_box_intrasection_peak_detection">
+             <widget class="QSpinBox" name="spin_box_selection_window_size">
               <property name="minimum">
                <number>5</number>
               </property>
@@ -2645,7 +2645,7 @@ li.checked::marker { content: &quot;\2612&quot;; }
             <item row="1" column="0">
              <widget class="QLabel" name="selectionEdgeBufferLabel">
               <property name="text">
-               <string>Selection Edge Buffer</string>
+               <string>Edge Buffer Size (Selection):</string>
               </property>
              </widget>
             </item>
@@ -2660,6 +2660,32 @@ li.checked::marker { content: &quot;\2612&quot;; }
               <property name="value">
                <number>10</number>
               </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QLabel" name="lookForLabel">
+              <property name="text">
+               <string>Look for:</string>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="1">
+             <widget class="QComboBox" name="combo_box_selection_peak_type">
+              <item>
+               <property name="text">
+                <string>Auto</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Maxima</string>
+               </property>
+              </item>
+              <item>
+               <property name="text">
+                <string>Minima</string>
+               </property>
+              </item>
              </widget>
             </item>
            </layout>

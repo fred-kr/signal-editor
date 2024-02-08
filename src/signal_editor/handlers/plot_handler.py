@@ -2,13 +2,11 @@ import typing as t
 
 import numpy as np
 import numpy.typing as npt
-import polars as pl
 import pyqtgraph as pg
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .. import constants as c
 from ..models.result import ManualPeakEdits
-from ..views.graphic_items import CustomScatterPlotItem, CustomViewBox
+from ..views.graphic_items import CustomScatterPlotItem, CustomViewBox, TimeAxisItem
 
 if t.TYPE_CHECKING:
     from pyqtgraph.GraphicsScene import mouseEvents
@@ -29,6 +27,9 @@ class PlotHandler(QtCore.QObject):
 
     scatter_search_radius: int = 20
 
+    _known_names: list[str] = ["hbr", "ventilation"]
+    _signal_colors: list[str] = ["crimson", "steelblue", "yellow", "lightgreen"]
+
     def __init__(self, app: "SignalEditor", parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
         self._app = app
@@ -43,10 +44,7 @@ class PlotHandler(QtCore.QObject):
         self._scatter_item: CustomScatterPlotItem | None = None
         self._rate_item: pg.PlotDataItem | None = None
         self._rate_mean_item: pg.InfiniteLine | pg.PlotDataItem | None = None
-        self._included_regions: list[pg.LinearRegionItem] = []
-        self._excluded_regions: list[pg.LinearRegionItem] = []
-        self._known_names: list[str] = []
-        self._line_colors: list[str] = ["crimson", "steelblue", "yellow", "lightgreen"]
+        self._regions: list[pg.LinearRegionItem] = []
         self._connect_qt_signals()
 
     def _connect_qt_signals(self) -> None:
@@ -86,8 +84,12 @@ class PlotHandler(QtCore.QObject):
         return self._pw_main.getPlotItem().getViewBox(), self._pw_rate.getPlotItem().getViewBox()
 
     @property
-    def combined_regions(self) -> list[pg.LinearRegionItem]:
-        return self._included_regions + self._excluded_regions
+    def plot_items(self) -> tuple[pg.PlotItem, pg.PlotItem]:
+        return self._pw_main.getPlotItem(), self._pw_rate.getPlotItem()
+
+    @property
+    def regions(self) -> list[pg.LinearRegionItem]:
+        return self._regions
 
     # endregion
 
@@ -96,6 +98,8 @@ class PlotHandler(QtCore.QObject):
 
     def _setup_plot_widgets(self) -> None:
         widget_layout = QtWidgets.QVBoxLayout()
+        widget_layout.setContentsMargins(0, 0, 0, 0)
+        widget_layout.setSpacing(2)
         main_plot_widget = pg.PlotWidget(viewBox=CustomViewBox(name="main_plot"), useOpenGL=True)
         rate_plot_widget = pg.PlotWidget(viewBox=pg.ViewBox(name="rate_plot"), useOpenGL=True)
         widget_layout.addWidget(main_plot_widget)
@@ -106,66 +110,80 @@ class PlotHandler(QtCore.QObject):
         self._pw_rate = rate_plot_widget
 
     def _setup_plot_items(self) -> None:
-        self._setup_plot_labels()
-        for pw in [self._pw_main, self._pw_rate]:
-            pl_item = pw.getPlotItem()
-            vb = pl_item.getViewBox()
+        for plt in self.plot_items:
+            vb = plt.getViewBox()
 
-            pl_item.showGrid(x=False, y=True)
-            pl_item.setDownsampling(auto=True)
-            pl_item.setClipToView(True)
-            pl_item.addLegend(colCount=2)
-            pl_item.addLegend().anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(5, -5))
-            pl_item.setMouseEnabled(x=True, y=False)
-            pl_item.showAxis("top", show=True)
-            pl_item.getAxis("top").setScale(1 / 200)
+            plt.setAxisItems(
+                {
+                    "top": TimeAxisItem(orientation="top"),
+                }
+            )
+            plt.showGrid(x=False, y=True)
+            plt.setDownsampling(auto=True)
+            plt.setClipToView(True)
+            plt.addLegend(colCount=2)
+            plt.addLegend().anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(5, -5))
+            plt.setMouseEnabled(x=True, y=False)
             vb.enableAutoRange("y")
             vb.setAutoVisible(y=True)
+            plt.scene().sigMouseMoved.connect(self._on_mouse_moved)
+
+        self._setup_plot_labels()
 
         self._pw_main.getPlotItem().getViewBox().setXLink("rate_plot")
-        self._pw_rate.getPlotItem().getViewBox().setMouseMode(pg.ViewBox.RectMode)
-        self._pw_main.getPlotItem().scene().sigMouseMoved.connect(self._on_mouse_moved)
-        self._temperature_label: pg.LabelItem = pg.LabelItem(parent=self._pw_main.getPlotItem())
+        # self._pw_main.getPlotItem().scene().sigMouseMoved.connect(self._on_mouse_moved)
+        self._temperature_label = pg.LabelItem(parent=self._pw_main.getPlotItem())
+        self._bpm_label = pg.LabelItem(parent=self._pw_rate.getPlotItem())
+
+    @QtCore.Slot(int)
+    def update_time_axis_scale(self, sfreq: int) -> None:
+        for plt in self.plot_items:
+            plt.getAxis("top").setScale(1 / sfreq)
 
     def _setup_plot_labels(self) -> None:
-        main_plot_title = "<b>Input Signal</b>"
+        # main_plot_title = "<b>Input Signal</b>"
         main_left_label = "<b>Signal Amplitude</b>"
 
-        rate_plot_title = "<b>Rate (interpolated)</b>"
-        rate_left_label = "<b>bpm</b>"
+        # rate_plot_title = "<b>Rate (interpolated)</b>"
+        rate_left_label = "<b>Rate (bpm)</b>"
 
-        top_label = "<b>Time</b>"
+        # top_label = "<b>Time</b>"
         bottom_label = "<b>Index</b>"
 
         main_plot_item = self._pw_main.getPlotItem()
         rate_plot_item = self._pw_rate.getPlotItem()
 
         main_plot_item.setLabels(
-            title=main_plot_title,
             left=main_left_label,
             bottom=bottom_label,
-            top=(top_label, " seconds"),
         )
         rate_plot_item.setLabels(
-            title=rate_plot_title,
             left=rate_left_label,
             bottom=bottom_label,
-            top=(top_label, " seconds"),
         )
 
     @QtCore.Slot(object)
     def _on_mouse_moved(self, pos: QtCore.QPointF) -> None:
         if not hasattr(self._app, "data"):
             return
+        mapped_pos = self._pw_main.plotItem.vb.mapSceneToView(pos)
+        cas_upper_bound = self._app.data.cas.data.height
+        i = np.clip(int(mapped_pos.x()), 0, cas_upper_bound - 1)
+
         try:
-            cols = self._app.data.cas.data.select("index", "section_index", "temperature")
+            temp_val = self._app.data.cas.data.get_column("temperature").item(i)
         except Exception:
-            return
-        pos_data_coords = self._pw_main.plotItem.vb.mapSceneToView(pos)
-        index = np.clip(pos_data_coords.x(), 0, cols.height - 1, dtype=np.int32, casting="unsafe")
-        vals = cols.filter(pl.col("section_index") == index)
-        temp_text = f"<span style='color: yellow; font-size: 12pt; font-weight: bold;'>Temperature: {vals.get_column("temperature")[0]:.1f} °C</span>"
+            temp_val = np.nan
+
+        try:
+            rate_val = self._app.data.cas.rate_interp[i]
+        except Exception:
+            rate_val = np.nan
+
+        temp_text = f"<span style='color: gold; font-size: 12pt; font-weight: bold;'>Temperature: {temp_val:.1f} °C</span>"
         self._temperature_label.setText(temp_text)
+        rate_text = f"<span style='color: lightgreen; font-size: 12pt; font-weight: bold;'>Rate: {rate_val:.0f} bpm</span>"
+        self._bpm_label.setText(rate_text)
 
     @QtCore.Slot(int)
     def reset_view_range(self, len_data: int) -> None:
@@ -185,9 +203,9 @@ class PlotHandler(QtCore.QObject):
 
     @QtCore.Slot()
     def reset_plots(self) -> None:
-        for pw in [self._pw_main, self._pw_rate]:
-            pw.getPlotItem().clear()
-            pw.getPlotItem().getViewBox().clear()
+        for plt in self.plot_items:
+            plt.clear()
+            plt.getViewBox().clear()
 
         self._manual_peak_edits.clear()
         self._signal_item = None
@@ -200,43 +218,39 @@ class PlotHandler(QtCore.QObject):
 
     @QtCore.Slot(bool)
     def toggle_region_overview(self, show: bool) -> None:
-        for region in self.combined_regions:
+        for region in self.regions:
             region.setVisible(show)
 
     def remove_region(self, bounds: "tuple[int, int] | SectionIndices") -> None:
-        for region_list in [self._included_regions, self._excluded_regions]:
-            for region in region_list:
-                region_bounds = region.getRegion()
-                if bounds[0] == region_bounds[0] and bounds[1] == region_bounds[1]:
-                    region_list.remove(region)
-                    self._pw_main.removeItem(region)
-                    break
+        for region in self.regions:
+            region_bounds = region.getRegion()
+            if np.allclose(bounds, region_bounds):
+                self.regions.remove(region)
+                self._pw_main.removeItem(region)
+                break
 
     def clear_regions(self) -> None:
-        for region in self.combined_regions:
+        for region in self.regions:
             if region in self._pw_main.getPlotItem().items:
                 self._pw_main.removeItem(region)
-        self._included_regions.clear()
-        self._excluded_regions.clear()
+        self.regions.clear()
 
     def show_section_selector(
         self,
-        section_type: t.Literal["included", "excluded"],
         bounds: "tuple[int, int] | SectionIndices",
     ) -> None:
-        section_style = c.SECTION_STYLES[section_type]
         view_x = self._pw_main.plotItem.vb.viewRange()[0]
         span = view_x[1] - view_x[0]
-        initial_limits = (view_x[0] + span * 0.25, view_x[0] + span * 0.75)
+        initial_limits = (view_x[0], view_x[0] + 0.5 * span)
         self.remove_section_selector()
 
         selector = pg.LinearRegionItem(
             values=initial_limits,
             bounds=bounds,
-            brush=section_style["brush"],
-            pen=section_style["pen"],
-            hoverBrush=section_style["hoverBrush"],
-            hoverPen=section_style["hoverPen"],
+            brush=(0, 200, 100, 75),
+            pen={"color": "darkgoldenrod", "width": 1},
+            hoverBrush=(0, 200, 100, 30),
+            hoverPen={"color": "gold", "width": 3.5},
         )
         selector.setZValue(1e3)
         for line in selector.lines:
@@ -244,28 +258,16 @@ class PlotHandler(QtCore.QObject):
 
         self._pw_main.addItem(selector)
         self._selector = selector
-        self._selector_type = section_type
 
     def remove_section_selector(self) -> None:
-        if selector := self._selector:
+        selector = self._selector
+        if selector is not None:
             self._pw_main.removeItem(selector)
             self._selector = None
-            if hasattr(self, "_selector_type"):
-                del self._selector_type
 
     @QtCore.Slot(int, int)
     def mark_section(self, lower: int, upper: int) -> None:
-        if not hasattr(self, "_selector_type"):
-            return
-        section_type = self._selector_type
-        if section_type == "included":
-            r, g, b = 0, 250, 50
-            region_list = self._included_regions
-        elif section_type == "excluded":
-            r, g, b = 250, 0, 50
-            region_list = self._excluded_regions
-        else:
-            return
+        r, g, b = 0, 200, 100
         marked_region = pg.LinearRegionItem(
             values=(lower, upper),
             brush=(r, g, b, 25),
@@ -275,7 +277,7 @@ class PlotHandler(QtCore.QObject):
         if not self._app.action_section_overview.isChecked():
             marked_region.hide()
         marked_region.setZValue(10)
-        region_list.append(marked_region)
+        self.regions.append(marked_region)
         self._pw_main.addItem(marked_region)
         self.remove_section_selector()
 
@@ -302,7 +304,7 @@ class PlotHandler(QtCore.QObject):
     def _create_signal_data_item(self, sig: npt.NDArray[np.float64], name: str) -> None:
         signal_item = pg.PlotDataItem(
             sig,
-            pen=self._line_colors[self._known_names.index(name)],
+            pen=self._signal_colors[self._known_names.index(name)],
             skipFiniteCheck=True,
             autoDownSample=True,
             name=f"Signal ({name})",
@@ -477,31 +479,26 @@ class PlotHandler(QtCore.QObject):
         if scatter_item is None:
             return
 
-        rect_x, rect_y, rect_width, rect_height = vb.mapped_selection_rect.boundingRect().getRect()
+        r = vb.mapped_selection_rect.boundingRect()
+        rx, ry, rw, rh = r.x(), r.y(), r.width(), r.height()
 
         scatter_x, scatter_y = scatter_item.getData()
         if scatter_x.size == 0 or scatter_y.size == 0:
             return
 
-        mask = (
-            (scatter_x < rect_x)
-            | (scatter_x > rect_x + rect_width)
-            | (scatter_y < rect_y)
-            | (scatter_y > rect_y + rect_height)
-        )
+        mask = (scatter_x < rx) | (scatter_x > rx + rw) | (scatter_y < ry) | (scatter_y > ry + rh)
         scatter_item.setData(x=scatter_x[mask], y=scatter_y[mask])
         self.sig_peaks_edited.emit("remove", scatter_x[~mask].astype(int).tolist())
+        vb.mapped_selection_rect = None
         vb.selection_box = None
 
     @QtCore.Slot()
-    def show_selection_rect(self) -> None:
+    def remove_selection_rect(self) -> None:
         vb: CustomViewBox = self._pw_main.getPlotItem().getViewBox()
-        if vb.selection_box is None:
-            return
-        vb.selection_box.setVisible(not vb.selection_box.isVisible())
-        vb.selection_box.setEnabled(not vb.selection_box.isEnabled())
+        vb.selection_box = None
+        vb.mapped_selection_rect = None
 
-    def get_selection_rect(self) -> QtCore.QRectF:
+    def get_selection_rect(self) -> QtCore.QRectF | None:
         vb: CustomViewBox = self._pw_main.plotItem.vb
         if vb.mapped_selection_rect is not None:
             return vb.mapped_selection_rect.boundingRect()

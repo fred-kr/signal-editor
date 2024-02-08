@@ -1,10 +1,9 @@
 import os
+import pprint
 import typing as t
+
 import numpy as np
 import polars as pl
-import pprint
-
-
 import polars.selectors as ps
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
@@ -156,14 +155,16 @@ class UIHandler(QtCore.QObject):
         try:
             metadata = self._app.data.metadata
             meas_date = metadata["date_recorded"]
-
-            self._app.date_edit_file_info.setDate(
-                QtCore.QDate(meas_date.year, meas_date.month, meas_date.day)
-            )
+            if meas_date is None:
+                self._app.date_edit_file_info.setDate(QtCore.QDate(2000, 1, 1))
+            else:
+                self._app.date_edit_file_info.setDate(
+                    QtCore.QDate(meas_date.year, meas_date.month, meas_date.day)
+                )
             self._app.line_edit_subject_id.setText(metadata["animal_id"])
             self._app.combo_box_oxygen_condition.setValue(metadata["oxygen_condition"])
         except Exception:
-            self._app.date_edit_file_info.setDate(QtCore.QDate.currentDate())
+            self._app.date_edit_file_info.setDate(QtCore.QDate(2000, 1, 1))
             self._app.line_edit_subject_id.setText("unknown")
             self._app.combo_box_oxygen_condition.setValue("unknown")
 
@@ -189,9 +190,9 @@ class UIHandler(QtCore.QObject):
     def create_jupyter_console_widget(self) -> None:
         try:
             import jupyter_client
+            import pdir
             from PySide6 import QtCore, QtGui, QtWidgets
             from qtconsole import inprocess
-            import pdir
         except ImportError:
             return
 
