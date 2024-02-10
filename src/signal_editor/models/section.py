@@ -327,38 +327,39 @@ class Section:
         self._peak_edits.clear()
         self.calculate_rate()
 
-    def update_peaks(self, action: t.Literal["add", "remove"], peaks: t.Sequence[int]) -> None:
+    def update_peaks(self, action: t.Literal["add", "remove"], peaks: t.Sequence[int] | npt.NDArray[np.intp]) -> None:
         """
         Update the `is_peak` column based on the given action and indices.
         Only modifies the values at the given indices, while leaving the rest unchanged.
 
         Parameters
         ----------
-        action : t.Literal['add', 'remove']
+        action : Literal['add', 'remove']
             How to modify the peaks.
-        peaks : list[int]
+        peaks : Sequence[int]
             The indices of the peaks to modify.
         """
         pl_peaks = pl.Series("peaks", peaks, pl.Int32)
         then_value = action == "add"
 
-        updated_data = self.data.with_columns(
+        updated_data = self.data.lazy().select(
             pl.when(pl.col("section_index").is_in(pl_peaks))
             .then(then_value)
             .otherwise(pl.col("is_peak"))
             .alias("is_peak")
-        )
+        ).collect().get_column("is_peak")
 
         changed_indices = pl.arg_where(
-            updated_data.get_column("is_peak") != self.data.get_column("is_peak"), eager=True
+            updated_data != self.data.get_column("is_peak"), eager=True
         )
 
-        self.data = updated_data
+        self.data.replace("is_peak", updated_data)
 
         if action == "add":
             self._peak_edits.new_added(changed_indices)
         else:
             self._peak_edits.new_removed(changed_indices)
+        
 
     def get_peak_edits(self) -> ManualPeakEdits:
         """
@@ -395,7 +396,7 @@ class Section:
         )
 
     def get_peak_xy(self) -> tuple[npt.NDArray[np.uint32], npt.NDArray[np.float64]]:
-        peaks = self.peaks.to_numpy()
+        peaks = self.peaks.to_numpy(zero_copy_only=True)
         return peaks, self.proc_data.gather(peaks).to_numpy()
 
     def get_focused_result(self) -> FocusedResult:

@@ -14,10 +14,13 @@ class PolarsDFModel(QtCore.QAbstractTableModel):
     ) -> None:
         super().__init__(parent)
         self._is_description = is_description
-        self.set_data(dataframe, is_description=is_description)
+        self._df = dataframe
+        self.set_data(self._df, is_description=is_description)
 
     def set_data(self, dataframe: pl.DataFrame, is_description: bool = False) -> None:
         self.beginResetModel()
+        if hasattr(self, "_df"):
+            del self._df
         if is_description:
             self._df = dataframe
         else:
@@ -28,7 +31,6 @@ class PolarsDFModel(QtCore.QAbstractTableModel):
                     ps.contains("temp").cast(pl.Decimal(3, 1)),
                 )
                 .collect()
-                .rechunk()
             )
         self.endResetModel()
 
@@ -41,7 +43,7 @@ class PolarsDFModel(QtCore.QAbstractTableModel):
     def data(
         self,
         index: ModelIndex,
-        role: int = QtCore.Qt.ItemDataRole.DisplayRole,
+        role: int | QtCore.Qt.ItemDataRole = QtCore.Qt.ItemDataRole.DisplayRole,
     ) -> str | None:
         if not index.isValid():
             return None
@@ -69,7 +71,7 @@ class PolarsDFModel(QtCore.QAbstractTableModel):
         self,
         section: int,
         orientation: QtCore.Qt.Orientation,
-        role: int = QtCore.Qt.ItemDataRole.DisplayRole,
+        role: int | QtCore.Qt.ItemDataRole = QtCore.Qt.ItemDataRole.DisplayRole,
     ) -> str | None:
         if role != QtCore.Qt.ItemDataRole.DisplayRole:
             return None
@@ -82,4 +84,4 @@ class PolarsDFModel(QtCore.QAbstractTableModel):
         return str(section)
 
     def flags(self, index: QtCore.QModelIndex | QtCore.QPersistentModelIndex) -> QtCore.Qt.ItemFlag:
-        return QtCore.Qt.ItemFlag.ItemIsEnabled | QtCore.Qt.ItemFlag.ItemIsSelectable
+        return QtCore.Qt.ItemFlag.ItemIsEnabled

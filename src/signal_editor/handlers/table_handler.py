@@ -25,7 +25,7 @@ class TableHandler:
             table.setModel(model)
         else:
             model.set_data(df, is_description=is_description)
-        self._set_header_style(table=table, n_columns=lf.width)
+        self._set_header_style(table=table, n_columns=df.width)
 
     @staticmethod
     def _set_header_style(

@@ -166,6 +166,8 @@ class PlotHandler(QtCore.QObject):
     def _on_mouse_moved(self, pos: QtCore.QPointF) -> None:
         if not hasattr(self._app, "data"):
             return
+        if self._app.data.cas is None:
+            return
         mapped_pos = self._pw_main.plotItem.vb.mapSceneToView(pos)
         cas_upper_bound = self._app.data.cas.data.height
         i = np.clip(int(mapped_pos.x()), 0, cas_upper_bound - 1)

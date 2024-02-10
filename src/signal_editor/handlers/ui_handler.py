@@ -1,9 +1,6 @@
-import os
-import pprint
+import datetime
 import typing as t
 
-import numpy as np
-import polars as pl
 import polars.selectors as ps
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
@@ -40,8 +37,8 @@ class UIHandler(QtCore.QObject):
         )
 
         self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
-        if os.environ.get("ENABLE_CONSOLE", "0") == "1":
-            self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
+        # if os.environ.get("ENABLE_CONSOLE", "0") == "1":
+        # self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
         self._app.btn_reset_peak_detection_values.clicked.connect(
             self.set_initial_peak_detection_parameters
         )
@@ -62,8 +59,8 @@ class UIHandler(QtCore.QObject):
         self._setup_toolbars()
 
         # Console
-        if os.environ.get("ENABLE_CONSOLE", "0") == "1":
-            self.create_jupyter_console_widget()
+        # if os.environ.get("ENABLE_CONSOLE", "0") == "1":
+        # self.create_jupyter_console_widget()
 
     def _setup_statusbar(self) -> None:
         sb = self._app.statusbar
@@ -104,7 +101,6 @@ class UIHandler(QtCore.QObject):
         peak_combo_box = self._app.combo_box_peak_detection_method
         stacked_peak_widget = self._app.stacked_peak_parameters
         peak_combo_box.blockSignals(True)
-        peak_combo_box.clear()
         peak_combo_box.setItems(COMBO_BOX_ITEMS["combo_box_peak_detection_method"])
         peak_combo_box.setCurrentIndex(0)
         stacked_peak_widget.setCurrentIndex(0)
@@ -117,13 +113,9 @@ class UIHandler(QtCore.QObject):
         edit_tb.setVisible(False)
         self._app.action_toggle_section_sidebar.setChecked(False)
 
-    def update_currently_shown_label(self, text: str) -> None:
-        self.label_currently_showing.setText(f"Currently showing: {text}")
-
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():
             combo_box: pg.ComboBox = getattr(self._app, key)
-            combo_box.clear()
             combo_box.setItems(value)
 
     @QtCore.Slot()
@@ -144,29 +136,29 @@ class UIHandler(QtCore.QObject):
 
     @QtCore.Slot()
     def update_data_select_ui(self) -> None:
-        self._app.container_file_info.setEnabled(True)
+        if self._app.data.raw_df is None:
+            return
+        # self._app.container_file_info.setEnabled(True)
         self._app.btn_load_selection.setEnabled(True)
         data_cols = self._app.data.raw_df.select(
             (~ps.contains(["index", "time", "temp"])) & (ps.float())
         ).columns
-        data_combo_box = self._app.combo_box_signal_column
-        self._blocked_set_combo_box_items(data_combo_box, data_cols)
+        self._blocked_set_combo_box_items(self._app.combo_box_signal_column, data_cols)
 
-        try:
-            metadata = self._app.data.metadata
-            meas_date = metadata["date_recorded"]
-            if meas_date is None:
-                self._app.date_edit_file_info.setDate(QtCore.QDate(2000, 1, 1))
-            else:
-                self._app.date_edit_file_info.setDate(
-                    QtCore.QDate(meas_date.year, meas_date.month, meas_date.day)
-                )
-            self._app.line_edit_subject_id.setText(metadata["animal_id"])
-            self._app.combo_box_oxygen_condition.setValue(metadata["oxygen_condition"])
-        except Exception:
+        metadata = self._app.data.metadata
+        if metadata is None:
             self._app.date_edit_file_info.setDate(QtCore.QDate(2000, 1, 1))
             self._app.line_edit_subject_id.setText("unknown")
             self._app.combo_box_oxygen_condition.setValue("unknown")
+        else:
+            meas_date = metadata["date_recorded"] or datetime.date(2000, 1, 1)
+            subject_id = metadata["animal_id"] or "unknown"
+            oxygen_condition = metadata["oxygen_condition"] or "unknown"
+            self._app.date_edit_file_info.setDate(
+                QtCore.QDate(meas_date.year, meas_date.month, meas_date.day)
+            )
+            self._app.line_edit_subject_id.setText(subject_id)
+            self._app.combo_box_oxygen_condition.setValue(oxygen_condition)
 
     @QtCore.Slot()
     def reset_widget_state(self) -> None:
@@ -183,65 +175,65 @@ class UIHandler(QtCore.QObject):
 
     @QtCore.Slot(int)
     def on_main_tab_changed(self, index: int) -> None:
-        show_section_dock = index == 1 and self._app.action_toggle_section_sidebar.isChecked()
+        show_section_dock = index == 1 or self._app.action_toggle_section_sidebar.isChecked()
         self._app.toolbar_plots.setVisible(index == 1)
         self._app.dock_widget_sections.setVisible(show_section_dock)
 
-    def create_jupyter_console_widget(self) -> None:
-        try:
-            import jupyter_client
-            import pdir
-            from PySide6 import QtCore, QtGui, QtWidgets
-            from qtconsole import inprocess
-        except ImportError:
-            return
+    # def create_jupyter_console_widget(self) -> None:
+    #     try:
+    #         import jupyter_client
+    #         import pdir
+    #         from PySide6 import QtCore, QtGui, QtWidgets
+    #         from qtconsole import inprocess
+    #     except ImportError:
+    #         return
 
-        class JupyterConsoleWidget(inprocess.QtInProcessRichJupyterWidget):
-            def __init__(self):
-                super().__init__()
+    #     class JupyterConsoleWidget(inprocess.QtInProcessRichJupyterWidget):
+    #         def __init__(self):
+    #             super().__init__()
 
-                self.kernel_manager: inprocess.QtInProcessKernelManager = (
-                    inprocess.QtInProcessKernelManager()
-                )
-                self.kernel_manager.start_kernel()
-                self.kernel_client: jupyter_client.blocking.client.BlockingKernelClient = (
-                    self.kernel_manager.client()
-                )
-                self.kernel_client.start_channels()
-                qapp_instance = QtWidgets.QApplication.instance()
-                if qapp_instance is not None:
-                    qapp_instance.aboutToQuit.connect(self.shutdown_kernel)
+    #             self.kernel_manager: inprocess.QtInProcessKernelManager = (
+    #                 inprocess.QtInProcessKernelManager()
+    #             )
+    #             self.kernel_manager.start_kernel()
+    #             self.kernel_client: jupyter_client.blocking.client.BlockingKernelClient = (
+    #                 self.kernel_manager.client()
+    #             )
+    #             self.kernel_client.start_channels()
+    #             qapp_instance = QtWidgets.QApplication.instance()
+    #             if qapp_instance is not None:
+    #                 qapp_instance.aboutToQuit.connect(self.shutdown_kernel)
 
-            def shutdown_kernel(self):
-                self.kernel_client.stop_channels()
-                self.kernel_manager.shutdown_kernel()
+    #         def shutdown_kernel(self):
+    #             self.kernel_client.stop_channels()
+    #             self.kernel_manager.shutdown_kernel()
 
-        self.jupyter_console = JupyterConsoleWidget()
-        self.jupyter_console.set_default_style("linux")
-        self.jupyter_console_dock = QtWidgets.QDockWidget("Jupyter Console")
-        self.jupyter_console_dock.setWidget(self.jupyter_console)
-        self.jupyter_console.kernel_manager.kernel.shell.push(
-            dict(
-                mw=self._app,
-                pg=pg,
-                np=np,
-                pl=pl,
-                pp=pprint.pprint,
-                pdir=pdir,
-                qtc=QtCore,
-                qtw=QtWidgets,
-                qtg=QtGui,
-            )
-        )
-        self.jupyter_console.execute("whos")
+    #     self.jupyter_console = JupyterConsoleWidget()
+    #     self.jupyter_console.set_default_style("linux")
+    #     self.jupyter_console_dock = QtWidgets.QDockWidget("Jupyter Console", self._app)
+    #     self.jupyter_console_dock.setWidget(self.jupyter_console)
+    #     self.jupyter_console.kernel_manager.kernel.shell.push(
+    #         dict(
+    #             mw=self._app,
+    #             pg=pg,
+    #             np=np,
+    #             pl=pl,
+    #             pp=pprint.pprint,
+    #             pdir=pdir,
+    #             qtc=QtCore,
+    #             qtw=QtWidgets,
+    #             qtg=QtGui,
+    #         )
+    #     )
+    #     self.jupyter_console.execute("whos")
 
-    @QtCore.Slot()
-    def show_jupyter_console_widget(self) -> None:
-        if self.jupyter_console_dock.isVisible():
-            self.jupyter_console_dock.close()
-        else:
-            self.jupyter_console_dock.show()
-            self.jupyter_console_dock.resize(900, 600)
+    # @QtCore.Slot()
+    # def show_jupyter_console_widget(self) -> None:
+    #     if self.jupyter_console_dock.isVisible():
+    #         self.jupyter_console_dock.close()
+    #     else:
+    #         self.jupyter_console_dock.show()
+    #         self.jupyter_console_dock.resize(900, 600)
 
     @QtCore.Slot(str)
     def handle_filter_method_changed(self, text: str) -> None:

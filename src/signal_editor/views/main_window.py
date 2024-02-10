@@ -21,20 +21,20 @@ from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QAbstract
     QDoubleSpinBox, QFormLayout, QFrame, QGridLayout,
     QGroupBox, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
-    QMenu, QMenuBar, QPushButton, QSizePolicy,
-    QSlider, QSpacerItem, QSpinBox, QStackedWidget,
-    QStatusBar, QTabWidget, QTableView, QTextBrowser,
-    QToolBar, QToolBox, QToolButton, QVBoxLayout,
-    QWidget)
+    QMenu, QMenuBar, QPushButton, QScrollArea,
+    QSizePolicy, QSlider, QSpacerItem, QSpinBox,
+    QStackedWidget, QStatusBar, QTabWidget, QTableView,
+    QTextBrowser, QToolBar, QToolBox, QToolButton,
+    QTreeWidgetItem, QVBoxLayout, QWidget)
 
-from pyqtgraph import (ComboBox, FeedbackButton)
+from pyqtgraph import (ComboBox, FeedbackButton, TreeWidget)
 from . import icons_rc
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(2209, 1019)
+        MainWindow.resize(2255, 1042)
         sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -195,6 +195,7 @@ class Ui_MainWindow(object):
         self.action_delete_base_values.setMenuRole(QAction.NoRole)
         self.action_show_data_table = QAction(MainWindow)
         self.action_show_data_table.setObjectName(u"action_show_data_table")
+        self.action_show_data_table.setCheckable(True)
         self.action_show_data_table.setMenuRole(QAction.NoRole)
         self.action_hide_selection_box = QAction(MainWindow)
         self.action_hide_selection_box.setObjectName(u"action_hide_selection_box")
@@ -224,13 +225,33 @@ class Ui_MainWindow(object):
         self.gridLayout_4.setSpacing(4)
         self.gridLayout_4.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_4.setObjectName(u"gridLayout_4")
-        self.table_view_cas_description = QTableView(self.tab_data)
-        self.table_view_cas_description.setObjectName(u"table_view_cas_description")
-        sizePolicy2 = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        self.btn_show_more_rows = QPushButton(self.tab_data)
+        self.btn_show_more_rows.setObjectName(u"btn_show_more_rows")
+        sizePolicy2 = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         sizePolicy2.setHorizontalStretch(0)
         sizePolicy2.setVerticalStretch(0)
-        sizePolicy2.setHeightForWidth(self.table_view_cas_description.sizePolicy().hasHeightForWidth())
-        self.table_view_cas_description.setSizePolicy(sizePolicy2)
+        sizePolicy2.setHeightForWidth(self.btn_show_more_rows.sizePolicy().hasHeightForWidth())
+        self.btn_show_more_rows.setSizePolicy(sizePolicy2)
+
+        self.gridLayout_4.addWidget(self.btn_show_more_rows, 0, 2, 1, 1)
+
+        self.label_17 = QLabel(self.tab_data)
+        self.label_17.setObjectName(u"label_17")
+        sizePolicy3 = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
+        sizePolicy3.setHorizontalStretch(0)
+        sizePolicy3.setVerticalStretch(0)
+        sizePolicy3.setHeightForWidth(self.label_17.sizePolicy().hasHeightForWidth())
+        self.label_17.setSizePolicy(sizePolicy3)
+
+        self.gridLayout_4.addWidget(self.label_17, 0, 1, 1, 1)
+
+        self.table_view_cas_description = QTableView(self.tab_data)
+        self.table_view_cas_description.setObjectName(u"table_view_cas_description")
+        sizePolicy4 = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        sizePolicy4.setHorizontalStretch(0)
+        sizePolicy4.setVerticalStretch(0)
+        sizePolicy4.setHeightForWidth(self.table_view_cas_description.sizePolicy().hasHeightForWidth())
+        self.table_view_cas_description.setSizePolicy(sizePolicy4)
         self.table_view_cas_description.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
         self.table_view_cas_description.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table_view_cas_description.setProperty("showDropIndicator", False)
@@ -239,30 +260,10 @@ class Ui_MainWindow(object):
 
         self.label_25 = QLabel(self.tab_data)
         self.label_25.setObjectName(u"label_25")
-        sizePolicy3 = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        sizePolicy3.setHorizontalStretch(0)
-        sizePolicy3.setVerticalStretch(0)
         sizePolicy3.setHeightForWidth(self.label_25.sizePolicy().hasHeightForWidth())
         self.label_25.setSizePolicy(sizePolicy3)
 
         self.gridLayout_4.addWidget(self.label_25, 0, 3, 1, 1)
-
-        self.label_17 = QLabel(self.tab_data)
-        self.label_17.setObjectName(u"label_17")
-        sizePolicy3.setHeightForWidth(self.label_17.sizePolicy().hasHeightForWidth())
-        self.label_17.setSizePolicy(sizePolicy3)
-
-        self.gridLayout_4.addWidget(self.label_17, 0, 1, 1, 1)
-
-        self.btn_show_more_rows = QPushButton(self.tab_data)
-        self.btn_show_more_rows.setObjectName(u"btn_show_more_rows")
-        sizePolicy4 = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        sizePolicy4.setHorizontalStretch(0)
-        sizePolicy4.setVerticalStretch(0)
-        sizePolicy4.setHeightForWidth(self.btn_show_more_rows.sizePolicy().hasHeightForWidth())
-        self.btn_show_more_rows.setSizePolicy(sizePolicy4)
-
-        self.gridLayout_4.addWidget(self.btn_show_more_rows, 0, 2, 1, 1)
 
         self.table_view_cas = QTableView(self.tab_data)
         self.table_view_cas.setObjectName(u"table_view_cas")
@@ -347,25 +348,20 @@ class Ui_MainWindow(object):
         self.gridLayout_21.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_21.setObjectName(u"gridLayout_21")
         self.gridLayout_21.setContentsMargins(0, 0, 0, 0)
-        self.container_complete_result = QWidget(self.tab_complete_result)
-        self.container_complete_result.setObjectName(u"container_complete_result")
+        self.table_view_complete_result = QTableView(self.tab_complete_result)
+        self.table_view_complete_result.setObjectName(u"table_view_complete_result")
 
-        self.gridLayout_21.addWidget(self.container_complete_result, 0, 0, 1, 1)
+        self.gridLayout_21.addWidget(self.table_view_complete_result, 0, 0, 1, 1)
+
+        self.tree_widget_complete_result = TreeWidget(self.tab_complete_result)
+        __qtreewidgetitem = QTreeWidgetItem()
+        __qtreewidgetitem.setText(0, u"1");
+        self.tree_widget_complete_result.setHeaderItem(__qtreewidgetitem)
+        self.tree_widget_complete_result.setObjectName(u"tree_widget_complete_result")
+
+        self.gridLayout_21.addWidget(self.tree_widget_complete_result, 0, 1, 1, 1)
 
         self.tab_container_result_views.addTab(self.tab_complete_result, "")
-        self.tab_internal_view_result = QWidget()
-        self.tab_internal_view_result.setObjectName(u"tab_internal_view_result")
-        self.gridLayout_23 = QGridLayout(self.tab_internal_view_result)
-        self.gridLayout_23.setSpacing(4)
-        self.gridLayout_23.setContentsMargins(7, 7, 7, 7)
-        self.gridLayout_23.setObjectName(u"gridLayout_23")
-        self.gridLayout_23.setContentsMargins(0, 0, 0, 0)
-        self.container_internal_view_result = QWidget(self.tab_internal_view_result)
-        self.container_internal_view_result.setObjectName(u"container_internal_view_result")
-
-        self.gridLayout_23.addWidget(self.container_internal_view_result, 0, 0, 1, 1)
-
-        self.tab_container_result_views.addTab(self.tab_internal_view_result, "")
 
         self.gridLayout_11.addWidget(self.tab_container_result_views, 1, 0, 4, 3)
 
@@ -399,7 +395,7 @@ class Ui_MainWindow(object):
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
-        self.menubar.setGeometry(QRect(0, 0, 2209, 22))
+        self.menubar.setGeometry(QRect(0, 0, 2255, 22))
         self.menubar.setNativeMenuBar(True)
         self.menu_editing_tools = QMenu(self.menubar)
         self.menu_editing_tools.setObjectName(u"menu_editing_tools")
@@ -426,8 +422,239 @@ class Ui_MainWindow(object):
         self.statusbar = QStatusBar(MainWindow)
         self.statusbar.setObjectName(u"statusbar")
         MainWindow.setStatusBar(self.statusbar)
+        self.toolbar_plots = QToolBar(MainWindow)
+        self.toolbar_plots.setObjectName(u"toolbar_plots")
+        self.toolbar_plots.setEnabled(True)
+        self.toolbar_plots.setMovable(False)
+        self.toolbar_plots.setAllowedAreas(Qt.RightToolBarArea|Qt.TopToolBarArea)
+        self.toolbar_plots.setIconSize(QSize(16, 16))
+        self.toolbar_plots.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
+        MainWindow.addToolBar(Qt.TopToolBarArea, self.toolbar_plots)
+        self.dock_widget_sections = QDockWidget(MainWindow)
+        self.dock_widget_sections.setObjectName(u"dock_widget_sections")
+        self.dock_widget_sections.setEnabled(True)
+        sizePolicy6 = QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Maximum)
+        sizePolicy6.setHorizontalStretch(0)
+        sizePolicy6.setVerticalStretch(0)
+        sizePolicy6.setHeightForWidth(self.dock_widget_sections.sizePolicy().hasHeightForWidth())
+        self.dock_widget_sections.setSizePolicy(sizePolicy6)
+        self.dock_widget_sections.setMinimumSize(QSize(220, 113))
+        self.dock_widget_sections.setFeatures(QDockWidget.DockWidgetFloatable|QDockWidget.DockWidgetMovable)
+        self.dock_widget_sections.setAllowedAreas(Qt.LeftDockWidgetArea|Qt.RightDockWidgetArea)
+        self.section_dock_contents = QWidget()
+        self.section_dock_contents.setObjectName(u"section_dock_contents")
+        self.gridLayout_7 = QGridLayout(self.section_dock_contents)
+        self.gridLayout_7.setSpacing(4)
+        self.gridLayout_7.setContentsMargins(7, 7, 7, 7)
+        self.gridLayout_7.setObjectName(u"gridLayout_7")
+        self.gridLayout_7.setContentsMargins(0, -1, 0, -1)
+        self.scroll_area_right_sidebar = QScrollArea(self.section_dock_contents)
+        self.scroll_area_right_sidebar.setObjectName(u"scroll_area_right_sidebar")
+        sizePolicy7 = QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Expanding)
+        sizePolicy7.setHorizontalStretch(0)
+        sizePolicy7.setVerticalStretch(0)
+        sizePolicy7.setHeightForWidth(self.scroll_area_right_sidebar.sizePolicy().hasHeightForWidth())
+        self.scroll_area_right_sidebar.setSizePolicy(sizePolicy7)
+        self.scroll_area_right_sidebar.setWidgetResizable(True)
+        self.scrollAreaWidgetContents_2 = QWidget()
+        self.scrollAreaWidgetContents_2.setObjectName(u"scrollAreaWidgetContents_2")
+        self.scrollAreaWidgetContents_2.setGeometry(QRect(0, 0, 218, 909))
+        sizePolicy8 = QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
+        sizePolicy8.setHorizontalStretch(0)
+        sizePolicy8.setVerticalStretch(0)
+        sizePolicy8.setHeightForWidth(self.scrollAreaWidgetContents_2.sizePolicy().hasHeightForWidth())
+        self.scrollAreaWidgetContents_2.setSizePolicy(sizePolicy8)
+        self.verticalLayout_2 = QVBoxLayout(self.scrollAreaWidgetContents_2)
+        self.verticalLayout_2.setSpacing(4)
+        self.verticalLayout_2.setContentsMargins(7, 7, 7, 7)
+        self.verticalLayout_2.setObjectName(u"verticalLayout_2")
+        self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.section_widgets_container = QWidget(self.scrollAreaWidgetContents_2)
+        self.section_widgets_container.setObjectName(u"section_widgets_container")
+        sizePolicy8.setHeightForWidth(self.section_widgets_container.sizePolicy().hasHeightForWidth())
+        self.section_widgets_container.setSizePolicy(sizePolicy8)
+        self.gridLayout_18 = QGridLayout(self.section_widgets_container)
+        self.gridLayout_18.setSpacing(4)
+        self.gridLayout_18.setContentsMargins(7, 7, 7, 7)
+        self.gridLayout_18.setObjectName(u"gridLayout_18")
+        self.tool_box_editing = QToolBox(self.section_widgets_container)
+        self.tool_box_editing.setObjectName(u"tool_box_editing")
+        self.page_section_list = QWidget()
+        self.page_section_list.setObjectName(u"page_section_list")
+        self.page_section_list.setGeometry(QRect(0, 0, 200, 704))
+        self.gridLayout_13 = QGridLayout(self.page_section_list)
+        self.gridLayout_13.setSpacing(4)
+        self.gridLayout_13.setContentsMargins(7, 7, 7, 7)
+        self.gridLayout_13.setObjectName(u"gridLayout_13")
+        self.gridLayout_13.setContentsMargins(3, 3, 3, 3)
+        self.label_6 = QLabel(self.page_section_list)
+        self.label_6.setObjectName(u"label_6")
+        sizePolicy3.setHeightForWidth(self.label_6.sizePolicy().hasHeightForWidth())
+        self.label_6.setSizePolicy(sizePolicy3)
+
+        self.gridLayout_13.addWidget(self.label_6, 0, 0, 1, 1)
+
+        self.btn_info_section = QPushButton(self.page_section_list)
+        self.btn_info_section.setObjectName(u"btn_info_section")
+        sizePolicy9 = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        sizePolicy9.setHorizontalStretch(0)
+        sizePolicy9.setVerticalStretch(0)
+        sizePolicy9.setHeightForWidth(self.btn_info_section.sizePolicy().hasHeightForWidth())
+        self.btn_info_section.setSizePolicy(sizePolicy9)
+        self.btn_info_section.setIcon(icon7)
+        self.btn_info_section.setFlat(True)
+
+        self.gridLayout_13.addWidget(self.btn_info_section, 0, 1, 1, 1, Qt.AlignRight)
+
+        self.list_widget_sections = QListWidget(self.page_section_list)
+        self.list_widget_sections.setObjectName(u"list_widget_sections")
+        sizePolicy5.setHeightForWidth(self.list_widget_sections.sizePolicy().hasHeightForWidth())
+        self.list_widget_sections.setSizePolicy(sizePolicy5)
+        self.list_widget_sections.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContentsOnFirstShow)
+        self.list_widget_sections.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.list_widget_sections.setTabKeyNavigation(True)
+        self.list_widget_sections.setProperty("showDropIndicator", False)
+        self.list_widget_sections.setUniformItemSizes(True)
+        self.list_widget_sections.setItemAlignment(Qt.AlignLeading)
+
+        self.gridLayout_13.addWidget(self.list_widget_sections, 1, 0, 1, 2)
+
+        self.tool_box_editing.addItem(self.page_section_list, u"Section List")
+        self.page_editing_options = QWidget()
+        self.page_editing_options.setObjectName(u"page_editing_options")
+        self.page_editing_options.setGeometry(QRect(0, 0, 186, 176))
+        self.formLayout_2 = QFormLayout(self.page_editing_options)
+        self.formLayout_2.setSpacing(4)
+        self.formLayout_2.setContentsMargins(7, 7, 7, 7)
+        self.formLayout_2.setObjectName(u"formLayout_2")
+        self.formLayout_2.setRowWrapPolicy(QFormLayout.WrapAllRows)
+        self.formLayout_2.setContentsMargins(3, 3, 3, 3)
+        self.label_19 = QLabel(self.page_editing_options)
+        self.label_19.setObjectName(u"label_19")
+
+        self.formLayout_2.setWidget(0, QFormLayout.LabelRole, self.label_19)
+
+        self.spin_box_selection_window_size = QSpinBox(self.page_editing_options)
+        self.spin_box_selection_window_size.setObjectName(u"spin_box_selection_window_size")
+        self.spin_box_selection_window_size.setMinimum(5)
+        self.spin_box_selection_window_size.setMaximum(99999)
+        self.spin_box_selection_window_size.setValue(50)
+
+        self.formLayout_2.setWidget(0, QFormLayout.FieldRole, self.spin_box_selection_window_size)
+
+        self.selectionEdgeBufferLabel = QLabel(self.page_editing_options)
+        self.selectionEdgeBufferLabel.setObjectName(u"selectionEdgeBufferLabel")
+
+        self.formLayout_2.setWidget(1, QFormLayout.LabelRole, self.selectionEdgeBufferLabel)
+
+        self.spin_box_selection_edge_buffer = QSpinBox(self.page_editing_options)
+        self.spin_box_selection_edge_buffer.setObjectName(u"spin_box_selection_edge_buffer")
+        self.spin_box_selection_edge_buffer.setMaximum(5000)
+        self.spin_box_selection_edge_buffer.setValue(10)
+
+        self.formLayout_2.setWidget(1, QFormLayout.FieldRole, self.spin_box_selection_edge_buffer)
+
+        self.lookForLabel = QLabel(self.page_editing_options)
+        self.lookForLabel.setObjectName(u"lookForLabel")
+
+        self.formLayout_2.setWidget(2, QFormLayout.LabelRole, self.lookForLabel)
+
+        self.combo_box_selection_peak_type = QComboBox(self.page_editing_options)
+        self.combo_box_selection_peak_type.addItem("")
+        self.combo_box_selection_peak_type.addItem("")
+        self.combo_box_selection_peak_type.addItem("")
+        self.combo_box_selection_peak_type.setObjectName(u"combo_box_selection_peak_type")
+
+        self.formLayout_2.setWidget(2, QFormLayout.FieldRole, self.combo_box_selection_peak_type)
+
+        self.check_box_use_selection_peak_find = QCheckBox(self.page_editing_options)
+        self.check_box_use_selection_peak_find.setObjectName(u"check_box_use_selection_peak_find")
+
+        self.formLayout_2.setWidget(3, QFormLayout.SpanningRole, self.check_box_use_selection_peak_find)
+
+        self.tool_box_editing.addItem(self.page_editing_options, u"Editing Options")
+
+        self.gridLayout_18.addWidget(self.tool_box_editing, 5, 0, 1, 2)
+
+        self.btn_section_add = QToolButton(self.section_widgets_container)
+        self.btn_section_add.setObjectName(u"btn_section_add")
+        sizePolicy9.setHeightForWidth(self.btn_section_add.sizePolicy().hasHeightForWidth())
+        self.btn_section_add.setSizePolicy(sizePolicy9)
+        self.btn_section_add.setPopupMode(QToolButton.MenuButtonPopup)
+        self.btn_section_add.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        self.btn_section_add.setAutoRaise(False)
+
+        self.gridLayout_18.addWidget(self.btn_section_add, 2, 0, 1, 1)
+
+        self.container_section_confirm_cancel = QWidget(self.section_widgets_container)
+        self.container_section_confirm_cancel.setObjectName(u"container_section_confirm_cancel")
+        self.gridLayout_20 = QGridLayout(self.container_section_confirm_cancel)
+        self.gridLayout_20.setSpacing(4)
+        self.gridLayout_20.setContentsMargins(7, 7, 7, 7)
+        self.gridLayout_20.setObjectName(u"gridLayout_20")
+        self.btn_section_confirm = QPushButton(self.container_section_confirm_cancel)
+        self.btn_section_confirm.setObjectName(u"btn_section_confirm")
+        icon28 = QIcon()
+        icon28.addFile(u":/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.btn_section_confirm.setIcon(icon28)
+        self.btn_section_confirm.setIconSize(QSize(24, 24))
+
+        self.gridLayout_20.addWidget(self.btn_section_confirm, 1, 0, 1, 1)
+
+        self.btn_section_cancel = QPushButton(self.container_section_confirm_cancel)
+        self.btn_section_cancel.setObjectName(u"btn_section_cancel")
+        icon29 = QIcon()
+        icon29.addFile(u":/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
+        self.btn_section_cancel.setIcon(icon29)
+        self.btn_section_cancel.setIconSize(QSize(24, 24))
+
+        self.gridLayout_20.addWidget(self.btn_section_cancel, 1, 1, 1, 1)
+
+        self.label_24 = QLabel(self.container_section_confirm_cancel)
+        self.label_24.setObjectName(u"label_24")
+        self.label_24.setAlignment(Qt.AlignCenter)
+
+        self.gridLayout_20.addWidget(self.label_24, 0, 0, 1, 2)
+
+
+        self.gridLayout_18.addWidget(self.container_section_confirm_cancel, 3, 0, 1, 2)
+
+        self.combo_box_section_select = QComboBox(self.section_widgets_container)
+        self.combo_box_section_select.setObjectName(u"combo_box_section_select")
+        self.combo_box_section_select.setInputMethodHints(Qt.ImhNone)
+
+        self.gridLayout_18.addWidget(self.combo_box_section_select, 1, 0, 1, 2)
+
+        self.btn_section_remove = QToolButton(self.section_widgets_container)
+        self.btn_section_remove.setObjectName(u"btn_section_remove")
+        sizePolicy9.setHeightForWidth(self.btn_section_remove.sizePolicy().hasHeightForWidth())
+        self.btn_section_remove.setSizePolicy(sizePolicy9)
+        self.btn_section_remove.setToolButtonStyle(Qt.ToolButtonTextOnly)
+
+        self.gridLayout_18.addWidget(self.btn_section_remove, 2, 1, 1, 1)
+
+
+        self.verticalLayout_2.addWidget(self.section_widgets_container)
+
+        self.scroll_area_right_sidebar.setWidget(self.scrollAreaWidgetContents_2)
+
+        self.gridLayout_7.addWidget(self.scroll_area_right_sidebar, 0, 0, 1, 1)
+
+        self.dock_widget_sections.setWidget(self.section_dock_contents)
+        MainWindow.addDockWidget(Qt.RightDockWidgetArea, self.dock_widget_sections)
+        self.toolbar_section_sidebar = QToolBar(MainWindow)
+        self.toolbar_section_sidebar.setObjectName(u"toolbar_section_sidebar")
+        self.toolbar_section_sidebar.setLayoutDirection(Qt.RightToLeft)
+        self.toolbar_section_sidebar.setMovable(False)
+        self.toolbar_section_sidebar.setAllowedAreas(Qt.TopToolBarArea)
+        self.toolbar_section_sidebar.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.toolbar_section_sidebar.setFloatable(False)
+        MainWindow.addToolBar(Qt.TopToolBarArea, self.toolbar_section_sidebar)
         self.dock_widget_sidebar = QDockWidget(MainWindow)
         self.dock_widget_sidebar.setObjectName(u"dock_widget_sidebar")
+        sizePolicy6.setHeightForWidth(self.dock_widget_sidebar.sizePolicy().hasHeightForWidth())
+        self.dock_widget_sidebar.setSizePolicy(sizePolicy6)
+        self.dock_widget_sidebar.setMinimumSize(QSize(427, 113))
         self.dock_widget_sidebar.setFeatures(QDockWidget.DockWidgetFloatable|QDockWidget.DockWidgetMovable)
         self.dock_widget_sidebar.setAllowedAreas(Qt.LeftDockWidgetArea|Qt.RightDockWidgetArea)
         self.sidebar_dock_contents = QWidget()
@@ -437,8 +664,23 @@ class Ui_MainWindow(object):
         self.gridLayout_17.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_17.setObjectName(u"gridLayout_17")
         self.gridLayout_17.setContentsMargins(0, -1, 0, -1)
-        self.sidebar = QStackedWidget(self.sidebar_dock_contents)
+        self.scroll_area_left_sidebar = QScrollArea(self.sidebar_dock_contents)
+        self.scroll_area_left_sidebar.setObjectName(u"scroll_area_left_sidebar")
+        self.scroll_area_left_sidebar.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
+        self.scroll_area_left_sidebar.setWidgetResizable(True)
+        self.scrollAreaWidgetContents = QWidget()
+        self.scrollAreaWidgetContents.setObjectName(u"scrollAreaWidgetContents")
+        self.scrollAreaWidgetContents.setGeometry(QRect(0, 0, 425, 909))
+        self.verticalLayout = QVBoxLayout(self.scrollAreaWidgetContents)
+        self.verticalLayout.setSpacing(4)
+        self.verticalLayout.setContentsMargins(7, 7, 7, 7)
+        self.verticalLayout.setObjectName(u"verticalLayout")
+        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
+        self.sidebar = QStackedWidget(self.scrollAreaWidgetContents)
         self.sidebar.setObjectName(u"sidebar")
+        sizePolicy8.setHeightForWidth(self.sidebar.sizePolicy().hasHeightForWidth())
+        self.sidebar.setSizePolicy(sizePolicy8)
+        self.sidebar.setMinimumSize(QSize(425, 0))
         self.sidebar.setFrameShape(QFrame.StyledPanel)
         self.sidebar_page_data = QWidget()
         self.sidebar_page_data.setObjectName(u"sidebar_page_data")
@@ -446,22 +688,6 @@ class Ui_MainWindow(object):
         self.gridLayout.setSpacing(4)
         self.gridLayout.setContentsMargins(7, 7, 7, 7)
         self.gridLayout.setObjectName(u"gridLayout")
-        self.label_4 = QLabel(self.sidebar_page_data)
-        self.label_4.setObjectName(u"label_4")
-
-        self.gridLayout.addWidget(self.label_4, 0, 0, 1, 1)
-
-        self.label_3 = QLabel(self.sidebar_page_data)
-        self.label_3.setObjectName(u"label_3")
-        sizePolicy6 = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-        sizePolicy6.setHorizontalStretch(0)
-        sizePolicy6.setVerticalStretch(0)
-        sizePolicy6.setHeightForWidth(self.label_3.sizePolicy().hasHeightForWidth())
-        self.label_3.setSizePolicy(sizePolicy6)
-        self.label_3.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignVCenter)
-
-        self.gridLayout.addWidget(self.label_3, 2, 0, 1, 1)
-
         self.btn_info_data_selection = QPushButton(self.sidebar_page_data)
         self.btn_info_data_selection.setObjectName(u"btn_info_data_selection")
         self.btn_info_data_selection.setIcon(icon7)
@@ -469,104 +695,26 @@ class Ui_MainWindow(object):
 
         self.gridLayout.addWidget(self.btn_info_data_selection, 0, 1, 1, 1, Qt.AlignRight)
 
-        self.container_data_selection = QFrame(self.sidebar_page_data)
-        self.container_data_selection.setObjectName(u"container_data_selection")
-        sizePolicy7 = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        sizePolicy7.setHorizontalStretch(0)
-        sizePolicy7.setVerticalStretch(0)
-        sizePolicy7.setHeightForWidth(self.container_data_selection.sizePolicy().hasHeightForWidth())
-        self.container_data_selection.setSizePolicy(sizePolicy7)
-        self.container_data_selection.setFrameShape(QFrame.StyledPanel)
-        self.gridLayout_15 = QGridLayout(self.container_data_selection)
-        self.gridLayout_15.setSpacing(4)
-        self.gridLayout_15.setContentsMargins(7, 7, 7, 7)
-        self.gridLayout_15.setObjectName(u"gridLayout_15")
-        self.container_data_required_info = QWidget(self.container_data_selection)
-        self.container_data_required_info.setObjectName(u"container_data_required_info")
-        sizePolicy7.setHeightForWidth(self.container_data_required_info.sizePolicy().hasHeightForWidth())
-        self.container_data_required_info.setSizePolicy(sizePolicy7)
-        self.formLayout = QFormLayout(self.container_data_required_info)
-        self.formLayout.setSpacing(4)
-        self.formLayout.setContentsMargins(7, 7, 7, 7)
-        self.formLayout.setObjectName(u"formLayout")
-        self.formLayout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        self.label_23 = QLabel(self.container_data_required_info)
-        self.label_23.setObjectName(u"label_23")
-        sizePolicy6.setHeightForWidth(self.label_23.sizePolicy().hasHeightForWidth())
-        self.label_23.setSizePolicy(sizePolicy6)
+        self.label_4 = QLabel(self.sidebar_page_data)
+        self.label_4.setObjectName(u"label_4")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.label_23)
+        self.gridLayout.addWidget(self.label_4, 0, 0, 1, 1)
 
-        self.combo_box_signal_column = QComboBox(self.container_data_required_info)
-        self.combo_box_signal_column.setObjectName(u"combo_box_signal_column")
-        self.combo_box_signal_column.setInsertPolicy(QComboBox.InsertAlphabetically)
+        self.btn_info_metadata = QPushButton(self.sidebar_page_data)
+        self.btn_info_metadata.setObjectName(u"btn_info_metadata")
+        self.btn_info_metadata.setIcon(icon7)
+        self.btn_info_metadata.setFlat(True)
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.combo_box_signal_column)
-
-        self.sampleRateLabel = QLabel(self.container_data_required_info)
-        self.sampleRateLabel.setObjectName(u"sampleRateLabel")
-
-        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.sampleRateLabel)
-
-        self.spin_box_sample_rate = QSpinBox(self.container_data_required_info)
-        self.spin_box_sample_rate.setObjectName(u"spin_box_sample_rate")
-        self.spin_box_sample_rate.setMaximum(9999)
-
-        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.spin_box_sample_rate)
-
-
-        self.gridLayout_15.addWidget(self.container_data_required_info, 2, 0, 1, 3)
-
-        self.btn_select_file = QPushButton(self.container_data_selection)
-        self.btn_select_file.setObjectName(u"btn_select_file")
-        sizePolicy4.setHeightForWidth(self.btn_select_file.sizePolicy().hasHeightForWidth())
-        self.btn_select_file.setSizePolicy(sizePolicy4)
-        font = QFont()
-        font.setPointSize(9)
-        font.setBold(False)
-        self.btn_select_file.setFont(font)
-
-        self.gridLayout_15.addWidget(self.btn_select_file, 0, 0, 1, 1)
-
-        self.btn_load_selection = FeedbackButton(self.container_data_selection)
-        self.btn_load_selection.setObjectName(u"btn_load_selection")
-        self.btn_load_selection.setEnabled(False)
-        sizePolicy3.setHeightForWidth(self.btn_load_selection.sizePolicy().hasHeightForWidth())
-        self.btn_load_selection.setSizePolicy(sizePolicy3)
-        self.btn_load_selection.setMinimumSize(QSize(0, 50))
-        font1 = QFont()
-        font1.setPointSize(14)
-        font1.setBold(True)
-        self.btn_load_selection.setFont(font1)
-
-        self.gridLayout_15.addWidget(self.btn_load_selection, 3, 0, 1, 3)
-
-        self.line = QFrame(self.container_data_selection)
-        self.line.setObjectName(u"line")
-        self.line.setFrameShape(QFrame.HLine)
-        self.line.setFrameShadow(QFrame.Sunken)
-
-        self.gridLayout_15.addWidget(self.line, 1, 0, 1, 3)
-
-        self.line_edit_active_file = QLineEdit(self.container_data_selection)
-        self.line_edit_active_file.setObjectName(u"line_edit_active_file")
-        self.line_edit_active_file.setFont(font)
-        self.line_edit_active_file.setReadOnly(True)
-
-        self.gridLayout_15.addWidget(self.line_edit_active_file, 0, 1, 1, 2)
-
-
-        self.gridLayout.addWidget(self.container_data_selection, 1, 0, 1, 2)
-
-        self.verticalSpacer_2 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-
-        self.gridLayout.addItem(self.verticalSpacer_2, 4, 0, 1, 2)
+        self.gridLayout.addWidget(self.btn_info_metadata, 2, 1, 1, 1, Qt.AlignRight)
 
         self.container_file_info = QFrame(self.sidebar_page_data)
         self.container_file_info.setObjectName(u"container_file_info")
         self.container_file_info.setEnabled(True)
-        sizePolicy7.setHeightForWidth(self.container_file_info.sizePolicy().hasHeightForWidth())
-        self.container_file_info.setSizePolicy(sizePolicy7)
+        sizePolicy10 = QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
+        sizePolicy10.setHorizontalStretch(0)
+        sizePolicy10.setVerticalStretch(0)
+        sizePolicy10.setHeightForWidth(self.container_file_info.sizePolicy().hasHeightForWidth())
+        self.container_file_info.setSizePolicy(sizePolicy10)
         self.container_file_info.setFrameShape(QFrame.StyledPanel)
         self.formLayout_4 = QFormLayout(self.container_file_info)
         self.formLayout_4.setSpacing(4)
@@ -613,12 +761,106 @@ class Ui_MainWindow(object):
 
         self.gridLayout.addWidget(self.container_file_info, 3, 0, 1, 2)
 
-        self.btn_info_metadata = QPushButton(self.sidebar_page_data)
-        self.btn_info_metadata.setObjectName(u"btn_info_metadata")
-        self.btn_info_metadata.setIcon(icon7)
-        self.btn_info_metadata.setFlat(True)
+        self.container_data_selection = QFrame(self.sidebar_page_data)
+        self.container_data_selection.setObjectName(u"container_data_selection")
+        sizePolicy10.setHeightForWidth(self.container_data_selection.sizePolicy().hasHeightForWidth())
+        self.container_data_selection.setSizePolicy(sizePolicy10)
+        self.container_data_selection.setFrameShape(QFrame.StyledPanel)
+        self.gridLayout_15 = QGridLayout(self.container_data_selection)
+        self.gridLayout_15.setSpacing(4)
+        self.gridLayout_15.setContentsMargins(7, 7, 7, 7)
+        self.gridLayout_15.setObjectName(u"gridLayout_15")
+        self.container_data_required_info = QWidget(self.container_data_selection)
+        self.container_data_required_info.setObjectName(u"container_data_required_info")
+        sizePolicy9.setHeightForWidth(self.container_data_required_info.sizePolicy().hasHeightForWidth())
+        self.container_data_required_info.setSizePolicy(sizePolicy9)
+        self.formLayout = QFormLayout(self.container_data_required_info)
+        self.formLayout.setSpacing(4)
+        self.formLayout.setContentsMargins(7, 7, 7, 7)
+        self.formLayout.setObjectName(u"formLayout")
+        self.formLayout.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        self.label_23 = QLabel(self.container_data_required_info)
+        self.label_23.setObjectName(u"label_23")
+        sizePolicy11 = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+        sizePolicy11.setHorizontalStretch(0)
+        sizePolicy11.setVerticalStretch(0)
+        sizePolicy11.setHeightForWidth(self.label_23.sizePolicy().hasHeightForWidth())
+        self.label_23.setSizePolicy(sizePolicy11)
 
-        self.gridLayout.addWidget(self.btn_info_metadata, 2, 1, 1, 1, Qt.AlignRight)
+        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.label_23)
+
+        self.combo_box_signal_column = QComboBox(self.container_data_required_info)
+        self.combo_box_signal_column.setObjectName(u"combo_box_signal_column")
+        self.combo_box_signal_column.setInsertPolicy(QComboBox.InsertAlphabetically)
+
+        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.combo_box_signal_column)
+
+        self.sampleRateLabel = QLabel(self.container_data_required_info)
+        self.sampleRateLabel.setObjectName(u"sampleRateLabel")
+
+        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.sampleRateLabel)
+
+        self.spin_box_sample_rate = QSpinBox(self.container_data_required_info)
+        self.spin_box_sample_rate.setObjectName(u"spin_box_sample_rate")
+        self.spin_box_sample_rate.setMaximum(9999)
+
+        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.spin_box_sample_rate)
+
+
+        self.gridLayout_15.addWidget(self.container_data_required_info, 2, 0, 1, 3)
+
+        self.btn_select_file = QPushButton(self.container_data_selection)
+        self.btn_select_file.setObjectName(u"btn_select_file")
+        sizePolicy2.setHeightForWidth(self.btn_select_file.sizePolicy().hasHeightForWidth())
+        self.btn_select_file.setSizePolicy(sizePolicy2)
+        font = QFont()
+        font.setPointSize(9)
+        font.setBold(False)
+        self.btn_select_file.setFont(font)
+
+        self.gridLayout_15.addWidget(self.btn_select_file, 0, 0, 1, 1)
+
+        self.btn_load_selection = FeedbackButton(self.container_data_selection)
+        self.btn_load_selection.setObjectName(u"btn_load_selection")
+        self.btn_load_selection.setEnabled(False)
+        sizePolicy3.setHeightForWidth(self.btn_load_selection.sizePolicy().hasHeightForWidth())
+        self.btn_load_selection.setSizePolicy(sizePolicy3)
+        self.btn_load_selection.setMinimumSize(QSize(0, 50))
+        font1 = QFont()
+        font1.setPointSize(14)
+        font1.setBold(True)
+        self.btn_load_selection.setFont(font1)
+
+        self.gridLayout_15.addWidget(self.btn_load_selection, 3, 0, 1, 3)
+
+        self.line = QFrame(self.container_data_selection)
+        self.line.setObjectName(u"line")
+        self.line.setFrameShape(QFrame.HLine)
+        self.line.setFrameShadow(QFrame.Sunken)
+
+        self.gridLayout_15.addWidget(self.line, 1, 0, 1, 3)
+
+        self.line_edit_active_file = QLineEdit(self.container_data_selection)
+        self.line_edit_active_file.setObjectName(u"line_edit_active_file")
+        self.line_edit_active_file.setFont(font)
+        self.line_edit_active_file.setReadOnly(True)
+
+        self.gridLayout_15.addWidget(self.line_edit_active_file, 0, 1, 1, 2)
+
+
+        self.gridLayout.addWidget(self.container_data_selection, 1, 0, 1, 2)
+
+        self.label_3 = QLabel(self.sidebar_page_data)
+        self.label_3.setObjectName(u"label_3")
+        sizePolicy11.setHeightForWidth(self.label_3.sizePolicy().hasHeightForWidth())
+        self.label_3.setSizePolicy(sizePolicy11)
+        self.label_3.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignVCenter)
+
+        self.gridLayout.addWidget(self.label_3, 2, 0, 1, 1)
+
+        self.verticalSpacer_2 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+
+        self.gridLayout.addItem(self.verticalSpacer_2, 4, 0, 1, 2)
 
         self.sidebar.addWidget(self.sidebar_page_data)
         self.sidebar_page_plots = QWidget()
@@ -636,8 +878,8 @@ class Ui_MainWindow(object):
         self.gridLayout_2.setContentsMargins(1, 1, 1, 1)
         self.container_custom_filter_inputs = QFrame(self.container_signal_filtering_sidebar)
         self.container_custom_filter_inputs.setObjectName(u"container_custom_filter_inputs")
-        sizePolicy7.setHeightForWidth(self.container_custom_filter_inputs.sizePolicy().hasHeightForWidth())
-        self.container_custom_filter_inputs.setSizePolicy(sizePolicy7)
+        sizePolicy9.setHeightForWidth(self.container_custom_filter_inputs.sizePolicy().hasHeightForWidth())
+        self.container_custom_filter_inputs.setSizePolicy(sizePolicy9)
         self.container_custom_filter_inputs.setFrameShape(QFrame.StyledPanel)
         self.gridLayout_10 = QGridLayout(self.container_custom_filter_inputs)
         self.gridLayout_10.setSpacing(4)
@@ -655,19 +897,19 @@ class Ui_MainWindow(object):
         self.horizontalLayout_5.setContentsMargins(1, -1, 1, -1)
         self.label_10 = QLabel(self.container_order_inputs)
         self.label_10.setObjectName(u"label_10")
-        sizePolicy8 = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
-        sizePolicy8.setHorizontalStretch(0)
-        sizePolicy8.setVerticalStretch(0)
-        sizePolicy8.setHeightForWidth(self.label_10.sizePolicy().hasHeightForWidth())
-        self.label_10.setSizePolicy(sizePolicy8)
+        sizePolicy12 = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
+        sizePolicy12.setHorizontalStretch(0)
+        sizePolicy12.setVerticalStretch(0)
+        sizePolicy12.setHeightForWidth(self.label_10.sizePolicy().hasHeightForWidth())
+        self.label_10.setSizePolicy(sizePolicy12)
         self.label_10.setFont(font)
 
         self.horizontalLayout_5.addWidget(self.label_10)
 
         self.slider_order = QSlider(self.container_order_inputs)
         self.slider_order.setObjectName(u"slider_order")
-        sizePolicy7.setHeightForWidth(self.slider_order.sizePolicy().hasHeightForWidth())
-        self.slider_order.setSizePolicy(sizePolicy7)
+        sizePolicy9.setHeightForWidth(self.slider_order.sizePolicy().hasHeightForWidth())
+        self.slider_order.setSizePolicy(sizePolicy9)
         self.slider_order.setFont(font)
         self.slider_order.setMinimum(2)
         self.slider_order.setMaximum(10)
@@ -679,8 +921,8 @@ class Ui_MainWindow(object):
 
         self.spin_box_order = QSpinBox(self.container_order_inputs)
         self.spin_box_order.setObjectName(u"spin_box_order")
-        sizePolicy6.setHeightForWidth(self.spin_box_order.sizePolicy().hasHeightForWidth())
-        self.spin_box_order.setSizePolicy(sizePolicy6)
+        sizePolicy11.setHeightForWidth(self.spin_box_order.sizePolicy().hasHeightForWidth())
+        self.spin_box_order.setSizePolicy(sizePolicy11)
         self.spin_box_order.setMinimumSize(QSize(45, 0))
         self.spin_box_order.setFont(font)
         self.spin_box_order.setFrame(True)
@@ -695,8 +937,8 @@ class Ui_MainWindow(object):
 
         self.label_7 = QLabel(self.container_custom_filter_inputs)
         self.label_7.setObjectName(u"label_7")
-        sizePolicy8.setHeightForWidth(self.label_7.sizePolicy().hasHeightForWidth())
-        self.label_7.setSizePolicy(sizePolicy8)
+        sizePolicy12.setHeightForWidth(self.label_7.sizePolicy().hasHeightForWidth())
+        self.label_7.setSizePolicy(sizePolicy12)
         self.label_7.setFont(font)
 
         self.gridLayout_10.addWidget(self.label_7, 0, 0, 1, 1)
@@ -716,11 +958,8 @@ class Ui_MainWindow(object):
         self.gridLayout_3.setContentsMargins(1, 1, 1, 1)
         self.dbl_spin_box_highcut = QDoubleSpinBox(self.container_highcut)
         self.dbl_spin_box_highcut.setObjectName(u"dbl_spin_box_highcut")
-        sizePolicy9 = QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        sizePolicy9.setHorizontalStretch(0)
-        sizePolicy9.setVerticalStretch(0)
-        sizePolicy9.setHeightForWidth(self.dbl_spin_box_highcut.sizePolicy().hasHeightForWidth())
-        self.dbl_spin_box_highcut.setSizePolicy(sizePolicy9)
+        sizePolicy10.setHeightForWidth(self.dbl_spin_box_highcut.sizePolicy().hasHeightForWidth())
+        self.dbl_spin_box_highcut.setSizePolicy(sizePolicy10)
         self.dbl_spin_box_highcut.setFont(font)
         self.dbl_spin_box_highcut.setFrame(True)
         self.dbl_spin_box_highcut.setCorrectionMode(QAbstractSpinBox.CorrectToNearestValue)
@@ -733,8 +972,8 @@ class Ui_MainWindow(object):
 
         self.label_9 = QLabel(self.container_highcut)
         self.label_9.setObjectName(u"label_9")
-        sizePolicy6.setHeightForWidth(self.label_9.sizePolicy().hasHeightForWidth())
-        self.label_9.setSizePolicy(sizePolicy6)
+        sizePolicy11.setHeightForWidth(self.label_9.sizePolicy().hasHeightForWidth())
+        self.label_9.setSizePolicy(sizePolicy11)
         self.label_9.setFont(font)
         self.label_9.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignVCenter)
 
@@ -752,16 +991,16 @@ class Ui_MainWindow(object):
         self.gridLayout_5.setContentsMargins(1, 1, 1, 1)
         self.label_8 = QLabel(self.container_lowcut)
         self.label_8.setObjectName(u"label_8")
-        sizePolicy6.setHeightForWidth(self.label_8.sizePolicy().hasHeightForWidth())
-        self.label_8.setSizePolicy(sizePolicy6)
+        sizePolicy11.setHeightForWidth(self.label_8.sizePolicy().hasHeightForWidth())
+        self.label_8.setSizePolicy(sizePolicy11)
         self.label_8.setFont(font)
 
         self.gridLayout_5.addWidget(self.label_8, 0, 0, 1, 1)
 
         self.dbl_spin_box_lowcut = QDoubleSpinBox(self.container_lowcut)
         self.dbl_spin_box_lowcut.setObjectName(u"dbl_spin_box_lowcut")
-        sizePolicy9.setHeightForWidth(self.dbl_spin_box_lowcut.sizePolicy().hasHeightForWidth())
-        self.dbl_spin_box_lowcut.setSizePolicy(sizePolicy9)
+        sizePolicy10.setHeightForWidth(self.dbl_spin_box_lowcut.sizePolicy().hasHeightForWidth())
+        self.dbl_spin_box_lowcut.setSizePolicy(sizePolicy10)
         self.dbl_spin_box_lowcut.setFont(font)
         self.dbl_spin_box_lowcut.setWrapping(False)
         self.dbl_spin_box_lowcut.setFrame(True)
@@ -787,8 +1026,8 @@ class Ui_MainWindow(object):
         self.horizontalLayout_3.setContentsMargins(1, -1, 1, -1)
         self.label_11 = QLabel(self.container_window_size)
         self.label_11.setObjectName(u"label_11")
-        sizePolicy8.setHeightForWidth(self.label_11.sizePolicy().hasHeightForWidth())
-        self.label_11.setSizePolicy(sizePolicy8)
+        sizePolicy12.setHeightForWidth(self.label_11.sizePolicy().hasHeightForWidth())
+        self.label_11.setSizePolicy(sizePolicy12)
         self.label_11.setFont(font)
         self.label_11.setScaledContents(True)
 
@@ -796,8 +1035,8 @@ class Ui_MainWindow(object):
 
         self.slider_window_size = QSlider(self.container_window_size)
         self.slider_window_size.setObjectName(u"slider_window_size")
-        sizePolicy7.setHeightForWidth(self.slider_window_size.sizePolicy().hasHeightForWidth())
-        self.slider_window_size.setSizePolicy(sizePolicy7)
+        sizePolicy9.setHeightForWidth(self.slider_window_size.sizePolicy().hasHeightForWidth())
+        self.slider_window_size.setSizePolicy(sizePolicy9)
         self.slider_window_size.setFont(font)
         self.slider_window_size.setMinimum(5)
         self.slider_window_size.setMaximum(3333)
@@ -809,8 +1048,8 @@ class Ui_MainWindow(object):
 
         self.spin_box_window_size = QSpinBox(self.container_window_size)
         self.spin_box_window_size.setObjectName(u"spin_box_window_size")
-        sizePolicy6.setHeightForWidth(self.spin_box_window_size.sizePolicy().hasHeightForWidth())
-        self.spin_box_window_size.setSizePolicy(sizePolicy6)
+        sizePolicy11.setHeightForWidth(self.spin_box_window_size.sizePolicy().hasHeightForWidth())
+        self.spin_box_window_size.setSizePolicy(sizePolicy11)
         self.spin_box_window_size.setMinimumSize(QSize(45, 0))
         self.spin_box_window_size.setFont(font)
         self.spin_box_window_size.setFrame(True)
@@ -835,8 +1074,8 @@ class Ui_MainWindow(object):
         self.gridLayout_14.setContentsMargins(1, 1, 1, 1)
         self.label_20 = QLabel(self.container_powerline)
         self.label_20.setObjectName(u"label_20")
-        sizePolicy6.setHeightForWidth(self.label_20.sizePolicy().hasHeightForWidth())
-        self.label_20.setSizePolicy(sizePolicy6)
+        sizePolicy11.setHeightForWidth(self.label_20.sizePolicy().hasHeightForWidth())
+        self.label_20.setSizePolicy(sizePolicy11)
 
         self.gridLayout_14.addWidget(self.label_20, 0, 0, 1, 1)
 
@@ -856,15 +1095,15 @@ class Ui_MainWindow(object):
 
         self.label_5 = QLabel(self.container_signal_filtering_sidebar)
         self.label_5.setObjectName(u"label_5")
-        sizePolicy6.setHeightForWidth(self.label_5.sizePolicy().hasHeightForWidth())
-        self.label_5.setSizePolicy(sizePolicy6)
+        sizePolicy11.setHeightForWidth(self.label_5.sizePolicy().hasHeightForWidth())
+        self.label_5.setSizePolicy(sizePolicy11)
 
         self.gridLayout_2.addWidget(self.label_5, 1, 0, 1, 1)
 
         self.label_12 = QLabel(self.container_signal_filtering_sidebar)
         self.label_12.setObjectName(u"label_12")
-        sizePolicy6.setHeightForWidth(self.label_12.sizePolicy().hasHeightForWidth())
-        self.label_12.setSizePolicy(sizePolicy6)
+        sizePolicy11.setHeightForWidth(self.label_12.sizePolicy().hasHeightForWidth())
+        self.label_12.setSizePolicy(sizePolicy11)
         self.label_12.setFont(font)
 
         self.gridLayout_2.addWidget(self.label_12, 2, 0, 1, 1)
@@ -906,8 +1145,8 @@ class Ui_MainWindow(object):
 
         self.container_scale_window_inputs = QGroupBox(self.container_standardize)
         self.container_scale_window_inputs.setObjectName(u"container_scale_window_inputs")
-        sizePolicy7.setHeightForWidth(self.container_scale_window_inputs.sizePolicy().hasHeightForWidth())
-        self.container_scale_window_inputs.setSizePolicy(sizePolicy7)
+        sizePolicy9.setHeightForWidth(self.container_scale_window_inputs.sizePolicy().hasHeightForWidth())
+        self.container_scale_window_inputs.setSizePolicy(sizePolicy9)
         self.container_scale_window_inputs.setCheckable(True)
         self.container_scale_window_inputs.setChecked(True)
         self.horizontalLayout_2 = QHBoxLayout(self.container_scale_window_inputs)
@@ -916,15 +1155,15 @@ class Ui_MainWindow(object):
         self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
         self.label_2 = QLabel(self.container_scale_window_inputs)
         self.label_2.setObjectName(u"label_2")
-        sizePolicy8.setHeightForWidth(self.label_2.sizePolicy().hasHeightForWidth())
-        self.label_2.setSizePolicy(sizePolicy8)
+        sizePolicy12.setHeightForWidth(self.label_2.sizePolicy().hasHeightForWidth())
+        self.label_2.setSizePolicy(sizePolicy12)
 
         self.horizontalLayout_2.addWidget(self.label_2)
 
         self.slider_scale_window_size = QSlider(self.container_scale_window_inputs)
         self.slider_scale_window_size.setObjectName(u"slider_scale_window_size")
-        sizePolicy7.setHeightForWidth(self.slider_scale_window_size.sizePolicy().hasHeightForWidth())
-        self.slider_scale_window_size.setSizePolicy(sizePolicy7)
+        sizePolicy9.setHeightForWidth(self.slider_scale_window_size.sizePolicy().hasHeightForWidth())
+        self.slider_scale_window_size.setSizePolicy(sizePolicy9)
         self.slider_scale_window_size.setMinimum(5)
         self.slider_scale_window_size.setMaximum(10000)
         self.slider_scale_window_size.setValue(2000)
@@ -934,11 +1173,11 @@ class Ui_MainWindow(object):
 
         self.spin_box_scale_window_size = QSpinBox(self.container_scale_window_inputs)
         self.spin_box_scale_window_size.setObjectName(u"spin_box_scale_window_size")
-        sizePolicy10 = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
-        sizePolicy10.setHorizontalStretch(0)
-        sizePolicy10.setVerticalStretch(0)
-        sizePolicy10.setHeightForWidth(self.spin_box_scale_window_size.sizePolicy().hasHeightForWidth())
-        self.spin_box_scale_window_size.setSizePolicy(sizePolicy10)
+        sizePolicy13 = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        sizePolicy13.setHorizontalStretch(0)
+        sizePolicy13.setVerticalStretch(0)
+        sizePolicy13.setHeightForWidth(self.spin_box_scale_window_size.sizePolicy().hasHeightForWidth())
+        self.spin_box_scale_window_size.setSizePolicy(sizePolicy13)
         self.spin_box_scale_window_size.setCorrectionMode(QAbstractSpinBox.CorrectToNearestValue)
         self.spin_box_scale_window_size.setMinimum(5)
         self.spin_box_scale_window_size.setMaximum(10000)
@@ -951,8 +1190,8 @@ class Ui_MainWindow(object):
 
         self.label = QLabel(self.container_standardize)
         self.label.setObjectName(u"label")
-        sizePolicy7.setHeightForWidth(self.label.sizePolicy().hasHeightForWidth())
-        self.label.setSizePolicy(sizePolicy7)
+        sizePolicy9.setHeightForWidth(self.label.sizePolicy().hasHeightForWidth())
+        self.label.setSizePolicy(sizePolicy9)
 
         self.gridLayout_9.addWidget(self.label, 0, 0, 1, 1)
 
@@ -1005,8 +1244,8 @@ class Ui_MainWindow(object):
 
         self.combo_box_peak_detection_method = ComboBox(self.container_peak_detection_method)
         self.combo_box_peak_detection_method.setObjectName(u"combo_box_peak_detection_method")
-        sizePolicy7.setHeightForWidth(self.combo_box_peak_detection_method.sizePolicy().hasHeightForWidth())
-        self.combo_box_peak_detection_method.setSizePolicy(sizePolicy7)
+        sizePolicy9.setHeightForWidth(self.combo_box_peak_detection_method.sizePolicy().hasHeightForWidth())
+        self.combo_box_peak_detection_method.setSizePolicy(sizePolicy9)
         self.combo_box_peak_detection_method.setFont(font)
         self.combo_box_peak_detection_method.setMaxVisibleItems(10)
         self.combo_box_peak_detection_method.setMaxCount(50)
@@ -1098,11 +1337,11 @@ class Ui_MainWindow(object):
 
         self.peak_elgendi_ppg_info = QTextBrowser(self.page_peak_elgendi_ppg)
         self.peak_elgendi_ppg_info.setObjectName(u"peak_elgendi_ppg_info")
-        sizePolicy11 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        sizePolicy11.setHorizontalStretch(0)
-        sizePolicy11.setVerticalStretch(0)
-        sizePolicy11.setHeightForWidth(self.peak_elgendi_ppg_info.sizePolicy().hasHeightForWidth())
-        self.peak_elgendi_ppg_info.setSizePolicy(sizePolicy11)
+        sizePolicy14 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        sizePolicy14.setHorizontalStretch(0)
+        sizePolicy14.setVerticalStretch(0)
+        sizePolicy14.setHeightForWidth(self.peak_elgendi_ppg_info.sizePolicy().hasHeightForWidth())
+        self.peak_elgendi_ppg_info.setSizePolicy(sizePolicy14)
         self.peak_elgendi_ppg_info.setMaximumSize(QSize(16777215, 100))
         self.peak_elgendi_ppg_info.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
 
@@ -1386,8 +1625,8 @@ class Ui_MainWindow(object):
 
         self.label_18 = QLabel(self.container_peak_detection_sidebar)
         self.label_18.setObjectName(u"label_18")
-        sizePolicy6.setHeightForWidth(self.label_18.sizePolicy().hasHeightForWidth())
-        self.label_18.setSizePolicy(sizePolicy6)
+        sizePolicy11.setHeightForWidth(self.label_18.sizePolicy().hasHeightForWidth())
+        self.label_18.setSizePolicy(sizePolicy11)
 
         self.layout_container_peak_detection_sidebar.addWidget(self.label_18, 0, 0, 1, 1)
 
@@ -1410,8 +1649,8 @@ class Ui_MainWindow(object):
 
         self.btn_reset_peak_detection_values = QPushButton(self.container_peak_detection_sidebar)
         self.btn_reset_peak_detection_values.setObjectName(u"btn_reset_peak_detection_values")
-        sizePolicy8.setHeightForWidth(self.btn_reset_peak_detection_values.sizePolicy().hasHeightForWidth())
-        self.btn_reset_peak_detection_values.setSizePolicy(sizePolicy8)
+        sizePolicy12.setHeightForWidth(self.btn_reset_peak_detection_values.sizePolicy().hasHeightForWidth())
+        self.btn_reset_peak_detection_values.setSizePolicy(sizePolicy12)
 
         self.layout_container_peak_detection_sidebar.addWidget(self.btn_reset_peak_detection_values, 3, 3, 1, 1)
 
@@ -1428,8 +1667,8 @@ class Ui_MainWindow(object):
         self.btn_compute_results = FeedbackButton(self.sidebar_page_plots)
         self.btn_compute_results.setObjectName(u"btn_compute_results")
         self.btn_compute_results.setEnabled(True)
-        sizePolicy9.setHeightForWidth(self.btn_compute_results.sizePolicy().hasHeightForWidth())
-        self.btn_compute_results.setSizePolicy(sizePolicy9)
+        sizePolicy10.setHeightForWidth(self.btn_compute_results.sizePolicy().hasHeightForWidth())
+        self.btn_compute_results.setSizePolicy(sizePolicy10)
         self.btn_compute_results.setMinimumSize(QSize(0, 38))
         self.btn_compute_results.setFont(font3)
 
@@ -1451,11 +1690,8 @@ class Ui_MainWindow(object):
         self.gridLayout_22.setObjectName(u"gridLayout_22")
         self.btn_save_to_hdf5 = FeedbackButton(self.sidebar_page_result)
         self.btn_save_to_hdf5.setObjectName(u"btn_save_to_hdf5")
-        sizePolicy12 = QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
-        sizePolicy12.setHorizontalStretch(0)
-        sizePolicy12.setVerticalStretch(0)
-        sizePolicy12.setHeightForWidth(self.btn_save_to_hdf5.sizePolicy().hasHeightForWidth())
-        self.btn_save_to_hdf5.setSizePolicy(sizePolicy12)
+        sizePolicy8.setHeightForWidth(self.btn_save_to_hdf5.sizePolicy().hasHeightForWidth())
+        self.btn_save_to_hdf5.setSizePolicy(sizePolicy8)
 
         self.gridLayout_22.addWidget(self.btn_save_to_hdf5, 1, 1, 1, 1)
 
@@ -1468,8 +1704,8 @@ class Ui_MainWindow(object):
 
         self.btn_export_focused = QPushButton(self.sidebar_page_result)
         self.btn_export_focused.setObjectName(u"btn_export_focused")
-        sizePolicy12.setHeightForWidth(self.btn_export_focused.sizePolicy().hasHeightForWidth())
-        self.btn_export_focused.setSizePolicy(sizePolicy12)
+        sizePolicy8.setHeightForWidth(self.btn_export_focused.sizePolicy().hasHeightForWidth())
+        self.btn_export_focused.setSizePolicy(sizePolicy8)
 
         self.gridLayout_22.addWidget(self.btn_export_focused, 1, 0, 1, 1)
 
@@ -1479,206 +1715,21 @@ class Ui_MainWindow(object):
 
         self.label_21 = QLabel(self.sidebar_page_result)
         self.label_21.setObjectName(u"label_21")
-        sizePolicy7.setHeightForWidth(self.label_21.sizePolicy().hasHeightForWidth())
-        self.label_21.setSizePolicy(sizePolicy7)
+        sizePolicy9.setHeightForWidth(self.label_21.sizePolicy().hasHeightForWidth())
+        self.label_21.setSizePolicy(sizePolicy9)
 
         self.gridLayout_22.addWidget(self.label_21, 0, 0, 1, 1)
 
         self.sidebar.addWidget(self.sidebar_page_result)
 
-        self.gridLayout_17.addWidget(self.sidebar, 0, 0, 1, 1, Qt.AlignTop)
+        self.verticalLayout.addWidget(self.sidebar)
+
+        self.scroll_area_left_sidebar.setWidget(self.scrollAreaWidgetContents)
+
+        self.gridLayout_17.addWidget(self.scroll_area_left_sidebar, 0, 0, 1, 1)
 
         self.dock_widget_sidebar.setWidget(self.sidebar_dock_contents)
         MainWindow.addDockWidget(Qt.LeftDockWidgetArea, self.dock_widget_sidebar)
-        self.toolbar_plots = QToolBar(MainWindow)
-        self.toolbar_plots.setObjectName(u"toolbar_plots")
-        self.toolbar_plots.setEnabled(True)
-        self.toolbar_plots.setMovable(False)
-        self.toolbar_plots.setAllowedAreas(Qt.RightToolBarArea|Qt.TopToolBarArea)
-        self.toolbar_plots.setIconSize(QSize(16, 16))
-        self.toolbar_plots.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
-        MainWindow.addToolBar(Qt.TopToolBarArea, self.toolbar_plots)
-        self.dock_widget_sections = QDockWidget(MainWindow)
-        self.dock_widget_sections.setObjectName(u"dock_widget_sections")
-        self.dock_widget_sections.setEnabled(True)
-        self.dock_widget_sections.setFeatures(QDockWidget.DockWidgetFloatable|QDockWidget.DockWidgetMovable)
-        self.dock_widget_sections.setAllowedAreas(Qt.LeftDockWidgetArea|Qt.RightDockWidgetArea)
-        self.section_dock_contents = QWidget()
-        self.section_dock_contents.setObjectName(u"section_dock_contents")
-        self.gridLayout_7 = QGridLayout(self.section_dock_contents)
-        self.gridLayout_7.setSpacing(4)
-        self.gridLayout_7.setContentsMargins(7, 7, 7, 7)
-        self.gridLayout_7.setObjectName(u"gridLayout_7")
-        self.gridLayout_7.setContentsMargins(0, -1, 0, -1)
-        self.section_widgets_container = QWidget(self.section_dock_contents)
-        self.section_widgets_container.setObjectName(u"section_widgets_container")
-        sizePolicy.setHeightForWidth(self.section_widgets_container.sizePolicy().hasHeightForWidth())
-        self.section_widgets_container.setSizePolicy(sizePolicy)
-        self.gridLayout_18 = QGridLayout(self.section_widgets_container)
-        self.gridLayout_18.setSpacing(4)
-        self.gridLayout_18.setContentsMargins(7, 7, 7, 7)
-        self.gridLayout_18.setObjectName(u"gridLayout_18")
-        self.tool_box_editing = QToolBox(self.section_widgets_container)
-        self.tool_box_editing.setObjectName(u"tool_box_editing")
-        self.page_section_list = QWidget()
-        self.page_section_list.setObjectName(u"page_section_list")
-        self.page_section_list.setGeometry(QRect(0, 0, 193, 683))
-        self.gridLayout_13 = QGridLayout(self.page_section_list)
-        self.gridLayout_13.setSpacing(4)
-        self.gridLayout_13.setContentsMargins(7, 7, 7, 7)
-        self.gridLayout_13.setObjectName(u"gridLayout_13")
-        self.gridLayout_13.setContentsMargins(3, 3, 3, 3)
-        self.label_6 = QLabel(self.page_section_list)
-        self.label_6.setObjectName(u"label_6")
-        sizePolicy3.setHeightForWidth(self.label_6.sizePolicy().hasHeightForWidth())
-        self.label_6.setSizePolicy(sizePolicy3)
-
-        self.gridLayout_13.addWidget(self.label_6, 0, 0, 1, 1)
-
-        self.btn_info_section = QPushButton(self.page_section_list)
-        self.btn_info_section.setObjectName(u"btn_info_section")
-        sizePolicy7.setHeightForWidth(self.btn_info_section.sizePolicy().hasHeightForWidth())
-        self.btn_info_section.setSizePolicy(sizePolicy7)
-        self.btn_info_section.setIcon(icon7)
-        self.btn_info_section.setFlat(True)
-
-        self.gridLayout_13.addWidget(self.btn_info_section, 0, 1, 1, 1, Qt.AlignRight)
-
-        self.list_widget_sections = QListWidget(self.page_section_list)
-        self.list_widget_sections.setObjectName(u"list_widget_sections")
-        sizePolicy5.setHeightForWidth(self.list_widget_sections.sizePolicy().hasHeightForWidth())
-        self.list_widget_sections.setSizePolicy(sizePolicy5)
-        self.list_widget_sections.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContentsOnFirstShow)
-        self.list_widget_sections.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.list_widget_sections.setTabKeyNavigation(True)
-        self.list_widget_sections.setProperty("showDropIndicator", False)
-        self.list_widget_sections.setUniformItemSizes(True)
-        self.list_widget_sections.setItemAlignment(Qt.AlignLeading)
-
-        self.gridLayout_13.addWidget(self.list_widget_sections, 1, 0, 1, 2)
-
-        self.tool_box_editing.addItem(self.page_section_list, u"Section List")
-        self.page_editing_options = QWidget()
-        self.page_editing_options.setObjectName(u"page_editing_options")
-        self.page_editing_options.setGeometry(QRect(0, 0, 193, 683))
-        self.formLayout_2 = QFormLayout(self.page_editing_options)
-        self.formLayout_2.setSpacing(4)
-        self.formLayout_2.setContentsMargins(7, 7, 7, 7)
-        self.formLayout_2.setObjectName(u"formLayout_2")
-        self.formLayout_2.setRowWrapPolicy(QFormLayout.WrapAllRows)
-        self.formLayout_2.setContentsMargins(3, 3, 3, 3)
-        self.label_19 = QLabel(self.page_editing_options)
-        self.label_19.setObjectName(u"label_19")
-
-        self.formLayout_2.setWidget(0, QFormLayout.LabelRole, self.label_19)
-
-        self.spin_box_selection_window_size = QSpinBox(self.page_editing_options)
-        self.spin_box_selection_window_size.setObjectName(u"spin_box_selection_window_size")
-        self.spin_box_selection_window_size.setMinimum(5)
-        self.spin_box_selection_window_size.setMaximum(99999)
-        self.spin_box_selection_window_size.setValue(50)
-
-        self.formLayout_2.setWidget(0, QFormLayout.FieldRole, self.spin_box_selection_window_size)
-
-        self.selectionEdgeBufferLabel = QLabel(self.page_editing_options)
-        self.selectionEdgeBufferLabel.setObjectName(u"selectionEdgeBufferLabel")
-
-        self.formLayout_2.setWidget(1, QFormLayout.LabelRole, self.selectionEdgeBufferLabel)
-
-        self.spin_box_selection_edge_buffer = QSpinBox(self.page_editing_options)
-        self.spin_box_selection_edge_buffer.setObjectName(u"spin_box_selection_edge_buffer")
-        self.spin_box_selection_edge_buffer.setMaximum(5000)
-        self.spin_box_selection_edge_buffer.setValue(10)
-
-        self.formLayout_2.setWidget(1, QFormLayout.FieldRole, self.spin_box_selection_edge_buffer)
-
-        self.lookForLabel = QLabel(self.page_editing_options)
-        self.lookForLabel.setObjectName(u"lookForLabel")
-
-        self.formLayout_2.setWidget(2, QFormLayout.LabelRole, self.lookForLabel)
-
-        self.combo_box_selection_peak_type = QComboBox(self.page_editing_options)
-        self.combo_box_selection_peak_type.addItem("")
-        self.combo_box_selection_peak_type.addItem("")
-        self.combo_box_selection_peak_type.addItem("")
-        self.combo_box_selection_peak_type.setObjectName(u"combo_box_selection_peak_type")
-
-        self.formLayout_2.setWidget(2, QFormLayout.FieldRole, self.combo_box_selection_peak_type)
-
-        self.tool_box_editing.addItem(self.page_editing_options, u"Editing Options")
-
-        self.gridLayout_18.addWidget(self.tool_box_editing, 5, 0, 1, 2)
-
-        self.btn_section_add = QToolButton(self.section_widgets_container)
-        self.btn_section_add.setObjectName(u"btn_section_add")
-        sizePolicy7.setHeightForWidth(self.btn_section_add.sizePolicy().hasHeightForWidth())
-        self.btn_section_add.setSizePolicy(sizePolicy7)
-        self.btn_section_add.setPopupMode(QToolButton.MenuButtonPopup)
-        self.btn_section_add.setToolButtonStyle(Qt.ToolButtonTextOnly)
-        self.btn_section_add.setAutoRaise(False)
-
-        self.gridLayout_18.addWidget(self.btn_section_add, 2, 0, 1, 1)
-
-        self.container_section_confirm_cancel = QWidget(self.section_widgets_container)
-        self.container_section_confirm_cancel.setObjectName(u"container_section_confirm_cancel")
-        self.gridLayout_20 = QGridLayout(self.container_section_confirm_cancel)
-        self.gridLayout_20.setSpacing(4)
-        self.gridLayout_20.setContentsMargins(7, 7, 7, 7)
-        self.gridLayout_20.setObjectName(u"gridLayout_20")
-        self.btn_section_confirm = QPushButton(self.container_section_confirm_cancel)
-        self.btn_section_confirm.setObjectName(u"btn_section_confirm")
-        icon28 = QIcon()
-        icon28.addFile(u":/material-symbols/check_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.btn_section_confirm.setIcon(icon28)
-        self.btn_section_confirm.setIconSize(QSize(24, 24))
-
-        self.gridLayout_20.addWidget(self.btn_section_confirm, 1, 0, 1, 1)
-
-        self.btn_section_cancel = QPushButton(self.container_section_confirm_cancel)
-        self.btn_section_cancel.setObjectName(u"btn_section_cancel")
-        icon29 = QIcon()
-        icon29.addFile(u":/material-symbols/close_FILL0_wght400_GRAD0_opsz24.png", QSize(), QIcon.Normal, QIcon.Off)
-        self.btn_section_cancel.setIcon(icon29)
-        self.btn_section_cancel.setIconSize(QSize(24, 24))
-
-        self.gridLayout_20.addWidget(self.btn_section_cancel, 1, 1, 1, 1)
-
-        self.label_24 = QLabel(self.container_section_confirm_cancel)
-        self.label_24.setObjectName(u"label_24")
-        self.label_24.setAlignment(Qt.AlignCenter)
-
-        self.gridLayout_20.addWidget(self.label_24, 0, 0, 1, 2)
-
-
-        self.gridLayout_18.addWidget(self.container_section_confirm_cancel, 3, 0, 1, 2)
-
-        self.combo_box_section_select = QComboBox(self.section_widgets_container)
-        self.combo_box_section_select.setObjectName(u"combo_box_section_select")
-        self.combo_box_section_select.setInputMethodHints(Qt.ImhNone)
-
-        self.gridLayout_18.addWidget(self.combo_box_section_select, 1, 0, 1, 2)
-
-        self.btn_section_remove = QToolButton(self.section_widgets_container)
-        self.btn_section_remove.setObjectName(u"btn_section_remove")
-        sizePolicy7.setHeightForWidth(self.btn_section_remove.sizePolicy().hasHeightForWidth())
-        self.btn_section_remove.setSizePolicy(sizePolicy7)
-        self.btn_section_remove.setToolButtonStyle(Qt.ToolButtonTextOnly)
-
-        self.gridLayout_18.addWidget(self.btn_section_remove, 2, 1, 1, 1)
-
-
-        self.gridLayout_7.addWidget(self.section_widgets_container, 0, 0, 2, 1)
-
-        self.dock_widget_sections.setWidget(self.section_dock_contents)
-        MainWindow.addDockWidget(Qt.RightDockWidgetArea, self.dock_widget_sections)
-        self.toolbar_section_sidebar = QToolBar(MainWindow)
-        self.toolbar_section_sidebar.setObjectName(u"toolbar_section_sidebar")
-        self.toolbar_section_sidebar.setLayoutDirection(Qt.RightToLeft)
-        self.toolbar_section_sidebar.setMovable(False)
-        self.toolbar_section_sidebar.setAllowedAreas(Qt.TopToolBarArea)
-        self.toolbar_section_sidebar.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.toolbar_section_sidebar.setFloatable(False)
-        MainWindow.addToolBar(Qt.TopToolBarArea, self.toolbar_section_sidebar)
 #if QT_CONFIG(shortcut)
         self.label_12.setBuddy(self.combo_box_preprocess_pipeline)
         self.label_2.setBuddy(self.slider_scale_window_size)
@@ -1737,10 +1788,10 @@ class Ui_MainWindow(object):
 
         self.tabs_main.setCurrentIndex(0)
         self.tab_container_result_views.setCurrentIndex(0)
-        self.sidebar.setCurrentIndex(0)
-        self.stacked_peak_parameters.setCurrentIndex(0)
         self.tool_box_editing.setCurrentIndex(0)
         self.btn_section_confirm.setDefault(True)
+        self.sidebar.setCurrentIndex(0)
+        self.stacked_peak_parameters.setCurrentIndex(0)
 
 
         QMetaObject.connectSlotsByName(MainWindow)
@@ -1753,7 +1804,7 @@ class Ui_MainWindow(object):
         self.action_open_console.setToolTip(QCoreApplication.translate("MainWindow", u"Open a python console with access to the application state", None))
 #endif // QT_CONFIG(tooltip)
 #if QT_CONFIG(shortcut)
-        self.action_open_console.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+Shift+P", None))
+        self.action_open_console.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+T", None))
 #endif // QT_CONFIG(shortcut)
         self.action_select_file.setText(QCoreApplication.translate("MainWindow", u"Open File", None))
 #if QT_CONFIG(tooltip)
@@ -1854,18 +1905,17 @@ class Ui_MainWindow(object):
 #if QT_CONFIG(shortcut)
         self.action_hide_selection_box.setShortcut(QCoreApplication.translate("MainWindow", u"Ctrl+H", None))
 #endif // QT_CONFIG(shortcut)
-        self.label_25.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:11pt; font-weight:700;\">Summary (all rows in section)</span></p></body></html>", None))
-        self.label_17.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:11pt; font-weight:700;\">Current Section Data (first 500 rows)</span></p></body></html>", None))
 #if QT_CONFIG(tooltip)
         self.btn_show_more_rows.setToolTip(QCoreApplication.translate("MainWindow", u"Show additional rows ", None))
 #endif // QT_CONFIG(tooltip)
         self.btn_show_more_rows.setText(QCoreApplication.translate("MainWindow", u"Show More", None))
+        self.label_17.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:11pt; font-weight:700;\">Current Section Data (first 500 rows)</span></p></body></html>", None))
+        self.label_25.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:11pt; font-weight:700;\">Summary (all rows in section)</span></p></body></html>", None))
         self.tabs_main.setTabText(self.tabs_main.indexOf(self.tab_data), QCoreApplication.translate("MainWindow", u"Data", None))
         self.tabs_main.setTabText(self.tabs_main.indexOf(self.tab_plots), QCoreApplication.translate("MainWindow", u"Plots", None))
         self.label_focused_result_shown.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:10pt; font-weight:700;\">Results for: </span></p></body></html>", None))
         self.tab_container_result_views.setTabText(self.tab_container_result_views.indexOf(self.tab_focused_result), QCoreApplication.translate("MainWindow", u"Focused", None))
         self.tab_container_result_views.setTabText(self.tab_container_result_views.indexOf(self.tab_complete_result), QCoreApplication.translate("MainWindow", u"Complete", None))
-        self.tab_container_result_views.setTabText(self.tab_container_result_views.indexOf(self.tab_internal_view_result), QCoreApplication.translate("MainWindow", u"Internal View", None))
         self.tabs_main.setTabText(self.tabs_main.indexOf(self.tab_results), QCoreApplication.translate("MainWindow", u"Results", None))
         self.tabs_main.setTabText(self.tabs_main.indexOf(self.tab_analysis), QCoreApplication.translate("MainWindow", u"Analysis", None))
         self.menu_editing_tools.setTitle(QCoreApplication.translate("MainWindow", u"Edit", None))
@@ -1875,10 +1925,38 @@ class Ui_MainWindow(object):
         self.menuSettings.setTitle(QCoreApplication.translate("MainWindow", u"Settings", None))
         self.menuPreferences.setTitle(QCoreApplication.translate("MainWindow", u"Preferences", None))
         self.toolbar.setWindowTitle(QCoreApplication.translate("MainWindow", u"toolBar", None))
+        self.toolbar_plots.setWindowTitle(QCoreApplication.translate("MainWindow", u"toolbar_plots", None))
+        self.dock_widget_sections.setWindowTitle(QCoreApplication.translate("MainWindow", u"Section Controls", None))
+        self.label_6.setText(QCoreApplication.translate("MainWindow", u"Currently showing:", None))
+        self.tool_box_editing.setItemText(self.tool_box_editing.indexOf(self.page_section_list), QCoreApplication.translate("MainWindow", u"Section List", None))
+        self.label_19.setText(QCoreApplication.translate("MainWindow", u"Window Size (Selection):", None))
+        self.selectionEdgeBufferLabel.setText(QCoreApplication.translate("MainWindow", u"Edge Buffer Size (Selection):", None))
+#if QT_CONFIG(tooltip)
+        self.spin_box_selection_edge_buffer.setToolTip(QCoreApplication.translate("MainWindow", u"Ignore peaks if theyre closer than this value to the beginning or end of the selection area", None))
+#endif // QT_CONFIG(tooltip)
+        self.lookForLabel.setText(QCoreApplication.translate("MainWindow", u"Look for:", None))
+        self.combo_box_selection_peak_type.setItemText(0, QCoreApplication.translate("MainWindow", u"Auto", None))
+        self.combo_box_selection_peak_type.setItemText(1, QCoreApplication.translate("MainWindow", u"Maxima", None))
+        self.combo_box_selection_peak_type.setItemText(2, QCoreApplication.translate("MainWindow", u"Minima", None))
+
+        self.check_box_use_selection_peak_find.setText(QCoreApplication.translate("MainWindow", u"Use selection specific method", None))
+        self.tool_box_editing.setItemText(self.tool_box_editing.indexOf(self.page_editing_options), QCoreApplication.translate("MainWindow", u"Editing Options", None))
+        self.btn_section_add.setText(QCoreApplication.translate("MainWindow", u"Add Section", None))
+        self.btn_section_confirm.setText(QCoreApplication.translate("MainWindow", u"Confirm", None))
+        self.btn_section_cancel.setText(QCoreApplication.translate("MainWindow", u"Cancel", None))
+        self.label_24.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:10pt; font-weight:700;\">Selection</span></p></body></html>", None))
+        self.btn_section_remove.setText(QCoreApplication.translate("MainWindow", u"Remove Section", None))
+        self.toolbar_section_sidebar.setWindowTitle(QCoreApplication.translate("MainWindow", u"toolBar", None))
         self.dock_widget_sidebar.setWindowTitle(QCoreApplication.translate("MainWindow", u"Main Sidebar", None))
         self.label_4.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:10pt; font-weight:700;\">Data Selection</span></p></body></html>", None))
-        self.label_3.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:10pt; font-weight:700;\">Metadata</span></p></body></html>", None))
+        self.label_13.setText(QCoreApplication.translate("MainWindow", u"Date of recording (yyyy-mm-dd):", None))
+        self.date_edit_file_info.setDisplayFormat(QCoreApplication.translate("MainWindow", u"yyyy-MM-dd", None))
+        self.label_14.setText(QCoreApplication.translate("MainWindow", u"Subject ID:", None))
+        self.label_15.setText(QCoreApplication.translate("MainWindow", u"Oxygen condition:", None))
         self.label_23.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-weight:700;\">Signal Column</span></p></body></html>", None))
+#if QT_CONFIG(tooltip)
+        self.sampleRateLabel.setToolTip(QCoreApplication.translate("MainWindow", u"<html><head/><body><p>Samples / second</p></body></html>", None))
+#endif // QT_CONFIG(tooltip)
         self.sampleRateLabel.setText(QCoreApplication.translate("MainWindow", u"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n"
 "<html><head><meta name=\"qrichtext\" content=\"1\" /><meta charset=\"utf-8\" /><style type=\"text/css\">\n"
 "p, li { white-space: pre-wrap; }\n"
@@ -1886,14 +1964,11 @@ class Ui_MainWindow(object):
 "li.unchecked::marker { content: \"\\2610\"; }\n"
 "li.checked::marker { content: \"\\2612\"; }\n"
 "</style></head><body style=\" font-family:'Segoe UI'; font-size:9pt; font-weight:400; font-style:normal;\">\n"
-"<p style=\" margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">Sample Rate </span>(samples/second)</p></body></html>", None))
+"<p style=\" margin-top:12px; margin-bottom:12px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">Sample Rate</span></p></body></html>", None))
         self.spin_box_sample_rate.setSuffix(QCoreApplication.translate("MainWindow", u" Hz", None))
         self.btn_select_file.setText(QCoreApplication.translate("MainWindow", u"Select File", None))
         self.btn_load_selection.setText(QCoreApplication.translate("MainWindow", u"Load Selected", None))
-        self.label_13.setText(QCoreApplication.translate("MainWindow", u"Date of recording (yyyy-mm-dd):", None))
-        self.date_edit_file_info.setDisplayFormat(QCoreApplication.translate("MainWindow", u"yyyy-MM-dd", None))
-        self.label_14.setText(QCoreApplication.translate("MainWindow", u"Subject ID:", None))
-        self.label_15.setText(QCoreApplication.translate("MainWindow", u"Oxygen condition:", None))
+        self.label_3.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:10pt; font-weight:700;\">Metadata</span></p></body></html>", None))
         self.label_10.setText(QCoreApplication.translate("MainWindow", u"Order:", None))
         self.label_7.setText(QCoreApplication.translate("MainWindow", u"Filter Type:", None))
         self.dbl_spin_box_highcut.setSuffix(QCoreApplication.translate("MainWindow", u" Hz", None))
@@ -2036,26 +2111,5 @@ class Ui_MainWindow(object):
                         " margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">Complete</span> - Viewing currently not implemented. Can be exported to an HDF5 file via the 'Export Complete Result (HDF5)' button.</p></body></html>", None))
         self.btn_export_focused.setText(QCoreApplication.translate("MainWindow", u"Export Focused Result", None))
         self.label_21.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:10pt; font-weight:700;\">Output Directory</span></p></body></html>", None))
-        self.toolbar_plots.setWindowTitle(QCoreApplication.translate("MainWindow", u"toolbar_plots", None))
-        self.dock_widget_sections.setWindowTitle(QCoreApplication.translate("MainWindow", u"Section Controls", None))
-        self.label_6.setText(QCoreApplication.translate("MainWindow", u"Currently showing:", None))
-        self.tool_box_editing.setItemText(self.tool_box_editing.indexOf(self.page_section_list), QCoreApplication.translate("MainWindow", u"Section List", None))
-        self.label_19.setText(QCoreApplication.translate("MainWindow", u"Window Size (Selection):", None))
-        self.selectionEdgeBufferLabel.setText(QCoreApplication.translate("MainWindow", u"Edge Buffer Size (Selection):", None))
-#if QT_CONFIG(tooltip)
-        self.spin_box_selection_edge_buffer.setToolTip(QCoreApplication.translate("MainWindow", u"Ignore peaks if theyre closer than this value to the beginning or end of the selection area", None))
-#endif // QT_CONFIG(tooltip)
-        self.lookForLabel.setText(QCoreApplication.translate("MainWindow", u"Look for:", None))
-        self.combo_box_selection_peak_type.setItemText(0, QCoreApplication.translate("MainWindow", u"Auto", None))
-        self.combo_box_selection_peak_type.setItemText(1, QCoreApplication.translate("MainWindow", u"Maxima", None))
-        self.combo_box_selection_peak_type.setItemText(2, QCoreApplication.translate("MainWindow", u"Minima", None))
-
-        self.tool_box_editing.setItemText(self.tool_box_editing.indexOf(self.page_editing_options), QCoreApplication.translate("MainWindow", u"Editing Options", None))
-        self.btn_section_add.setText(QCoreApplication.translate("MainWindow", u"Add Section", None))
-        self.btn_section_confirm.setText(QCoreApplication.translate("MainWindow", u"Confirm", None))
-        self.btn_section_cancel.setText(QCoreApplication.translate("MainWindow", u"Cancel", None))
-        self.label_24.setText(QCoreApplication.translate("MainWindow", u"<html><head/><body><p><span style=\" font-size:10pt; font-weight:700;\">Selection</span></p></body></html>", None))
-        self.btn_section_remove.setText(QCoreApplication.translate("MainWindow", u"Remove Section", None))
-        self.toolbar_section_sidebar.setWindowTitle(QCoreApplication.translate("MainWindow", u"toolBar", None))
     # retranslateUi
 
