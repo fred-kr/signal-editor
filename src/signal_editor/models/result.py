@@ -5,6 +5,7 @@ import attrs
 import numpy as np
 import numpy.typing as npt
 import polars as pl
+import polars.selectors as ps
 
 from .. import type_aliases as _t
 
@@ -132,7 +133,7 @@ class CompleteResult:
     def as_dict(self) -> _t.CompleteResultDict:
         return {
             "identifier": self.identifier.as_dict(),
-            "global_dataframe": self.processed_dataframe.to_numpy(structured=True),
+            "global_dataframe": self.processed_dataframe.lazy().with_columns(ps.boolean().cast(pl.Int8)).collect().to_numpy(structured=True),
             "complete_section_results": {
                 s_id: s_res.as_dict() for s_id, s_res in self.complete_section_results.items()
             },

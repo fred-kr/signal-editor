@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 import pyqtgraph as pg
-from loguru import logger
 from PySide6 import QtCore, QtGui, QtWidgets
+from loguru import logger
 
 from . import type_aliases as _t
 from .fileio import result_dict_to_hdf5
@@ -854,8 +854,8 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
     def _read_settings(self) -> None:
         settings = QtCore.QSettings("AWI", "Signal Editor")
 
-        self.restoreGeometry(settings.value("geometry"))
-        self.restoreState(settings.value("windowState"))
+        self.restoreGeometry(settings.value("geometry"))  # type: ignore
+        self.restoreState(settings.value("windowState"))  # type: ignore
 
     def _write_settings(self) -> None:
         settings = QtCore.QSettings("AWI", "Signal Editor")
@@ -881,6 +881,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
 
 
 def main(dev_mode: bool = False, antialias: bool = False, enable_console: bool = False) -> None:
+    # os.environ["PYTHONTRACEMALLOC"] = "1"
     pl.Config.activate_decimals(True)
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"

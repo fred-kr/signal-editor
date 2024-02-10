@@ -131,7 +131,6 @@ class PlotHandler(QtCore.QObject):
         self._setup_plot_labels()
 
         self._pw_main.getPlotItem().getViewBox().setXLink("rate_plot")
-        # self._pw_main.getPlotItem().scene().sigMouseMoved.connect(self._on_mouse_moved)
         self._temperature_label = pg.LabelItem(parent=self._pw_main.getPlotItem())
         self._bpm_label = pg.LabelItem(parent=self._pw_rate.getPlotItem())
 
@@ -170,7 +169,7 @@ class PlotHandler(QtCore.QObject):
             return
         mapped_pos = self._pw_main.plotItem.vb.mapSceneToView(pos)
         cas_upper_bound = self._app.data.cas.data.height
-        i = np.clip(int(mapped_pos.x()), 0, cas_upper_bound - 1)
+        i = np.clip(mapped_pos.x(), 0, cas_upper_bound - 1, dtype=np.int32, casting="unsafe")
 
         try:
             temp_val = self._app.data.cas.data.get_column("temperature").item(i)
@@ -198,7 +197,7 @@ class PlotHandler(QtCore.QObject):
             vb.setLimits(
                 xMin=-0.25 * len_data,
                 xMax=1.25 * len_data,
-                maxYRange=1e4,
+                maxYRange=1e5,
                 minYRange=0.5,
             )
         self.reset_view_range(len_data)
@@ -311,7 +310,7 @@ class PlotHandler(QtCore.QObject):
             autoDownSample=True,
             name=f"Signal ({name})",
         )
-        signal_item.curve.setSegmentedLineMode("on")
+        signal_item.curve.setSegmentedLineMode("auto")
         signal_item.curve.setClickable(True, self._line_clicked_tolerance)
         self._pw_main.addItem(signal_item)
         signal_item.sigClicked.connect(self.add_scatter)

@@ -167,7 +167,7 @@ class DataHandler(QtCore.QObject):
         - temperature: pl.Float64
         - {name_of_data_column}: pl.Float64
         - {name_of_data_column}_processed: pl.Float64
-        - is_peak: pl.Boolean
+        - is_peak: pl.Int8
         """
         return self._base_df
 
@@ -349,7 +349,7 @@ class DataHandler(QtCore.QObject):
                 ps.contains("temp"),
                 pl.col(sig_name),
                 pl.col(sig_name).alias(f"{sig_name}_processed"),
-                pl.lit(False).alias("is_peak"),
+                pl.lit(0).cast(pl.Int8).alias("is_peak"),
             )
             .with_row_index()
             .set_sorted("index")

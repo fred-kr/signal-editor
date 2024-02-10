@@ -7,7 +7,7 @@ from PySide6 import QtCore, QtWidgets
 
 from .. import type_aliases as _t
 from ..handlers import PlotHandler
-from ..views._ui_state_maps import (
+from ..views.ui_state_maps import (
     COMBO_BOX_ITEMS,
     FILTER_INPUT_STATES,
     INITIAL_PEAK_STATES,
@@ -179,62 +179,6 @@ class UIHandler(QtCore.QObject):
         self._app.toolbar_plots.setVisible(index == 1)
         self._app.dock_widget_sections.setVisible(show_section_dock)
 
-    # def create_jupyter_console_widget(self) -> None:
-    #     try:
-    #         import jupyter_client
-    #         import pdir
-    #         from PySide6 import QtCore, QtGui, QtWidgets
-    #         from qtconsole import inprocess
-    #     except ImportError:
-    #         return
-
-    #     class JupyterConsoleWidget(inprocess.QtInProcessRichJupyterWidget):
-    #         def __init__(self):
-    #             super().__init__()
-
-    #             self.kernel_manager: inprocess.QtInProcessKernelManager = (
-    #                 inprocess.QtInProcessKernelManager()
-    #             )
-    #             self.kernel_manager.start_kernel()
-    #             self.kernel_client: jupyter_client.blocking.client.BlockingKernelClient = (
-    #                 self.kernel_manager.client()
-    #             )
-    #             self.kernel_client.start_channels()
-    #             qapp_instance = QtWidgets.QApplication.instance()
-    #             if qapp_instance is not None:
-    #                 qapp_instance.aboutToQuit.connect(self.shutdown_kernel)
-
-    #         def shutdown_kernel(self):
-    #             self.kernel_client.stop_channels()
-    #             self.kernel_manager.shutdown_kernel()
-
-    #     self.jupyter_console = JupyterConsoleWidget()
-    #     self.jupyter_console.set_default_style("linux")
-    #     self.jupyter_console_dock = QtWidgets.QDockWidget("Jupyter Console", self._app)
-    #     self.jupyter_console_dock.setWidget(self.jupyter_console)
-    #     self.jupyter_console.kernel_manager.kernel.shell.push(
-    #         dict(
-    #             mw=self._app,
-    #             pg=pg,
-    #             np=np,
-    #             pl=pl,
-    #             pp=pprint.pprint,
-    #             pdir=pdir,
-    #             qtc=QtCore,
-    #             qtw=QtWidgets,
-    #             qtg=QtGui,
-    #         )
-    #     )
-    #     self.jupyter_console.execute("whos")
-
-    # @QtCore.Slot()
-    # def show_jupyter_console_widget(self) -> None:
-    #     if self.jupyter_console_dock.isVisible():
-    #         self.jupyter_console_dock.close()
-    #     else:
-    #         self.jupyter_console_dock.show()
-    #         self.jupyter_console_dock.resize(900, 600)
-
     @QtCore.Slot(str)
     def handle_filter_method_changed(self, text: str) -> None:
         method = self._app.filter_method
@@ -251,6 +195,17 @@ class UIHandler(QtCore.QObject):
         self._app.spin_box_order.setValue(3)
         self._app.slider_order.setValue(3)
 
+    def _set_neurokit2_cleaning_params(self) -> None:
+        self._app.combo_box_filter_method.blockSignals(True)
+        self._app.combo_box_filter_method.setValue("butterworth")
+        self._app.combo_box_filter_method.blockSignals(False)
+        self._app.dbl_spin_box_lowcut.setValue(0.5)
+        self._app.dbl_spin_box_highcut.setValue(
+            self._app.dbl_spin_box_highcut.minimum()
+        )  # This displays the SpecialValueText 'None'
+        self._app.spin_box_order.setValue(5)
+        self._app.slider_order.setValue(5)
+
     @QtCore.Slot()
     def handle_preprocess_pipeline_changed(self) -> None:
         pipeline_value = self._app.pipeline
@@ -263,6 +218,10 @@ class UIHandler(QtCore.QObject):
             self._app.container_custom_filter_inputs.setEnabled(False)
             self._app.combo_box_filter_method.setValue("butterworth")
             self._set_elgendi_cleaning_params()
+        elif pipeline_value == "ecg_neurokit2":
+            self._app.container_custom_filter_inputs.setEnabled(False)
+            self._app.container_powerline.setEnabled(True)
+            self._set_neurokit2_cleaning_params()
         else:
             # TODO: add UI and logic for other signal cleaning pipelines
             self._app.container_custom_filter_inputs.setEnabled(False)
@@ -291,6 +250,8 @@ class UIHandler(QtCore.QObject):
             }
             for param, widget in filter_widgets.items():
                 if widget.isEnabled():
+                    if param in ("lowcut", "highcut") and widget.value() == 0:
+                        filter_params[param] = None
                     filter_params[param] = widget.value()
 
         return filter_params

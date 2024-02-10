@@ -6,10 +6,9 @@ import numpy.typing as npt
 import polars as pl
 
 if t.TYPE_CHECKING:
-    from PySide6 import QtCore, QtGui
-
     from .handlers import DataState
     from .models import SectionContainer, SectionID, SectionIndices
+    from PySide6 import QtCore, QtGui
 
 
 type SignalName = t.Literal["hbr", "ventilation"]
@@ -39,6 +38,7 @@ type FilterMethod = t.Literal[
     "savgol",
     "fir",
     "bessel",
+    "powerline",
     "None",
 ]
 type OxygenCondition = t.Literal["normoxic", "hypoxic", "unknown"]

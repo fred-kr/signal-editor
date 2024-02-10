@@ -12,7 +12,7 @@ import polars.selectors as ps
 
 from .. import type_aliases as _t
 from ..peaks import find_peaks
-from ..processing import filter_elgendi, filter_signal, scale_signal
+from ..processing import filter_elgendi, filter_neurokit2, filter_signal, scale_signal
 from .result import FocusedResult, ManualPeakEdits
 
 
@@ -42,7 +42,11 @@ def _to_section_indices(value: SectionIndices | tuple[int, int]) -> SectionIndic
 
 
 def _to_structured_array(value: npt.NDArray[np.void] | pl.DataFrame) -> npt.NDArray[np.void]:
-    return value.to_numpy(True) if isinstance(value, pl.DataFrame) else value
+    if isinstance(value, pl.DataFrame):
+        value = value.lazy().with_columns(ps.boolean().cast(pl.Int8)).collect()
+    else:
+        value = pl.from_numpy(value).lazy().with_columns(ps.boolean().cast(pl.Int8)).collect()
+    return value.to_numpy(structured=True)
 
 
 def _to_uint_array(value: npt.NDArray[np.uint32] | pl.Series) -> npt.NDArray[np.uint32]:
@@ -205,7 +209,13 @@ class Section:
 
     @property
     def peaks(self) -> pl.Series:
-        return self.data.get_column("is_peak").arg_true()
+        return (
+            self.data.lazy()
+            .filter(pl.col("is_peak") == 1)
+            .select("section_index")
+            .collect()
+            .get_column("section_index")
+        )
 
     @property
     def peaks_global(self) -> pl.Series:
@@ -225,16 +235,15 @@ class Section:
         **kwargs: t.Unpack[_t.SignalFilterParameters],
     ) -> None:
         method = kwargs.get("method", "None")
+        raw_data = self.raw_data.to_numpy(zero_copy_only=True)
         if pipeline == "custom":
             if method == "None":
-                filtered = self.raw_data.to_numpy()
+                filtered = raw_data
                 filter_params = "None"
             else:
-                filtered, filter_params = filter_signal(
-                    self.raw_data.to_numpy(), self.sfreq, **kwargs
-                )
+                filtered, filter_params = filter_signal(raw_data, self.sfreq, **kwargs)
         elif pipeline == "ppg_elgendi":
-            filtered = filter_elgendi(self.raw_data.to_numpy(), self.sfreq)
+            filtered = filter_elgendi(raw_data, self.sfreq)
             filter_params = _t.SignalFilterParameters(
                 highcut=8,
                 lowcut=0.5,
@@ -243,12 +252,23 @@ class Section:
                 window_size="default",
                 powerline=50,
             )
+        elif pipeline == "ecg_neurokit2":
+            filtered = filter_neurokit2(raw_data, self.sfreq, powerline=kwargs.get("powerline", 50))
+            filter_params = _t.SignalFilterParameters(
+                highcut=None,
+                lowcut=0.5,
+                method="butterworth",
+                order=5,
+                window_size="default",
+                powerline=kwargs.get("powerline", 50),
+            )
         else:
             raise ValueError(f"Unknown pipeline: {pipeline}")
         self._parameters_used["pipeline"] = pipeline
         self._parameters_used["filter_parameters"] = filter_params
-        pl_filtered = pl.Series(self._proc_sig_name, filtered, pl.Float64)
-        self.data = self.data.with_columns((pl_filtered).alias(self._proc_sig_name))
+        self.data = self.data.with_columns(
+            pl.Series(self._proc_sig_name, filtered, pl.Float64).alias(self._proc_sig_name)
+        )
 
     def scale_data(
         self,
@@ -263,7 +283,7 @@ class Section:
             window_size=window_size,
             method=method,
         )
-        self.data = self.data.with_columns((scaled).alias(self._proc_sig_name))
+        self.data = self.data.with_columns(scaled.alias(self._proc_sig_name))
 
     def detect_peaks(
         self,
@@ -320,14 +340,17 @@ class Section:
 
         self.data = self.data.with_columns(
             pl.when(pl.col("section_index").is_in(pl_peaks))
-            .then(True)
-            .otherwise(False)
+            .then(pl.lit(1))
+            .otherwise(pl.lit(0))
+            .cast(pl.Int8)
             .alias("is_peak")
         )
         self._peak_edits.clear()
         self.calculate_rate()
 
-    def update_peaks(self, action: t.Literal["add", "remove"], peaks: t.Sequence[int] | npt.NDArray[np.intp]) -> None:
+    def update_peaks(
+        self, action: t.Literal["add", "remove"], peaks: t.Sequence[int] | npt.NDArray[np.intp]
+    ) -> None:
         """
         Update the `is_peak` column based on the given action and indices.
         Only modifies the values at the given indices, while leaving the rest unchanged.
@@ -340,18 +363,21 @@ class Section:
             The indices of the peaks to modify.
         """
         pl_peaks = pl.Series("peaks", peaks, pl.Int32)
-        then_value = action == "add"
-
-        updated_data = self.data.lazy().select(
-            pl.when(pl.col("section_index").is_in(pl_peaks))
-            .then(then_value)
-            .otherwise(pl.col("is_peak"))
-            .alias("is_peak")
-        ).collect().get_column("is_peak")
-
-        changed_indices = pl.arg_where(
-            updated_data != self.data.get_column("is_peak"), eager=True
+        then_value = 1 if action == "add" else 0
+        updated_data = (
+            self.data.lazy()
+            .select(
+                pl.when(pl.col("section_index").is_in(pl_peaks))
+                .then(then_value)
+                .otherwise(pl.col("is_peak"))
+                .cast(pl.Int8)
+                .alias("is_peak")
+            )
+            .collect()
+            .get_column("is_peak")
         )
+
+        changed_indices = pl.arg_where(updated_data != self.data.get_column("is_peak"), eager=True)
 
         self.data.replace("is_peak", updated_data)
 
@@ -359,7 +385,6 @@ class Section:
             self._peak_edits.new_added(changed_indices)
         else:
             self._peak_edits.new_removed(changed_indices)
-        
 
     def get_peak_edits(self) -> ManualPeakEdits:
         """
@@ -380,8 +405,9 @@ class Section:
             self.data.lazy()
             .with_columns(
                 pl.when(pl.col("section_index").is_in(manual_indices))
-                .then(True)
-                .otherwise(False)
+                .then(pl.lit(1))
+                .otherwise(pl.lit(0))
+                .cast(pl.Int8)
                 .alias("is_manual")
             )
             .collect()

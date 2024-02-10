@@ -632,8 +632,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>186</width>
-                 <height>176</height>
+                 <width>200</width>
+                 <height>704</height>
                 </rect>
                </property>
                <attribute name="label">
@@ -1449,6 +1449,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
                         <property name="frame">
                          <bool>true</bool>
                         </property>
+                        <property name="specialValueText">
+                         <string>None</string>
+                        </property>
                         <property name="correctionMode">
                          <enum>QAbstractSpinBox::CorrectToNearestValue</enum>
                         </property>
@@ -1547,6 +1550,9 @@ li.checked::marker { content: &quot;\2612&quot;; }
                         </property>
                         <property name="frame">
                          <bool>true</bool>
+                        </property>
+                        <property name="specialValueText">
+                         <string>None</string>
                         </property>
                         <property name="correctionMode">
                          <enum>QAbstractSpinBox::CorrectToNearestValue</enum>

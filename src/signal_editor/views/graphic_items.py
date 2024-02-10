@@ -71,11 +71,11 @@ class CustomViewBox(pg.ViewBox):
         ev.accept()
 
         pos = ev.pos()
-        lastPos = ev.lastPos()
-        dif = (pos - lastPos) * np.array([-1, -1])
+        last_pos = ev.lastPos()
+        dif = (pos - last_pos) * np.array([-1, -1])
 
-        mouseEnabled = np.array(self.state["mouseEnabled"], dtype=np.float64)
-        mask = mouseEnabled.copy()
+        mouse_enabled = np.array(self.state["mouseEnabled"], dtype=np.float64)
+        mask = mouse_enabled.copy()
         if axis is not None:
             mask[1 - axis] = 0.0
 
@@ -125,8 +125,8 @@ class CustomViewBox(pg.ViewBox):
 
             tr = pg.invertQTransform(self.childGroup.transform())
 
-            x = s[0] if mouseEnabled[0] == 1 else None
-            y = s[1] if mouseEnabled[1] == 1 else None
+            x = s[0] if mouse_enabled[0] == 1 else None
+            y = s[1] if mouse_enabled[1] == 1 else None
 
             center = pg.Point(tr.map(ev.buttonDownPos(QtCore.Qt.MouseButton.RightButton)))
             self._resetTarget()
@@ -171,24 +171,20 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
                 kargs["y"] = y
 
         # Calculate number of points
-        numPts = (
+        num_pts = (
             len(spots)
             if spots is not None
-            else len(y)
-            if y is not None and hasattr(y, "__len__")
-            else 1
-            if y is not None
-            else 0
+            else len(y) if y is not None and hasattr(y, "__len__") else 1 if y is not None else 0
         )
 
         # Initialize new data array
         self.data["item"][...] = None
-        oldData = self.data
-        self.data = np.empty(len(oldData) + numPts, dtype=self.data.dtype)
-        self.data[: len(oldData)] = oldData
-        newData = self.data[len(oldData) :]
-        newData["size"] = -1
-        newData["visible"] = True
+        old_data = self.data
+        self.data = np.empty(len(old_data) + num_pts, dtype=self.data.dtype)
+        self.data[: len(old_data)] = old_data
+        new_data = self.data[len(old_data) :]
+        new_data["size"] = -1
+        new_data["visible"] = True
 
         # Handle 'spots' parameter
         if spots is not None:
@@ -200,20 +196,20 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
                             x, y = pos.x(), pos.y()
                         else:
                             x, y = pos[0], pos[1]
-                        newData[i]["x"] = x
-                        newData[i]["y"] = y
+                        new_data[i]["x"] = x
+                        new_data[i]["y"] = y
                     elif k == "pen":
-                        newData[i][k] = pg.mkPen(v)
+                        new_data[i][k] = pg.mkPen(v)
                     elif k == "brush":
-                        newData[i][k] = pg.mkBrush(v)
+                        new_data[i][k] = pg.mkBrush(v)
                     elif k in ["x", "y", "size", "symbol", "data"]:
-                        newData[i][k] = v
+                        new_data[i][k] = v
                     else:
                         raise ScatterPlotItemError(f"Unknown spot parameter: {k}")
         # Handle 'y' parameter
         elif y is not None:
-            newData["x"] = x
-            newData["y"] = y
+            new_data["x"] = x
+            new_data["y"] = y
 
         # Update the scatter plot item properties based on keyword arguments
         for k, v in kargs.items():
@@ -233,11 +229,11 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         # Set point-specific properties
         for k in ["pen", "brush", "symbol", "size"]:
             if k in kargs:
-                setMethod = getattr(self, f"set{k[0].upper()}{k[1:]}")
-                setMethod(
+                set_method = getattr(self, f"set{k[0].upper()}{k[1:]}")
+                set_method(
                     kargs[k],
                     update=False,
-                    dataSet=newData,
+                    dataSet=new_data,
                     mask=kargs.get("mask", None),
                 )
             kh = f"hover{k.title()}"
@@ -251,14 +247,14 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
 
         # Set point data
         if "data" in kargs:
-            self.setPointData(kargs["data"], dataSet=newData)
+            self.setPointData(kargs["data"], dataSet=new_data)
 
         # Update the scatter plot item
         self.prepareGeometryChange()
         self.informViewBoundsChanged()
         self.bounds = [None, None]
         self.invalidate()
-        self.updateSpots(newData)
+        self.updateSpots(new_data)
         self.sigPlotChanged.emit(self)
 
 

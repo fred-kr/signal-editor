@@ -2,9 +2,10 @@ from typing import Unpack
 
 import neurokit2 as nk
 import numpy as np
+import numpy.typing as npt
 import polars as pl
+import scipy.signal
 from loguru import logger
-from numpy.typing import NDArray
 
 from . import type_aliases as _t
 
@@ -44,7 +45,7 @@ def _rolling_z(sig: pl.Series, window_size: int) -> pl.Series:
 
 
 def scale_signal(
-    sig: pl.Series | NDArray[np.float64],
+    sig: pl.Series | npt.NDArray[np.float64],
     robust: bool = False,
     window_size: int | None = None,
 ) -> pl.Series:
@@ -84,7 +85,28 @@ def scale_signal(
         return _scale_mad(sig) if robust else _scale_z(sig)
 
 
-def filter_elgendi(sig: NDArray[np.float64], sampling_rate: int) -> NDArray[np.float64]:
+def _signal_filter_powerline(
+    sig: npt.NDArray[np.float64], sampling_rate: int, powerline: int = 50
+) -> npt.NDArray[np.float64]:
+    b = np.ones(sampling_rate // powerline) if sampling_rate >= 100 else np.ones(2)
+    a = [len(b)]
+    return np.asarray(scipy.signal.filtfilt(b, a, sig, method="pad"), dtype=np.float64)
+
+
+def filter_neurokit2(
+    sig: npt.NDArray[np.float64], sampling_rate: int, powerline: int | float = 50
+) -> npt.NDArray[np.float64]:
+    clean = nk.signal_filter(
+        signal=sig,
+        sampling_rate=sampling_rate,
+        lowcut=0.5,
+        method="butterworth",
+        order=5,
+    )
+    return _signal_filter_powerline(clean, sampling_rate, powerline)
+
+
+def filter_elgendi(sig: npt.NDArray[np.float64], sampling_rate: int) -> npt.NDArray[np.float64]:
     return np.asarray(
         nk.signal_filter(
             sig,
@@ -100,18 +122,21 @@ def filter_elgendi(sig: NDArray[np.float64], sampling_rate: int) -> NDArray[np.f
 
 # TODO: Look up how window size for FIR filters is calculated and replace the loop with that
 def filter_signal(
-    sig: NDArray[np.float64],
+    sig: npt.NDArray[np.float64],
     sampling_rate: int,
     **kwargs: Unpack[_t.SignalFilterParameters],
-) -> tuple[NDArray[np.float64], _t.SignalFilterParameters]:
+) -> tuple[npt.NDArray[np.float64], _t.SignalFilterParameters]:
     method = kwargs["method"]
     if method == "fir":
         max_attempts = 5  # Define a maximum number of attempts for FIR filtering
 
         for _ in range(max_attempts):
             try:
-                logger.info(f"Attempting FIR filtering with length {kwargs['window_size']}")
+                logger.info(
+                    f"Attempting FIR filtering with window size {kwargs['window_size']} ..."
+                )
                 out = nk.signal_filter(sig, sampling_rate=sampling_rate, **kwargs)  # type: ignore
+                logger.info("Filtering successful!")
                 break  # Exit the loop if filtering is successful
             except ValueError as e:
                 message = str(e)
