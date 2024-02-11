@@ -205,7 +205,7 @@ class Section:
     def update_sfreq(self, new_sfreq: int) -> None:
         self._sampling_rate = new_sfreq
         if self._rate.shape[0] != 0 or self._rate_interp.shape[0] != 0:
-            self.calculate_rate()
+            self.calculate_rate(new_sfreq, self.peaks.to_numpy(zero_copy_only=True))
 
     @property
     def peaks(self) -> pl.Series:
@@ -295,12 +295,12 @@ class Section:
             method=method,
             method_parameters=method_parameters,
         )
-        peaks = find_peaks(self.proc_data.to_numpy(), sampling_rate, method, method_parameters)
+        peaks = find_peaks(
+            self.proc_data.to_numpy(zero_copy_only=True), sampling_rate, method, method_parameters
+        )
         self.set_peaks(peaks)
 
-    def calculate_rate(self) -> None:
-        sampling_rate = self.sfreq
-        peaks = self.peaks.to_numpy()
+    def calculate_rate(self, sampling_rate: int, peaks: npt.NDArray[np.int32 | np.uint32]) -> None:
         self._rate = np.asarray(
             nk.signal_rate(
                 peaks,
@@ -346,10 +346,12 @@ class Section:
             .alias("is_peak")
         )
         self._peak_edits.clear()
-        self.calculate_rate()
+        self.calculate_rate(self.sfreq, peaks)
 
     def update_peaks(
-        self, action: t.Literal["add", "remove"], peaks: t.Sequence[int] | npt.NDArray[np.intp]
+        self,
+        action: t.Literal["add", "remove"],
+        peaks: t.Sequence[int] | npt.NDArray[np.intp],
     ) -> None:
         """
         Update the `is_peak` column based on the given action and indices.

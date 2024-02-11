@@ -80,7 +80,7 @@ def infer_sampling_rate(
     if time_col == "auto":
         # Try to infer the column holding the time data
         for col in df.columns:
-            if "time" in col:
+            if "time" in col or df.get_column(col).dtype.is_temporal():
                 time_col = col
                 break
 
@@ -129,6 +129,7 @@ class DataHandler(QtCore.QObject):
 
         self._raw_df: pl.DataFrame | None = None
         self._base_df: pl.DataFrame | None = None
+        self._base_section: Section | None = None
         self._sections: SectionContainer = SectionContainer()
         self._sampling_rate: int = -1
         self._metadata: _t.FileMetadata | None = None
@@ -201,13 +202,15 @@ class DataHandler(QtCore.QObject):
     def base_section(self) -> Section | None:
         if self.base_df is None or self.sig_name is None or self.sfreq == -1:
             return None
-        return Section(
-            self.base_df,
-            sig_name=self.sig_name,
-            sampling_rate=self.sfreq,
-            set_active=True,
-            _is_base=True,
-        )
+        if self._base_section is None:
+            self._base_section = Section(
+                self.base_df,
+                sig_name=self.sig_name,
+                sampling_rate=self.sfreq,
+                set_active=True,
+                _is_base=True,
+            )
+        return self._base_section
 
     @property
     def cas(self) -> Section | None:

@@ -4,8 +4,22 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from .. import type_aliases as _t
+
 if t.TYPE_CHECKING:
     from pyqtgraph.GraphicsScene import mouseEvents
+
+
+def _mk_pen(*args: t.Any, **kwargs: t.Any) -> QtGui.QPen:
+    if len(args) == 1 and isinstance(args[0], QtGui.QPen):
+        return args[0]
+    return pg.mkPen(*args, **kwargs)
+
+
+def _mk_brush(*args: t.Any, **kwargs: t.Any) -> QtGui.QBrush:
+    if len(args) == 1 and isinstance(args[0], QtGui.QBrush):
+        return args[0]
+    return pg.mkBrush(*args, **kwargs)
 
 
 class ScatterPlotItemError(Exception):
@@ -20,7 +34,7 @@ class CustomViewBox(pg.ViewBox):
     """
 
     def __init__(self, *args: t.Any, **kargs: t.Any) -> None:
-        pg.ViewBox.__init__(self, *args, **kargs)
+        super().__init__(*args, **kargs)
         self._selection_box: QtWidgets.QGraphicsRectItem | None = None
         self.mapped_selection_rect: QtGui.QPolygonF | None = None
 
@@ -28,7 +42,7 @@ class CustomViewBox(pg.ViewBox):
     def selection_box(self) -> QtWidgets.QGraphicsRectItem:
         if self._selection_box is None:
             selection_box = QtWidgets.QGraphicsRectItem(0, 0, 1, 1)
-            selection_box.setPen(pg.mkPen((50, 100, 200), width=1))
+            selection_box.setPen(pg.mkPen(color=(50, 100, 200, 255)))
             selection_box.setBrush(pg.mkBrush((50, 100, 200, 100)))
             selection_box.setZValue(1e9)
             selection_box.hide()
@@ -144,37 +158,31 @@ class CustomViewBox(pg.ViewBox):
 
 class CustomScatterPlotItem(pg.ScatterPlotItem):
     def addPoints(self, *args: t.Any, **kargs: t.Any) -> None:
-        # Extract the required parameters
-        spots = kargs.get("spots")
-        x = kargs.get("x")
-        y = kargs.get("y")
+        arg_keys = ["spots", "x", "y"]
+        for i, key in enumerate(arg_keys[: len(args)]):
+            kargs[key] = args[i]
+
         pos = kargs.get("pos")
-
-        # Handle variable input arguments
-        if len(args) == 1:
-            kargs["spots"] = args[0]
-        elif len(args) == 2:
-            kargs["x"] = args[0]
-            kargs["y"] = args[1]
-        elif len(args) > 2:
-            raise ScatterPlotItemError("Only accepts up to two non-keyword arguments.")
-
-        # Handle 'pos' parameter
         if pos is not None:
             if isinstance(pos, np.ndarray):
-                kargs["x"] = pos[:, 0]
-                kargs["y"] = pos[:, 1]
+                kargs["x"], kargs["y"] = pos[:, 0], pos[:, 1]
             else:
-                x = [p.x() if isinstance(p, QtCore.QPointF) else p[0] for p in pos]
-                y = [p.y() if isinstance(p, QtCore.QPointF) else p[1] for p in pos]
-                kargs["x"] = x
-                kargs["y"] = y
+                kargs["x"] = [p.x() if isinstance(p, QtCore.QPointF) else p[0] for p in pos]
+                kargs["y"] = [p.y() if isinstance(p, QtCore.QPointF) else p[1] for p in pos]
+
+        spots: list[_t.SpotDict] | None = kargs.get("spots")
+        x = kargs.get("x")
+        y = kargs.get("y")
 
         # Calculate number of points
         num_pts = (
             len(spots)
             if spots is not None
-            else len(y) if y is not None and hasattr(y, "__len__") else 1 if y is not None else 0
+            else len(y)
+            if y is not None and hasattr(y, "__len__")
+            else 1
+            if y is not None
+            else 0
         )
 
         # Initialize new data array
@@ -190,64 +198,61 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
         if spots is not None:
             for i, spot in enumerate(spots):
                 for k, v in spot.items():
-                    if k == "pos":
-                        pos = v
-                        if isinstance(pos, QtCore.QPointF):
-                            x, y = pos.x(), pos.y()
-                        else:
-                            x, y = pos[0], pos[1]
-                        new_data[i]["x"] = x
-                        new_data[i]["y"] = y
-                    elif k == "pen":
-                        new_data[i][k] = pg.mkPen(v)
-                    elif k == "brush":
-                        new_data[i][k] = pg.mkBrush(v)
-                    elif k in ["x", "y", "size", "symbol", "data"]:
-                        new_data[i][k] = v
-                    else:
-                        raise ScatterPlotItemError(f"Unknown spot parameter: {k}")
+                    match k:
+                        case "pos":
+                            pos = v
+                            if isinstance(pos, QtCore.QPointF):
+                                x, y = pos.x(), pos.y()
+                            else:
+                                x, y = pos[0], pos[1]
+                            new_data[i]["x"] = x
+                            new_data[i]["y"] = y
+                        case "pen":
+                            new_data[i][k] = _mk_pen(v)
+                        case "brush":
+                            new_data[i][k] = _mk_brush(v)
+                        case "x" | "y" | "size" | "symbol" | "data":
+                            new_data[i][k] = v
+                        case _:
+                            raise ScatterPlotItemError(f"Unknown spot parameter: {k}")
         # Handle 'y' parameter
         elif y is not None:
             new_data["x"] = x
             new_data["y"] = y
 
-        # Update the scatter plot item properties based on keyword arguments
         for k, v in kargs.items():
-            if k == "name":
-                self.opts["name"] = v
-            elif k == "pxMode":
-                self.setPxMode(v)
-            elif k == "antialias":
-                self.opts["antialias"] = v
-            elif k == "hoverable":
-                self.opts["hoverable"] = bool(v)
-            elif k == "tip":
-                self.opts["tip"] = v
-            elif k == "useCache":
-                self.opts["useCache"] = v
-
-        # Set point-specific properties
-        for k in ["pen", "brush", "symbol", "size"]:
-            if k in kargs:
-                set_method = getattr(self, f"set{k[0].upper()}{k[1:]}")
-                set_method(
-                    kargs[k],
-                    update=False,
-                    dataSet=new_data,
-                    mask=kargs.get("mask", None),
-                )
-            kh = f"hover{k.title()}"
-            if kh in kargs:
-                vh = kargs[kh]
-                if k == "pen":
-                    vh = pg.mkPen(vh)
-                elif k == "brush":
-                    vh = pg.mkBrush(vh)
-                self.opts[kh] = vh
-
-        # Set point data
-        if "data" in kargs:
-            self.setPointData(kargs["data"], dataSet=new_data)
+            match k:
+                case "name":
+                    self.opts["name"] = v
+                case "pxMode":
+                    self.setPxMode(v)
+                case "antialias":
+                    self.opts["antialias"] = v
+                case "hoverable":
+                    self.opts["hoverable"] = bool(v)
+                case "tip":
+                    self.opts["tip"] = v
+                case "useCache":
+                    self.opts["useCache"] = v
+                case "pen" | "brush" | "symbol" | "size":
+                    set_method = getattr(self, f"set{k.capitalize()}")
+                    set_method(
+                        v,
+                        update=False,
+                        dataSet=new_data,
+                        mask=kargs.get("mask", None),
+                    )
+                case "hoverPen" | "hoverBrush" | "hoverSymbol" | "hoverSize":
+                    vh = kargs[k]
+                    if k == "hoverPen":
+                        vh = _mk_pen(vh)
+                    elif k == "hoverBrush":
+                        vh = _mk_brush(vh)
+                    self.opts[k] = vh
+                case "data":
+                    self.setPointData(kargs["data"], dataSet=new_data)
+                case _:
+                    pass
 
         # Update the scatter plot item
         self.prepareGeometryChange()

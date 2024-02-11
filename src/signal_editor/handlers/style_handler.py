@@ -5,7 +5,7 @@ import qdarkstyle
 from PySide6 import QtCore, QtWidgets
 
 
-class StyleHandler:
+class StyleHandler(QtCore.QObject):
     def __init__(
         self,
         plot_widgets: list[pg.PlotWidget] | None = None,

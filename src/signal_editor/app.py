@@ -1,4 +1,5 @@
 import cProfile
+import numpy.typing as npt
 import os
 import sys
 import traceback
@@ -28,6 +29,9 @@ from .models import (
 )
 from .peaks import find_extrema, find_peaks
 from .views.main_window import Ui_MainWindow
+
+if t.TYPE_CHECKING:
+    from .views.graphic_items import CustomScatterPlotItem
 
 
 def readable_section_id(section_id: SectionID, subject_id: str, oxygen_condition: str) -> str:
@@ -800,12 +804,19 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
 
     @QtCore.Slot(bool)
     def handle_draw_signal(self, has_peaks: bool = False) -> None:
+        """
+        Draw the currently active signal in the main plot widget.
+
+        :param has_peaks: Indicates whether the signal has peaks detected. If True, the peaks will be drawn as well.
+        :type has_peaks: bool, optional
+        """        
         if self.data.cas is None:
             return
         self.plot.update_time_axis_scale(self.data.cas.sfreq)
-        self.plot.draw_signal(self.data.cas.proc_data.to_numpy(), self.sig_name)
+        self.plot.draw_signal(self.data.cas.proc_data.to_numpy(zero_copy_only=True), self.sig_name)
         if has_peaks:
             self.handle_draw_peaks()
+            self.handle_draw_rate()
 
         for region in self.plot.regions:
             if (
@@ -825,16 +836,16 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         peaks_x, peaks_y = self.data.cas.get_peak_xy()
         self.plot.draw_peaks(peaks_x, peaks_y, self.sig_name)
 
-    @QtCore.Slot()
-    def handle_draw_rate(self) -> None:
+    @QtCore.Slot(object)
+    def handle_draw_rate(self, scatter_plt_item: "CustomScatterPlotItem | None" = None) -> None:
         if self.data.cas is None:
             return
-        self.data.cas.calculate_rate()
+        self.data.cas.calculate_rate(sampling_rate=self.data.cas.sfreq, peaks=self.data.cas.peaks.to_numpy())
         self.plot.draw_rate(self.data.cas.rate_interp, self.sig_name)
 
     @QtCore.Slot(str, list)
     def handle_scatter_clicked(
-        self, action: t.Literal["add", "remove"], indices: list[int]
+        self, action: t.Literal["add", "remove"], indices: t.Sequence[int] | npt.NDArray[np.int32]
     ) -> None:
         if self.data.cas is None:
             return
@@ -881,7 +892,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
 
 
 def main(dev_mode: bool = False, antialias: bool = False, enable_console: bool = False) -> None:
-    # os.environ["PYTHONTRACEMALLOC"] = "1"
     pl.Config.activate_decimals(True)
     if dev_mode:
         os.environ["QT_LOGGING_RULES"] = "qt.pyside.libpyside.warning=true"
@@ -891,12 +901,13 @@ def main(dev_mode: bool = False, antialias: bool = False, enable_console: bool =
         os.environ["DEV_MODE"] = "0"
 
     os.environ["ENABLE_CONSOLE"] = "1" if enable_console else "0"
+    os.environ["PG_ANTIALIAS"] = "1" if antialias else "0"
     pg.setConfigOptions(
         useOpenGL=True,
         enableExperimental=True,
         segmentedLineMode="auto",
         background="k",
-        antialias=antialias,
+        antialias=os.environ.get("PG_ANTIALIAS", "0") == "1",
     )
     logger.add(
         "./logs/debug.log",

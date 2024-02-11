@@ -37,8 +37,6 @@ class UIHandler(QtCore.QObject):
         )
 
         self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
-        # if os.environ.get("ENABLE_CONSOLE", "0") == "1":
-        # self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
         self._app.btn_reset_peak_detection_values.clicked.connect(
             self.set_initial_peak_detection_parameters
         )
@@ -57,10 +55,6 @@ class UIHandler(QtCore.QObject):
 
         # Toolbar Plots
         self._setup_toolbars()
-
-        # Console
-        # if os.environ.get("ENABLE_CONSOLE", "0") == "1":
-        # self.create_jupyter_console_widget()
 
     def _setup_statusbar(self) -> None:
         sb = self._app.statusbar
@@ -138,7 +132,6 @@ class UIHandler(QtCore.QObject):
     def update_data_select_ui(self) -> None:
         if self._app.data.raw_df is None:
             return
-        # self._app.container_file_info.setEnabled(True)
         self._app.btn_load_selection.setEnabled(True)
         data_cols = self._app.data.raw_df.select(
             (~ps.contains(["index", "time", "temp"])) & (ps.float())
@@ -223,9 +216,8 @@ class UIHandler(QtCore.QObject):
             self._app.container_powerline.setEnabled(True)
             self._set_neurokit2_cleaning_params()
         else:
-            # TODO: add UI and logic for other signal cleaning pipelines
             self._app.container_custom_filter_inputs.setEnabled(False)
-            msg = f"Selected pipeline {pipeline_value} not yet implemented, use either 'custom' or 'ppg_elgendi'."
+            msg = f"Selected pipeline {pipeline_value} not yet implemented."
             self._app.sig_show_message.emit(msg, "info")
             return
 
@@ -264,7 +256,7 @@ class UIHandler(QtCore.QObject):
         else:
             window_size = None
 
-        return _t.StandardizeParameters(robust=robust, window_size=window_size)
+        return {"robust": robust, "window_size": window_size, "method": method}
 
     def get_peak_detection_parameters(self) -> _t.PeakDetectionParameters:
         method = self._app.peak_detection_method
@@ -310,44 +302,44 @@ class UIHandler(QtCore.QObject):
             if isinstance(val, float):
                 vals[key] = round(val, 3)
 
-        return _t.PeakDetectionParameters(method=method, method_parameters=vals)
+        return {"method": method, "method_parameters": vals}
 
-    def set_peak_detection_parameters(self, params: _t.PeakDetectionParameters) -> None:
-        # sourcery skip: extract-method
-        method = params["method"]
-        self._app.combo_box_peak_detection_method.setValue(method)
+    # def set_peak_detection_parameters(self, params: _t.PeakDetectionParameters) -> None:
+    #     # sourcery skip: extract-method
+    #     method = params["method"]
+    #     self._app.combo_box_peak_detection_method.setValue(method)
 
-        vals = params["method_parameters"]
+    #     vals = params["method_parameters"]
 
-        match method:
-            case "elgendi_ppg":
-                vals = t.cast(_t.PeakDetectionElgendiPPG, vals)
-                self._app.peak_elgendi_ppg_peakwindow.setValue(vals["peakwindow"])
-                self._app.peak_elgendi_ppg_beatwindow.setValue(vals["beatwindow"])
-                self._app.peak_elgendi_ppg_beatoffset.setValue(vals["beatoffset"])
-                self._app.peak_elgendi_ppg_min_delay.setValue(vals["mindelay"])
-            case "local":
-                vals = t.cast(_t.PeakDetectionLocalMaxima, vals)
-                self._app.peak_local_max_radius.setValue(vals["radius"])
-            case "neurokit2":
-                vals = t.cast(_t.PeakDetectionNeurokit2, vals)
-                self._app.peak_neurokit2_smoothwindow.setValue(vals["smoothwindow"])
-                self._app.peak_neurokit2_avgwindow.setValue(vals["avgwindow"])
-                self._app.peak_neurokit2_gradthreshweight.setValue(vals["gradthreshweight"])
-                self._app.peak_neurokit2_minlenweight.setValue(vals["minlenweight"])
-                self._app.peak_neurokit2_mindelay.setValue(vals["mindelay"])
-                self._app.peak_neurokit2_correct_artifacts.setChecked(vals["correct_artifacts"])
-            case "promac":
-                vals = t.cast(_t.PeakDetectionProMAC, vals)
-                self._app.peak_promac_threshold.setValue(vals["threshold"])
-                self._app.peak_promac_gaussian_sd.setValue(vals["gaussian_sd"])
-                self._app.peak_promac_correct_artifacts.setChecked(vals["correct_artifacts"])
-            case "pantompkins":
-                vals = t.cast(_t.PeakDetectionPantompkins, vals)
-                self._app.peak_pantompkins_correct_artifacts.setChecked(vals["correct_artifacts"])
-            case "wfdb_xqrs":
-                vals = t.cast(_t.PeakDetectionXQRS, vals)
-                self._app.peak_xqrs_search_radius.setValue(vals["search_radius"])
-                self._app.peak_xqrs_peak_dir.setValue(vals["peak_dir"])
-            case _:
-                raise NotImplementedError(f"Peak detection method {method} not yet implemented.")
+    #     match method:
+    #         case "elgendi_ppg":
+    #             vals = t.cast(_t.PeakDetectionElgendiPPG, vals)
+    #             self._app.peak_elgendi_ppg_peakwindow.setValue(vals["peakwindow"])
+    #             self._app.peak_elgendi_ppg_beatwindow.setValue(vals["beatwindow"])
+    #             self._app.peak_elgendi_ppg_beatoffset.setValue(vals["beatoffset"])
+    #             self._app.peak_elgendi_ppg_min_delay.setValue(vals["mindelay"])
+    #         case "local":
+    #             vals = t.cast(_t.PeakDetectionLocalMaxima, vals)
+    #             self._app.peak_local_max_radius.setValue(vals["radius"])
+    #         case "neurokit2":
+    #             vals = t.cast(_t.PeakDetectionNeurokit2, vals)
+    #             self._app.peak_neurokit2_smoothwindow.setValue(vals["smoothwindow"])
+    #             self._app.peak_neurokit2_avgwindow.setValue(vals["avgwindow"])
+    #             self._app.peak_neurokit2_gradthreshweight.setValue(vals["gradthreshweight"])
+    #             self._app.peak_neurokit2_minlenweight.setValue(vals["minlenweight"])
+    #             self._app.peak_neurokit2_mindelay.setValue(vals["mindelay"])
+    #             self._app.peak_neurokit2_correct_artifacts.setChecked(vals["correct_artifacts"])
+    #         case "promac":
+    #             vals = t.cast(_t.PeakDetectionProMAC, vals)
+    #             self._app.peak_promac_threshold.setValue(vals["threshold"])
+    #             self._app.peak_promac_gaussian_sd.setValue(vals["gaussian_sd"])
+    #             self._app.peak_promac_correct_artifacts.setChecked(vals["correct_artifacts"])
+    #         case "pantompkins":
+    #             vals = t.cast(_t.PeakDetectionPantompkins, vals)
+    #             self._app.peak_pantompkins_correct_artifacts.setChecked(vals["correct_artifacts"])
+    #         case "wfdb_xqrs":
+    #             vals = t.cast(_t.PeakDetectionXQRS, vals)
+    #             self._app.peak_xqrs_search_radius.setValue(vals["search_radius"])
+    #             self._app.peak_xqrs_peak_dir.setValue(vals["peak_dir"])
+    #         case _:
+    #             raise NotImplementedError(f"Peak detection method {method} not yet implemented.")
