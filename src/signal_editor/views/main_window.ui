@@ -33,7 +33,7 @@
    <set>QMainWindow::AnimatedDocks|QMainWindow::VerticalTabs</set>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QGridLayout" name="gridLayout_24">
+   <layout class="QHBoxLayout" name="horizontalLayout">
     <property name="leftMargin">
      <number>0</number>
     </property>
@@ -46,7 +46,7 @@
     <property name="bottomMargin">
      <number>0</number>
     </property>
-    <item row="0" column="0">
+    <item>
      <widget class="QTabWidget" name="tabs_main">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
@@ -270,15 +270,6 @@
                   </property>
                   <item row="0" column="0">
                    <widget class="QTableView" name="table_view_complete_result"/>
-                  </item>
-                  <item row="0" column="1">
-                   <widget class="TreeWidget" name="tree_widget_complete_result">
-                    <column>
-                     <property name="text">
-                      <string notr="true">1</string>
-                     </property>
-                    </column>
-                   </widget>
                   </item>
                  </layout>
                 </widget>
@@ -540,15 +531,15 @@
             <item row="5" column="0" colspan="2">
              <widget class="QToolBox" name="tool_box_editing">
               <property name="currentIndex">
-               <number>0</number>
+               <number>1</number>
               </property>
               <widget class="QWidget" name="page_section_list">
                <property name="geometry">
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>200</width>
-                 <height>704</height>
+                 <width>148</width>
+                 <height>109</height>
                 </rect>
                </property>
                <attribute name="label">
@@ -725,6 +716,9 @@
                  <widget class="QCheckBox" name="check_box_use_selection_peak_find">
                   <property name="text">
                    <string>Use selection specific method</string>
+                  </property>
+                  <property name="checked">
+                   <bool>true</bool>
                   </property>
                  </widget>
                 </item>
@@ -3359,11 +3353,6 @@ li.checked::marker { content: &quot;\2612&quot;; }
   <customwidget>
    <class>FeedbackButton</class>
    <extends>QPushButton</extends>
-   <header>pyqtgraph</header>
-  </customwidget>
-  <customwidget>
-   <class>TreeWidget</class>
-   <extends>QTreeWidget</extends>
    <header>pyqtgraph</header>
   </customwidget>
  </customwidgets>

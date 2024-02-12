@@ -5,29 +5,13 @@ import numpy.typing as npt
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
-from ..views.graphic_items import CustomScatterPlotItem, CustomViewBox, TimeAxisItem
+from ..views import CustomScatterPlotItem, CustomViewBox, TimeAxisItem
 
 if t.TYPE_CHECKING:
     from pyqtgraph.GraphicsScene import mouseEvents
 
     from ..app import SignalEditor
     from ..models import SectionIndices
-
-
-# class RatePlotWorkerSignals(QtCore.QObject):
-#     finished = QtCore.Signal()
-#     error = QtCore.Signal(str)
-
-
-# class RatePlotWorker(QtCore.QRunnable):
-#     def __init__(self, func: t.Callable, *args: t.Any, **kwargs: t.Any) -> None:
-#         super().__init__()
-#         self.func = func
-#         self.args = args
-#         self.kwargs = kwargs
-
-#     def run(self) -> None:
-#         self.func(*self.args, **self.kwargs)
 
 
 class PlotHandler(QtCore.QObject):
@@ -93,28 +77,21 @@ class PlotHandler(QtCore.QObject):
         widget_layout = QtWidgets.QVBoxLayout()
         widget_layout.setContentsMargins(0, 0, 0, 0)
         widget_layout.setSpacing(2)
-        main_plot_widget = pg.PlotWidget(viewBox=CustomViewBox(name="main_plot"), useOpenGL=True)
-        rate_plot_widget = pg.PlotWidget(viewBox=pg.ViewBox(name="rate_plot"), useOpenGL=True)
-        # remote_rate_plot_widget = pg.RemoteGraphicsView(useOpenGL=True)
+        main_plot_widget = pg.PlotWidget(viewBox=CustomViewBox(name="main_plot"))
+        rate_plot_widget = pg.PlotWidget(viewBox=pg.ViewBox(name="rate_plot"))
 
         widget_layout.addWidget(main_plot_widget)
         widget_layout.addWidget(rate_plot_widget)
-        # widget_layout.addWidget(remote_rate_plot_widget)
 
         self._app.container_plots.setLayout(widget_layout)
         self._pw_main = main_plot_widget
         self._pw_rate = rate_plot_widget
-        # self._rpw_rate = remote_rate_plot_widget
 
     def _setup_plot_items(self) -> None:
         for plt in self.plot_items:
             vb = plt.getViewBox()
             vb.setMenuEnabled(False)
-            plt.setAxisItems(
-                {
-                    "top": TimeAxisItem(orientation="top"),
-                }
-            )
+            plt.setAxisItems({"top": TimeAxisItem(orientation="top")})
             plt.showGrid(x=False, y=True)
             plt.setDownsampling(auto=True)
             plt.setClipToView(True)
@@ -143,14 +120,13 @@ class PlotHandler(QtCore.QObject):
 
         bottom_label = "<b>Index</b>"
 
-        main_plot_item = self._pw_main.getPlotItem()
-        rate_plot_item = self._pw_rate.getPlotItem()
+        main_plt, rate_plt = self.plot_items
 
-        main_plot_item.setLabels(
+        main_plt.setLabels(
             left=main_left_label,
             bottom=bottom_label,
         )
-        rate_plot_item.setLabels(
+        rate_plt.setLabels(
             left=rate_left_label,
             bottom=bottom_label,
         )
@@ -210,6 +186,7 @@ class PlotHandler(QtCore.QObject):
         self._rate_item = None
         self._rate_mean_item = None
         self._temperature_label.setText("")
+        self._bpm_label.setText("")
 
         self._setup_plot_items()
 
@@ -363,27 +340,27 @@ class PlotHandler(QtCore.QObject):
     ) -> None:
         rate_mean_val = np.mean(rate_values, dtype=np.int32)
 
-        # rate_item = self._rate_item
-        # rate_mean_item = self._rate_mean_item
+        rate_curve = self._rate_item
+        rate_mean_line = self._rate_mean_item
         legend = self._pw_rate.getPlotItem().addLegend()
 
-        if self._rate_item is None or self._rate_mean_item is None:
-            rate_item, rate_mean_item = self._create_rate_items(
+        if rate_curve is None or rate_mean_line is None:
+            rate_curve, rate_mean_line = self._create_rate_items(
                 rate_values, rate_mean_val, name, pen_color, mean_pen_color
             )
             legend.clear()
-            self._pw_rate.addItem(rate_item)
-            self._pw_rate.addItem(rate_mean_item)
-            legend.addItem(rate_mean_item, name=f"Mean Rate: {rate_mean_val} bpm")
-            self._rate_item = rate_item
-            self._rate_mean_item = rate_mean_item
+            self._pw_rate.addItem(rate_curve)
+            self._pw_rate.addItem(rate_mean_line)
+            legend.addItem(rate_mean_line, name=f"Mean Rate: {rate_mean_val} bpm")
+            self._rate_item = rate_curve
+            self._rate_mean_item = rate_mean_line
         else:
             legend.clear()
-            self._rate_item.setData(rate_values)
-            self._rate_mean_item.setValue(rate_mean_val)
-            self._rate_mean_item.opts = {"pen": self._rate_mean_item.pen}
-            legend.addItem(self._rate_item, name=f"Rate ({name})")
-            legend.addItem(self._rate_mean_item, name=f"Mean Rate: {rate_mean_val} bpm")
+            rate_curve.setData(rate_values)
+            rate_mean_line.setValue(rate_mean_val)
+            rate_mean_line.opts = {"pen": rate_mean_line.pen}
+            legend.addItem(rate_curve, name=f"Rate ({name})")
+            legend.addItem(rate_mean_line, name=f"Mean Rate: {rate_mean_val} bpm")
 
     def _create_rate_items(
         self,
@@ -416,19 +393,20 @@ class PlotHandler(QtCore.QObject):
     def remove_scatter(
         self,
         sender: CustomScatterPlotItem,
-        points: t.Sequence[pg.SpotItem],
+        points: np.ndarray[pg.SpotItem, t.Any],
         ev: "mouseEvents.MouseClickEvent",
     ) -> None:
         ev.accept()
-        if len(points) == 0:
+        if points.size == 0:
             return
         spot_item = points[0]
         to_remove_val = int(spot_item.pos().x())
         to_remove_index = spot_item.index()
-        if self._scatter_item is None:
+        peak_scatter = self._scatter_item
+        if peak_scatter is None:
             return
-        self._remove_scatter(to_remove_index, self._scatter_item)
-        self.sig_peaks_edited.emit("remove", [to_remove_val])
+        self._remove_scatter(to_remove_index, peak_scatter)
+        self.sig_peaks_edited.emit("remove", np.array([to_remove_val], dtype=np.int32))
 
     def _remove_scatter(self, to_remove_index: int, scatter_plot: CustomScatterPlotItem) -> None:
         scatter_data = scatter_plot.data
@@ -442,11 +420,13 @@ class PlotHandler(QtCore.QObject):
         click_x = int(ev.pos().x())
         click_y = ev.pos().y()
 
-        if self._signal_item is None or self._scatter_item is None:
+        signal_curve = self._signal_item
+        peak_scatter = self._scatter_item
+        if signal_curve is None or peak_scatter is None:
             return
 
-        x_data = self._signal_item.xData
-        y_data = self._signal_item.yData
+        x_data = signal_curve.xData
+        y_data = signal_curve.yData
         if x_data is None or y_data is None:
             return
 
@@ -469,12 +449,12 @@ class PlotHandler(QtCore.QObject):
             extreme_index = y_extreme_index
             extreme_value = y_extreme_value
 
-        if extreme_index in self._scatter_item.data["x"]:
+        if extreme_index in peak_scatter.data["x"]:
             return
 
         x_new, y_new = x_data[extreme_index], extreme_value
-        self._scatter_item.addPoints(x=x_new, y=y_new)
-        self.sig_peaks_edited.emit("add", [int(x_new)])
+        peak_scatter.addPoints(x=x_new, y=y_new)
+        self.sig_peaks_edited.emit("add", np.array([x_new], dtype=np.int32))
 
     @QtCore.Slot()
     def remove_selected_scatter(self) -> None:

@@ -25,9 +25,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QAbstract
     QSizePolicy, QSlider, QSpacerItem, QSpinBox,
     QStackedWidget, QStatusBar, QTabWidget, QTableView,
     QTextBrowser, QToolBar, QToolBox, QToolButton,
-    QTreeWidgetItem, QVBoxLayout, QWidget)
+    QVBoxLayout, QWidget)
 
-from pyqtgraph import (ComboBox, FeedbackButton, TreeWidget)
+from pyqtgraph import (ComboBox, FeedbackButton)
 from . import icons_rc
 
 class Ui_MainWindow(object):
@@ -205,11 +205,11 @@ class Ui_MainWindow(object):
         self.action_hide_selection_box.setMenuRole(QAction.NoRole)
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
-        self.gridLayout_24 = QGridLayout(self.centralwidget)
-        self.gridLayout_24.setSpacing(4)
-        self.gridLayout_24.setContentsMargins(7, 7, 7, 7)
-        self.gridLayout_24.setObjectName(u"gridLayout_24")
-        self.gridLayout_24.setContentsMargins(0, 0, 0, 0)
+        self.horizontalLayout = QHBoxLayout(self.centralwidget)
+        self.horizontalLayout.setSpacing(4)
+        self.horizontalLayout.setContentsMargins(7, 7, 7, 7)
+        self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.tabs_main = QTabWidget(self.centralwidget)
         self.tabs_main.setObjectName(u"tabs_main")
         sizePolicy1 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -353,14 +353,6 @@ class Ui_MainWindow(object):
 
         self.gridLayout_21.addWidget(self.table_view_complete_result, 0, 0, 1, 1)
 
-        self.tree_widget_complete_result = TreeWidget(self.tab_complete_result)
-        __qtreewidgetitem = QTreeWidgetItem()
-        __qtreewidgetitem.setText(0, u"1");
-        self.tree_widget_complete_result.setHeaderItem(__qtreewidgetitem)
-        self.tree_widget_complete_result.setObjectName(u"tree_widget_complete_result")
-
-        self.gridLayout_21.addWidget(self.tree_widget_complete_result, 0, 1, 1, 1)
-
         self.tab_container_result_views.addTab(self.tab_complete_result, "")
 
         self.gridLayout_11.addWidget(self.tab_container_result_views, 1, 0, 4, 3)
@@ -390,7 +382,7 @@ class Ui_MainWindow(object):
         icon27.addFile(u":/iconduck/iconduck/dashboard.svg", QSize(), QIcon.Normal, QIcon.Off)
         self.tabs_main.addTab(self.tab_analysis, icon27, "")
 
-        self.gridLayout_24.addWidget(self.tabs_main, 0, 0, 1, 1)
+        self.horizontalLayout.addWidget(self.tabs_main)
 
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainWindow)
@@ -481,7 +473,7 @@ class Ui_MainWindow(object):
         self.tool_box_editing.setObjectName(u"tool_box_editing")
         self.page_section_list = QWidget()
         self.page_section_list.setObjectName(u"page_section_list")
-        self.page_section_list.setGeometry(QRect(0, 0, 200, 704))
+        self.page_section_list.setGeometry(QRect(0, 0, 148, 109))
         self.gridLayout_13 = QGridLayout(self.page_section_list)
         self.gridLayout_13.setSpacing(4)
         self.gridLayout_13.setContentsMargins(7, 7, 7, 7)
@@ -569,6 +561,7 @@ class Ui_MainWindow(object):
 
         self.check_box_use_selection_peak_find = QCheckBox(self.page_editing_options)
         self.check_box_use_selection_peak_find.setObjectName(u"check_box_use_selection_peak_find")
+        self.check_box_use_selection_peak_find.setChecked(True)
 
         self.formLayout_2.setWidget(3, QFormLayout.SpanningRole, self.check_box_use_selection_peak_find)
 
@@ -1788,7 +1781,7 @@ class Ui_MainWindow(object):
 
         self.tabs_main.setCurrentIndex(0)
         self.tab_container_result_views.setCurrentIndex(0)
-        self.tool_box_editing.setCurrentIndex(0)
+        self.tool_box_editing.setCurrentIndex(1)
         self.btn_section_confirm.setDefault(True)
         self.sidebar.setCurrentIndex(0)
         self.stacked_peak_parameters.setCurrentIndex(0)

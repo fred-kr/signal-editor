@@ -31,7 +31,7 @@ from .peaks import find_extrema, find_peaks
 from .views.main_window import Ui_MainWindow
 
 if t.TYPE_CHECKING:
-    from .views.graphic_items import CustomScatterPlotItem
+    from .views import CustomScatterPlotItem
 
 
 def readable_section_id(section_id: SectionID, subject_id: str, oxygen_condition: str) -> str:
@@ -209,12 +209,12 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.jupyter_console = JupyterConsoleWidget()
         self.jupyter_console_dock = QtWidgets.QDockWidget(
             "Jupyter Console",
-            flags=QtCore.Qt.WindowType.WindowStaysOnTopHint | QtCore.Qt.WindowType.Widget,
+            flags=QtCore.Qt.WindowType.MSWindowsFixedSizeDialogHint | QtCore.Qt.WindowType.Widget,
         )
         self.jupyter_console_dock.setWidget(self.jupyter_console)
         self.jupyter_console.kernel_manager.kernel.shell.push(
             dict(
-                se=self,
+                self=self,
                 pg=pg,
                 np=np,
                 pl=pl,
@@ -905,8 +905,7 @@ def main(dev_mode: bool = False, antialias: bool = False, enable_console: bool =
     pg.setConfigOptions(
         useOpenGL=True,
         enableExperimental=True,
-        segmentedLineMode="auto",
-        background="k",
+        segmentedLineMode="on",
         antialias=os.environ.get("PG_ANTIALIAS", "0") == "1",
     )
     logger.add(
