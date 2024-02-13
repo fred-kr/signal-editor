@@ -4,8 +4,8 @@ if __name__ == "__main__":
     multiprocessing.freeze_support()
 
     import argparse
+    import contextlib
     import os
-    import dotenv
 
     from src.signal_editor.app import main
 
@@ -29,6 +29,7 @@ if __name__ == "__main__":
     if args.antialias:
         os.environ["PG_ANTIALIAS"] = "1"
 
-    dotenv.load_dotenv(".env")
-
+    with contextlib.suppress(Exception):
+        import dotenv
+        dotenv.load_dotenv(".env")
     main()

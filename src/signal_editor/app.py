@@ -24,7 +24,6 @@ from .handlers import (
     UIHandler,
 )
 from .models import CompleteResult, SectionID
-from .models.tree_model import CompleteResultModel
 from .peaks import find_extrema, find_peaks
 from .views.main_window import Ui_MainWindow
 
@@ -237,7 +236,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             self.jupyter_console_dock.hide()
         else:
             self.jupyter_console_dock.show()
-            # self.jupyter_console_dock.resize(900, 600)
 
     def _add_profiler(self) -> None:
         self.menubar.addAction("Start Profiler", self._start_profiler)
@@ -251,17 +249,17 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         logger.debug(f"Started profiling at: {datetime.now()}")
         self.sig_show_message.emit("Profiler started.", "info")
         self.ui.progress_bar.setRange(0, 0)
+        self.ui.progress_bar.show()
 
     @QtCore.Slot()
     def _stop_profiler(self):
         self.profiler.disable()
         self.statusbar.showMessage("Profiler stopped.")
-        log_path = Path(QtWidgets.QApplication.instance().applicationDirPath()) / "logs"
-        dtm = datetime.now()
-        self.profiler.dump_stats(
-            Path(log_path / f"cprof_{dtm.strftime('%Y-%m-%d_%H-%M-%S')}.pstats")
-        )
-        logger.debug(f"Stopped profiling at: {dtm.strftime('%Y-%m-%d %H:%M:%S')}")
+        dtm = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        log_path = Path(".") / "logs" / f"cprof_{dtm}.pstats"
+
+        self.profiler.dump_stats(log_path)
+        logger.debug(f"Stopped profiling at: {dtm}")
         self.sig_show_message.emit(f"Profiler stopped. Log file written to: \n\n{log_path}", "info")
         self.ui.progress_bar.setRange(0, 100)
         self.ui.progress_bar.hide()
@@ -433,8 +431,10 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ui.progress_bar.reset()
         self.ui.progress_bar.show()
         self.ui.progress_bar.setValue(50)
+
         self.data.save_cas()
         self.update_result_tables()
+
         self.ui.progress_bar.setValue(100)
         self.statusbar.showMessage("Focused result ready for export, see 'Results' tab.")
         self.ui.progress_bar.hide()
@@ -834,12 +834,6 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
 
     @QtCore.Slot(bool)
     def handle_draw_signal(self, has_peaks: bool = False) -> None:
-        """
-        Draw the currently active signal in the main plot widget.
-
-        :param has_peaks: Indicates whether the signal has peaks detected. If True, the peaks will be drawn as well.
-        :type has_peaks: bool, optional
-        """
         if self.data.cas is None:
             return
         self.plot.update_time_axis_scale(self.data.cas.sfreq)

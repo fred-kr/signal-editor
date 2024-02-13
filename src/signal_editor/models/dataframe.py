@@ -83,5 +83,5 @@ class PolarsDFModel(QtCore.QAbstractTableModel):
             return f"{name}\n---\n{dtype}"
         return str(section)
 
-    def flags(self, index: QtCore.QModelIndex | QtCore.QPersistentModelIndex) -> QtCore.Qt.ItemFlag:
+    def flags(self, index: ModelIndex) -> QtCore.Qt.ItemFlag:
         return QtCore.Qt.ItemFlag.ItemIsEnabled
