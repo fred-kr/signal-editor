@@ -1,37 +1,35 @@
-from PySide6.QtCore import QDate
-from PySide6.QtGui import QStandardItemModel
-from PySide6.QtWidgets import QAbstractSpinBox
+from PySide6 import QtCore, QtGui, QtWidgets
 
 # ------------------------------------------------------------------------------------------------ #
 #                                      Peak detection widgets                                      #
 # ------------------------------------------------------------------------------------------------ #
-INITIAL_PEAK_STATES = {
+INPUT_WIDGETS_PEAK_DETECTION = {
     "peak_elgendi_ppg_peakwindow": {
         "accelerated": True,
         "decimals": 3,
-        "minimum": 0.050000000000000,
-        "maximum": 5.000000000000000,
-        "singleStep": 0.001000000000000,
-        "value": 0.111000000000000,
+        "minimum": 0.050,
+        "maximum": 5.000,
+        "singleStep": 0.001,
+        "value": 0.111,
     },
     "peak_elgendi_ppg_beatwindow": {
         "decimals": 3,
-        "minimum": 0.100000000000000,
-        "maximum": 5.000000000000000,
-        "singleStep": 0.001000000000000,
-        "value": 0.667000000000000,
+        "minimum": 0.100,
+        "maximum": 5.000,
+        "singleStep": 0.001,
+        "value": 0.667,
     },
     "peak_elgendi_ppg_beatoffset": {
         "decimals": 2,
-        "maximum": 1.000000000000000,
-        "singleStep": 0.010000000000000,
-        "value": 0.020000000000000,
+        "maximum": 1.000,
+        "singleStep": 0.010,
+        "value": 0.020,
     },
     "peak_elgendi_ppg_min_delay": {
         "decimals": 2,
-        "maximum": 10.000000000000000,
-        "singleStep": 0.010000000000000,
-        "value": 0.300000000000000,
+        "maximum": 10.000,
+        "singleStep": 0.010,
+        "value": 0.300,
     },
     "peak_local_max_radius": {
         "accelerated": True,
@@ -40,44 +38,44 @@ INITIAL_PEAK_STATES = {
         "value": 111,
     },
     "peak_neurokit2_smoothwindow": {
-        "minimum": 0.010000000000000,
-        "maximum": 10.000000000000000,
-        "singleStep": 0.010000000000000,
+        "minimum": 0.010,
+        "maximum": 10.000,
+        "singleStep": 0.010,
     },
     "peak_neurokit2_avgwindow": {
         "decimals": 2,
-        "minimum": 0.010000000000000,
-        "maximum": 10.000000000000000,
-        "singleStep": 0.010000000000000,
-        "value": 0.750000000000000,
+        "minimum": 0.010,
+        "maximum": 10.000,
+        "singleStep": 0.010,
+        "value": 0.750,
     },
     "peak_neurokit2_gradthreshweight": {
         "decimals": 1,
-        "minimum": 0.100000000000000,
-        "maximum": 10.000000000000000,
-        "singleStep": 0.100000000000000,
-        "value": 1.500000000000000,
+        "minimum": 0.100,
+        "maximum": 10.000,
+        "singleStep": 0.100,
+        "value": 1.500,
     },
     "peak_neurokit2_minlenweight": {
         "decimals": 1,
-        "minimum": 0.100000000000000,
-        "maximum": 10.000000000000000,
-        "singleStep": 0.100000000000000,
-        "value": 0.400000000000000,
+        "minimum": 0.100,
+        "maximum": 10.000,
+        "singleStep": 0.100,
+        "value": 0.400,
     },
     "peak_neurokit2_mindelay": {
-        "minimum": 0.010000000000000,
-        "maximum": 10.000000000000000,
-        "singleStep": 0.010000000000000,
-        "value": 0.300000000000000,
+        "minimum": 0.010,
+        "maximum": 10.000,
+        "singleStep": 0.010,
+        "value": 0.300,
     },
     "peak_neurokit2_correct_artifacts": {
         "isChecked": False,
     },
     "peak_promac_threshold": {
-        "maximum": 1.000000000000000,
-        "singleStep": 0.010000000000000,
-        "value": 0.330000000000000,
+        "maximum": 1.000,
+        "singleStep": 0.010,
+        "value": 0.330,
     },
     "peak_promac_gaussian_sd": {
         "maximum": 100_000,
@@ -91,7 +89,7 @@ INITIAL_PEAK_STATES = {
     },
     "peak_xqrs_search_radius": {
         "accelerated": True,
-        "correctionMode": QAbstractSpinBox.CorrectionMode.CorrectToNearestValue,
+        "correctionMode": QtWidgets.QAbstractSpinBox.CorrectionMode.CorrectToNearestValue,
         "minimum": 5,
         "maximum": 99_999,
         "value": 110,
@@ -110,7 +108,7 @@ INITIAL_PEAK_STATES = {
 }
 
 
-METHODS_TO_WIDGETS = {
+PEAK_METHODS_TO_WIDGETS = {
     "elgendi_ppg": [
         "peak_elgendi_ppg_peakwindow",
         "peak_elgendi_ppg_beatwindow",
@@ -180,23 +178,23 @@ COMBO_BOX_ITEMS = {
 # ------------------------------------------------------------------------------------------------ #
 INITIAL_STATE_MAP = {
     "table_view_cas": {
-        "model": QStandardItemModel(),
+        "model": QtGui.QStandardItemModel(),
     },
     "table_view_cas_description": {
-        "model": QStandardItemModel(),
+        "model": QtGui.QStandardItemModel(),
     },
     "table_view_focused_result": {
-        "model": QStandardItemModel(),
+        "model": QtGui.QStandardItemModel(),
     },
     "table_view_complete_result": {
-        "model": QStandardItemModel(),
+        "model": QtGui.QStandardItemModel(),
     },
     "line_edit_active_file": {"text": ""},
     "container_file_info": {
         "enabled": True,
     },
     "date_edit_file_info": {
-        "date": QDate.currentDate(),
+        "date": QtCore.QDate(2000, 1, 1),
     },
     "line_edit_subject_id": {
         "text": "",
@@ -262,7 +260,7 @@ INITIAL_STATE_MAP = {
 }
 
 
-INITIAL_STATE_METHODS_MAP = {
+WIDGET_PARAMETER_TO_SETTER = {
     "enabled": "setEnabled",
     "visible": "setVisible",
     "checked": "setChecked",

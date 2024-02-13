@@ -21,7 +21,7 @@ from ..models import (
 )
 
 if t.TYPE_CHECKING:
-    from ..app import SignalEditor
+    from ..signal_editor import SignalEditor
     from ..models.result import FocusedResult, SectionResult
 
 

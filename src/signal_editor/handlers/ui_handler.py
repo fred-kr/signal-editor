@@ -10,13 +10,13 @@ from ..handlers import PlotHandler
 from ..views.ui_state_maps import (
     COMBO_BOX_ITEMS,
     FILTER_INPUT_STATES,
-    INITIAL_PEAK_STATES,
     INITIAL_STATE_MAP,
-    INITIAL_STATE_METHODS_MAP,
+    INPUT_WIDGETS_PEAK_DETECTION,
+    WIDGET_PARAMETER_TO_SETTER,
 )
 
 if t.TYPE_CHECKING:
-    from ..app import SignalEditor
+    from ..signal_editor import SignalEditor
 
 
 class UIHandler(QtCore.QObject):
@@ -114,10 +114,10 @@ class UIHandler(QtCore.QObject):
 
     @QtCore.Slot()
     def set_initial_peak_detection_parameters(self) -> None:
-        for widget_name, properties in INITIAL_PEAK_STATES.items():
+        for widget_name, properties in INPUT_WIDGETS_PEAK_DETECTION.items():
             for property_name, value in properties.items():
                 getattr(self._app, widget_name).__getattribute__(
-                    INITIAL_STATE_METHODS_MAP[property_name]
+                    WIDGET_PARAMETER_TO_SETTER[property_name]
                 )(value)
 
     @staticmethod
@@ -157,8 +157,8 @@ class UIHandler(QtCore.QObject):
     def reset_widget_state(self) -> None:
         mw = self._app
         mw.tabs_main.setCurrentIndex(0)
-        mapping = INITIAL_STATE_METHODS_MAP
-        combined_map = INITIAL_STATE_MAP | INITIAL_PEAK_STATES
+        mapping = WIDGET_PARAMETER_TO_SETTER
+        combined_map = INITIAL_STATE_MAP | INPUT_WIDGETS_PEAK_DETECTION
         for widget_name, state in combined_map.items():
             for attribute, value in state.items():
                 getattr(mw, widget_name).__getattribute__(mapping[attribute])(value)

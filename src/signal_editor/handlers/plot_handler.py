@@ -10,7 +10,7 @@ from ..views import CustomScatterPlotItem, CustomViewBox, TimeAxisItem
 if t.TYPE_CHECKING:
     from pyqtgraph.GraphicsScene import mouseEvents
 
-    from ..app import SignalEditor
+    from ..signal_editor import SignalEditor
     from ..models import SectionIndices
 
 

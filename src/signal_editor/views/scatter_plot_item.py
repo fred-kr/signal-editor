@@ -19,12 +19,6 @@ def _mk_brush(*args: t.Any, **kwargs: t.Any) -> QtGui.QBrush:
     return pg.mkBrush(*args, **kwargs)
 
 
-class ScatterPlotItemError(Exception):
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-        self.message = message
-
-
 class CustomScatterPlotItem(pg.ScatterPlotItem):
     def addPoints(self, *args: t.Any, **kargs: t.Any) -> None:
         arg_keys = ["spots", "x", "y"]
@@ -83,7 +77,7 @@ class CustomScatterPlotItem(pg.ScatterPlotItem):
                         case "x" | "y" | "size" | "symbol" | "data":
                             new_data[i][k] = v
                         case _:
-                            raise ScatterPlotItemError(f"Unknown spot parameter: {k}")
+                            raise KeyError(f"Invalid key: {k}")
         # Handle 'y' parameter
         elif y is not None:
             new_data["x"] = x
