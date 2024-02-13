@@ -8,6 +8,20 @@ if t.TYPE_CHECKING:
     from pyqtgraph.GraphicsScene import mouseEvents
 
 
+def _get_button_type(ev: "mouseEvents.MouseDragEvent") -> t.Literal["middle", "left", "left+control", "right", "unknown"]:
+    if ev.button() == QtCore.Qt.MouseButton.MiddleButton:
+        return "middle"
+    elif ev.button() == QtCore.Qt.MouseButton.LeftButton:
+        if ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier:
+            return "left+control"
+        else:
+            return "left"
+    elif ev.button() == QtCore.Qt.MouseButton.RightButton:
+        return "right"
+    else:
+        return "unknown"
+
+    
 class CustomViewBox(pg.ViewBox):
     """
     Custom `pyqtgraph.ViewBox` subclass that makes plot editing easier.
@@ -42,22 +56,6 @@ class CustomViewBox(pg.ViewBox):
         self.addItem(selection_box, ignoreBounds=True)
         return
 
-    @staticmethod
-    def get_button_type(
-        ev: "mouseEvents.MouseDragEvent",
-    ) -> t.Literal["middle", "left", "left+control", "right", "unknown"]:
-        if ev.button() == QtCore.Qt.MouseButton.MiddleButton:
-            return "middle"
-        elif ev.button() == QtCore.Qt.MouseButton.LeftButton:
-            if ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier:
-                return "left+control"
-            else:
-                return "left"
-        elif ev.button() == QtCore.Qt.MouseButton.RightButton:
-            return "right"
-        else:
-            return "unknown"
-
     @t.override
     def mouseDragEvent(
         self, ev: "mouseEvents.MouseDragEvent", axis: int | float | None = None
@@ -73,7 +71,7 @@ class CustomViewBox(pg.ViewBox):
         if axis is not None:
             mask[1 - axis] = 0.0
 
-        button_type = self.get_button_type(ev)
+        button_type = _get_button_type(ev)
 
         if button_type in {"middle", "left+control"}:
             if ev.isFinish():
@@ -112,8 +110,7 @@ class CustomViewBox(pg.ViewBox):
                 [
                     -(ev.screenPos().x() - ev.lastScreenPos().x()),
                     ev.screenPos().y() - ev.lastScreenPos().y(),
-                ],
-                dtype=np.float64,
+                ]
             )
             s = ((mask * 0.02) + 1) ** dif
 

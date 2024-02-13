@@ -21,8 +21,8 @@ from ..models import (
 )
 
 if t.TYPE_CHECKING:
-    from ..signal_editor import SignalEditor
     from ..models.result import FocusedResult, SectionResult
+    from ..signal_editor import SignalEditor
 
 
 def parse_file_name(

@@ -1,7 +1,7 @@
+import pprint
 import re
 import typing as t
 from collections import OrderedDict
-from pprint import pformat
 
 import attrs
 import neurokit2 as nk
@@ -19,9 +19,8 @@ from .result import FocusedResult, ManualPeakEdits
 class SectionIndices(t.NamedTuple):
     start: int
     stop: int
-
-    def __str__(self) -> str:
-        return f"{self.start}, {self.stop}"
+    # def __str__(self) -> str:
+    #     return f"{self.start}, {self.stop}"
 
 
 class SectionID(str):
@@ -53,6 +52,10 @@ def _to_uint_array(value: npt.NDArray[np.uint32] | pl.Series) -> npt.NDArray[np.
     return value.cast(pl.UInt32).to_numpy(writable=True) if isinstance(value, pl.Series) else value
 
 
+def _to_float_array(value: npt.NDArray[np.float64] | pl.Series) -> npt.NDArray[np.float64]:
+    return value.cast(pl.Float64).to_numpy(writable=True) if isinstance(value, pl.Series) else value
+
+
 @attrs.define(slots=True, frozen=True, repr=True)
 class SectionIdentifier:
     sig_name: str = attrs.field()
@@ -62,10 +65,6 @@ class SectionIdentifier:
 
     def as_dict(self) -> _t.SectionIdentifierDict:
         return _t.SectionIdentifierDict(**attrs.asdict(self))
-
-
-def _to_float_array(value: npt.NDArray[np.float64] | pl.Series) -> npt.NDArray[np.float64]:
-    return value.cast(pl.Float64).to_numpy(writable=True) if isinstance(value, pl.Series) else value
 
 
 @attrs.define(slots=True, frozen=True, repr=True)
@@ -493,5 +492,5 @@ class SectionContainer(OrderedDict[SectionID, Section]):
     def __getitem__(self, key: SectionID) -> Section:
         return super().__getitem__(key)
 
-    def __str__(self) -> str:
-        return pformat(self.__dict__, indent=4, width=100, compact=True)
+    def __repr__(self) -> str:
+        return pprint.pformat(self, indent=2, width=250, compact=True)
