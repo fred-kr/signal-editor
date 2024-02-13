@@ -20,8 +20,6 @@ class PlotHandler(QtCore.QObject):
     """
 
     sig_peaks_edited = QtCore.Signal(str, list)
-    sig_signal_drawn = QtCore.Signal(int)
-    sig_peaks_drawn = QtCore.Signal()
 
     scatter_search_radius: int = 20
 
@@ -41,10 +39,6 @@ class PlotHandler(QtCore.QObject):
         self._rate_item: pg.PlotDataItem | None = None
         self._rate_mean_item: pg.InfiniteLine | pg.PlotDataItem | None = None
         self._regions: list[pg.LinearRegionItem] = []
-        self._connect_qt_signals()
-
-    def _connect_qt_signals(self) -> None:
-        self.sig_signal_drawn.connect(self.update_view_limits)
 
     # region Properties
     @property
@@ -135,19 +129,20 @@ class PlotHandler(QtCore.QObject):
     def _on_mouse_moved(self, pos: QtCore.QPointF) -> None:
         if not hasattr(self._app, "data"):
             return
-        if self._app.data.cas is None:
+        cas = self._app.data.cas
+        if cas is None:
             return
         mapped_pos = self._pw_main.plotItem.vb.mapSceneToView(pos)
-        cas_upper_bound = self._app.data.cas.data.height
+        cas_upper_bound = cas.data.height
         i = np.clip(mapped_pos.x(), 0, cas_upper_bound - 1, dtype=np.int32, casting="unsafe")
 
         try:
-            temp_val = self._app.data.cas.data.get_column("temperature").item(i)
+            temp_val = cas.data.get_column("temperature").item(i)
         except (IndexError, TypeError, ValueError):
             temp_val = np.nan
 
         try:
-            rate_val = self._app.data.cas.rate_interp[i]
+            rate_val = cas.rate_interp[i]
         except IndexError:
             rate_val = np.nan
 
@@ -215,7 +210,7 @@ class PlotHandler(QtCore.QObject):
     ) -> None:
         view_x = self._pw_main.plotItem.vb.viewRange()[0]
         span = view_x[1] - view_x[0]
-        initial_limits = (view_x[0], view_x[0] + 0.5 * span)
+        initial_limits = (view_x[0], view_x[0] + 0.33 * span)
         self.remove_section_selector()
 
         selector = pg.LinearRegionItem(
@@ -224,7 +219,7 @@ class PlotHandler(QtCore.QObject):
             brush=(0, 200, 100, 75),
             pen={"color": "darkgoldenrod", "width": 1},
             hoverBrush=(0, 200, 100, 30),
-            hoverPen={"color": "gold", "width": 3.5},
+            hoverPen={"color": "gold", "width": 3},
         )
         selector.setZValue(1e3)
         for line in selector.lines:
@@ -362,8 +357,8 @@ class PlotHandler(QtCore.QObject):
             legend.addItem(rate_curve, name=f"Rate ({name})")
             legend.addItem(rate_mean_line, name=f"Mean Rate: {rate_mean_val} bpm")
 
+    @staticmethod
     def _create_rate_items(
-        self,
         rate_values: npt.NDArray[np.float64],
         mean_value: np.int32,
         name: str,
@@ -393,11 +388,11 @@ class PlotHandler(QtCore.QObject):
     def remove_scatter(
         self,
         sender: CustomScatterPlotItem,
-        points: np.ndarray[pg.SpotItem, t.Any],
+        points: t.Sequence[pg.SpotItem],
         ev: "mouseEvents.MouseClickEvent",
     ) -> None:
         ev.accept()
-        if points.size == 0:
+        if len(points) == 0:
             return
         spot_item = points[0]
         to_remove_val = int(spot_item.pos().x())
@@ -408,7 +403,8 @@ class PlotHandler(QtCore.QObject):
         self._remove_scatter(to_remove_index, peak_scatter)
         self.sig_peaks_edited.emit("remove", np.array([to_remove_val], dtype=np.int32))
 
-    def _remove_scatter(self, to_remove_index: int, scatter_plot: CustomScatterPlotItem) -> None:
+    @staticmethod
+    def _remove_scatter(to_remove_index: int, scatter_plot: CustomScatterPlotItem) -> None:
         scatter_data = scatter_plot.data
         new_points_x = np.delete(scatter_data["x"], to_remove_index)
         new_points_y = np.delete(scatter_data["y"], to_remove_index)

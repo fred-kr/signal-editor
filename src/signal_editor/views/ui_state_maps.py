@@ -188,6 +188,9 @@ INITIAL_STATE_MAP = {
     "table_view_focused_result": {
         "model": QStandardItemModel(),
     },
+    "table_view_complete_result": {
+        "model": QStandardItemModel(),
+    },
     "line_edit_active_file": {"text": ""},
     "container_file_info": {
         "enabled": True,
@@ -226,6 +229,9 @@ INITIAL_STATE_MAP = {
     },
     "dbl_spin_box_highcut": {
         "value": 8.0,
+    },
+    "dbl_spin_box_powerline": {
+        "value": 50.0,
     },
     "spin_box_order": {
         "value": 3,
