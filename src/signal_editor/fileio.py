@@ -6,7 +6,7 @@ import mne.io
 import polars as pl
 import tables as tb
 
-from signal_editor import type_aliases as _t
+from . import type_aliases as _t
 
 
 def read_edf(
@@ -103,7 +103,11 @@ def unpack_dict_to_attrs(
     """
     if data is None:
         return
+    if isinstance(data, str):
+        file.set_node_attr(node, "", data)
     for key, value in data.items():
+        if value is None:
+            value = "unknown"
         file.set_node_attr(node, key, value)
 
 
@@ -143,7 +147,7 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 title=f"Complete Result ({section_id})",
             )
 
-            # Section DataFrame
+            # region Section DataFrame
             h5f.create_table(
                 f"/complete_section_results/complete_result_{section_id}",
                 name="section_dataframe",
@@ -151,8 +155,9 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 title=f"DataFrame ({section_id})",
                 expectedrows=section_result["data"].shape[0],
             )
+            # endregion
 
-            # Peaks
+            # region Peaks
             h5f.create_group(
                 f"/complete_section_results/complete_result_{section_id}",
                 name="peaks",
@@ -182,8 +187,9 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 obj=section_result["peak_edits"]["removed"],
                 title="Manually removed (section)",
             )
+            # endregion
 
-            # Rate
+            # region Rate
             h5f.create_group(
                 f"/complete_section_results/complete_result_{section_id}",
                 name="rate",
@@ -201,8 +207,9 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 obj=section_result["rate_interpolated"],
                 title="Rate (interpolated to length of section)",
             )
+            # endregion
 
-            # Processing Parameters
+            # region Processing Parameters
             h5f.create_group(
                 f"/complete_section_results/complete_result_{section_id}",
                 name="processing_parameters",
@@ -218,6 +225,8 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 attrname="pipeline",
                 attrvalue=section_result["processing_parameters"]["pipeline"],
             )
+
+            # Filter parameters
             h5f.create_group(
                 f"/complete_section_results/complete_result_{section_id}/processing_parameters",
                 name="filter_parameters",
@@ -228,6 +237,8 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 h5f,
                 f"/complete_section_results/complete_result_{section_id}/processing_parameters/filter_parameters",
             )
+
+            # Standardize parameters
             h5f.create_group(
                 f"/complete_section_results/complete_result_{section_id}/processing_parameters",
                 name="standardize_parameters",
@@ -238,6 +249,8 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                 h5f,
                 f"/complete_section_results/complete_result_{section_id}/processing_parameters/standardize_parameters",
             )
+
+            # Peak detection parameters
             h5f.create_group(
                 f"/complete_section_results/complete_result_{section_id}/processing_parameters",
                 name="peak_detection_parameters",
@@ -253,3 +266,4 @@ def result_dict_to_hdf5(file_path: str | Path, data: _t.CompleteResultDict) -> N
                     h5f,
                     f"/complete_section_results/complete_result_{section_id}/processing_parameters/peak_detection_parameters",
                 )
+            # endregion

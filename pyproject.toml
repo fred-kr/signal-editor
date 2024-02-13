@@ -8,7 +8,6 @@ packages = [{ include = "signal_editor", from = "src" }]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
-pyqtgraph = { git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "master" }
 pyopengl-accelerate = "^3.1.7"
 pyarrow = "^15.0.0"
 wfdb = "^4.1.2"
@@ -26,9 +25,11 @@ pyinstaller = "^6.3.0"
 pyinstaller-hooks-contrib = "^2024.0"
 python-dateutil = "^2.8.2"
 qtconsole = "^5.5.1"
-pdir2 = "^1.1.0"
 attrs = "^23.2.0"
 tables = "^3.9.2"
+numexpr = "^2.9.0"
+pyqtgraph = {git = "https://github.com/pyqtgraph/pyqtgraph.git", rev = "master"}
+numba = "^0.59.0"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.21.0"
@@ -40,9 +41,9 @@ ruff = "^0.2.0"
 matplotlib = "^3.8.2"
 black = "^24.1.1"
 pygments = "^2.17.2"
-rich = "^13.7.0"
-sphinx = "^7.2.6"
-sphinx-tabs = "^3.4.5"
+better-exceptions = "^0.3.3"
+pretty-errors = "^1.2.25"
+python-dotenv = "^1.0.1"
 
 [tool.mypy]
 python_version = "3.12"

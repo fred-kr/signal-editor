@@ -2,11 +2,10 @@ import typing as t
 
 import pyqtgraph as pg
 import qdarkstyle
-from PySide6.QtCore import Slot
-from PySide6.QtWidgets import QApplication
+from PySide6 import QtCore, QtWidgets
 
 
-class StyleHandler:
+class StyleHandler(QtCore.QObject):
     def __init__(
         self,
         plot_widgets: list[pg.PlotWidget] | None = None,
@@ -14,7 +13,7 @@ class StyleHandler:
     ) -> None:
         self.active_style: t.Literal["light", "dark"] = style
         self.plot_widgets = plot_widgets
-        self.app = QApplication.instance()
+        self.app = QtWidgets.QApplication.instance()
 
     def _set_light_style(self) -> None:
         self.app.setStyleSheet(
@@ -37,7 +36,7 @@ class StyleHandler:
         elif style == "dark":
             self._set_dark_style()
 
-    @Slot(bool)
+    @QtCore.Slot(bool)
     def switch_theme(self, checked: bool) -> None:
         if checked:
             self._set_light_style()

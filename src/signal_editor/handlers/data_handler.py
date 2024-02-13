@@ -9,8 +9,8 @@ import polars as pl
 import polars.selectors as ps
 from PySide6 import QtCore, QtWidgets
 
-from signal_editor.io import read_edf
 from .. import type_aliases as _t
+from ..fileio import read_edf
 from ..models import (
     CompleteResult,
     ResultIdentifier,
@@ -80,7 +80,7 @@ def infer_sampling_rate(
     if time_col == "auto":
         # Try to infer the column holding the time data
         for col in df.columns:
-            if "time" in col:
+            if "time" in col or df.get_column(col).dtype.is_temporal():
                 time_col = col
                 break
 
@@ -129,11 +129,12 @@ class DataHandler(QtCore.QObject):
 
         self._raw_df: pl.DataFrame | None = None
         self._base_df: pl.DataFrame | None = None
+        self._base_section: Section | None = None
         self._sections: SectionContainer = SectionContainer()
-        self._excluded_sections: list[SectionIndices] = []
         self._sampling_rate: int = -1
         self._metadata: _t.FileMetadata | None = None
         self._sig_name: str | None = None
+        self._error_no_data_available_shown = False
         self._connect_qt_signals()
 
     def _connect_qt_signals(self) -> None:
@@ -152,14 +153,12 @@ class DataHandler(QtCore.QObject):
         return
 
     @property
-    def raw_df(self) -> pl.DataFrame:
+    def raw_df(self) -> pl.DataFrame | None:
         """The raw data as loaded from the file."""
-        if self._raw_df is None:
-            raise RuntimeError("No signal data loaded")
         return self._raw_df
 
     @property
-    def base_df(self) -> pl.DataFrame:
+    def base_df(self) -> pl.DataFrame | None:
         """
         A modified version of the raw data from which new sections are created.
 
@@ -169,15 +168,15 @@ class DataHandler(QtCore.QObject):
         - temperature: pl.Float64
         - {name_of_data_column}: pl.Float64
         - {name_of_data_column}_processed: pl.Float64
-        - is_peak: pl.Boolean
+        - is_peak: pl.Int8
         """
-        if self._base_df is None:
-            raise RuntimeError("No signal data loaded")
         return self._base_df
 
     @property
-    def bounds(self) -> SectionIndices:
+    def bounds(self) -> SectionIndices | None:
         """The row indices of the first and last row of the base data frame."""
+        if self.base_df is None:
+            return None
         index = self.base_df.get_column("index")
         return SectionIndices(index[0], index[-1])
 
@@ -200,22 +199,24 @@ class DataHandler(QtCore.QObject):
         return self._sections
 
     @property
-    def base_section(self) -> Section:
-        try:
-            return Section(
+    def base_section(self) -> Section | None:
+        if self.base_df is None or self.sig_name is None or self.sfreq == -1:
+            return None
+        if self._base_section is None:
+            self._base_section = Section(
                 self.base_df,
                 sig_name=self.sig_name,
                 sampling_rate=self.sfreq,
                 set_active=True,
                 _is_base=True,
             )
-        except RuntimeError:
-            self._app.sig_show_message.emit("No data to create base section from", "warning")
-            raise
+        return self._base_section
 
     @property
-    def cas(self) -> Section:
+    def cas(self) -> Section | None:
         """Shorthand for the currently active section (cas = current active section)."""
+        if self.base_section is None:
+            return None
         return next(
             (section for section in self.sections.values() if section.is_active),
             self.base_section,
@@ -223,46 +224,31 @@ class DataHandler(QtCore.QObject):
 
     @QtCore.Slot(str)
     def set_cas(self, section_id: SectionID) -> None:
+        if section_id not in self.sections or self.cas is None:
+            return
         for section in self.sections.values():
             section.set_active(section.section_id == section_id)
         has_peaks = not self.cas.peaks.is_empty()
         self.sig_cas_changed.emit(has_peaks)
 
     @property
-    def excluded_sections(self) -> list[SectionIndices]:
-        return self._excluded_sections
-
-    @excluded_sections.setter
-    def excluded_sections(self, value: list[SectionIndices]) -> None:
-        self._excluded_sections = value
+    def removable_section_ids(self) -> list[SectionID]:
+        return list(self.sections.keys())[1:]
 
     @property
-    def combined_section_ids(self) -> list[SectionID | SectionIndices]:
-        return list(self.sections.keys())[1:] + self.excluded_sections
-
-    @property
-    def metadata(self) -> _t.FileMetadata:
-        if self._metadata is None:
-            raise RuntimeError("No signal data loaded")
+    def metadata(self) -> _t.FileMetadata | None:
         return self._metadata
 
     @property
-    def sig_name(self) -> str:
+    def sig_name(self) -> str | None:
         """The name of the column holding the raw signal data."""
-        if self._sig_name is None:
-            raise RuntimeError("No signal data loaded")
         return self._sig_name
-
-    @property
-    def proc_sig_name(self) -> str:
-        """The name of the column holding the processed signal data."""
-        if self._sig_name is None:
-            raise RuntimeError("No signal data loaded")
-        return f"{self._sig_name}_processed"
 
     @QtCore.Slot(QtCore.QDate)
     def set_date(self, date: QtCore.QDate) -> None:
         py_date = t.cast(datetime.date, date.toPython())
+        if py_date.year == 2000 and py_date.month == 1 and py_date.day == 1:
+            py_date = None
         if self._metadata is None:
             self._metadata = _t.FileMetadata(
                 date_recorded=py_date,
@@ -276,7 +262,7 @@ class DataHandler(QtCore.QObject):
     def set_animal_id(self, animal_id: str) -> None:
         if self._metadata is None:
             self._metadata = _t.FileMetadata(
-                date_recorded=datetime.date.today(), animal_id=animal_id, oxygen_condition="unknown"
+                date_recorded=None, animal_id=animal_id, oxygen_condition="unknown"
             )
         else:
             self._metadata["animal_id"] = animal_id
@@ -285,7 +271,7 @@ class DataHandler(QtCore.QObject):
     def set_oxy_condition(self, oxy_condition: _t.OxygenCondition) -> None:
         if self._metadata is None:
             self._metadata = _t.FileMetadata(
-                date_recorded=datetime.date.today(),
+                date_recorded=None,
                 animal_id="unknown",
                 oxygen_condition=oxy_condition,
             )
@@ -299,8 +285,8 @@ class DataHandler(QtCore.QObject):
             self._app.sig_show_message.emit(info_msg, "error")
             return
         suffix = path.suffix
-        if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx", ".pkl"}:
-            info_msg = "Supported file types are .csv, .txt, .xlsx, .feather, .pkl and .edf"
+        if suffix not in {".csv", ".txt", ".edf", ".feather", ".xlsx"}:
+            info_msg = "Supported file types are .csv, .txt, .xlsx, .feather and .edf"
             self._app.sig_show_message.emit(info_msg, "info")
             return
 
@@ -309,10 +295,6 @@ class DataHandler(QtCore.QObject):
         animal_id = None
         oxy_condition = None
         match suffix:
-            # ? Part of state saving/loading, either remove or update to work with v0.3.0 changes
-            # case ".pkl":
-            # self._app.restore_state(path)
-            # return
             case ".csv":
                 df = pl.read_csv(path)
             case ".edf":
@@ -325,7 +307,7 @@ class DataHandler(QtCore.QObject):
             case ".xlsx":
                 df = pl.read_excel(path)
             case _:
-                raise NotImplementedError(f"File type `{suffix}` not supported")
+                raise NotImplementedError(f"File type '{suffix}' not supported")
 
         if sfreq == -1:
             try:
@@ -369,15 +351,17 @@ class DataHandler(QtCore.QObject):
             .select(
                 ps.contains("temp"),
                 pl.col(sig_name),
-                pl.col(sig_name).alias(self.proc_sig_name),
-                pl.lit(False).alias("is_peak"),
+                pl.col(sig_name).alias(f"{sig_name}_processed"),
+                pl.lit(0).cast(pl.Int8).alias("is_peak"),
             )
             .with_row_index()
+            .set_sorted("index")
             .collect()
-            .rechunk()
         )
 
         base_section = self.base_section
+        if base_section is None:
+            return
         self._sections[base_section.section_id] = base_section
         self.sig_section_added.emit(base_section.section_id)
 
@@ -386,8 +370,8 @@ class DataHandler(QtCore.QObject):
         self._raw_df = None
         self._base_df = None
         self._sections = SectionContainer()
-        self._excluded_sections = []
-        self.set_sfreq(-1)
+        sfreq = self._app.config.sample_rate
+        self.set_sfreq(sfreq)
         self._metadata = None
         self._sig_name = None
         Section.reset_id_counter()
@@ -395,22 +379,19 @@ class DataHandler(QtCore.QObject):
     @QtCore.Slot()
     def clear_sections(self) -> None:
         self._sections.clear()
-        self._excluded_sections.clear()
         Section.reset_id_counter()
         self._base_df = None
 
     def update_base(self, section_df: pl.DataFrame) -> None:
+        if self.base_df is None:
+            return
         self._base_df = (
             self.base_df.lazy().update(section_df.lazy(), on="index", how="left").collect()
         )
 
-    @QtCore.Slot(int, int)
-    def remove_slice(self, start: int, stop: int) -> None:
-        self._base_df = (
-            self.base_df.lazy().filter(~(pl.col("index").is_between(start, stop))).collect()
-        )
-
     def new_section(self, start: int, stop: int) -> None:
+        if self.base_df is None or self.sig_name is None or self.sfreq == -1:
+            return
         data = self.base_df.filter(pl.col("index").is_between(start, stop))
         section = Section(data, sig_name=self.sig_name, sampling_rate=self.sfreq)
         self._sections[section.section_id] = section
@@ -423,11 +404,11 @@ class DataHandler(QtCore.QObject):
         self.sig_section_removed.emit(section_id)
 
     def get_section(self, section_id: SectionID) -> Section:
-        return self.sections.get(section_id, self.base_section)
+        return self.sections[section_id]
 
     def save_sections_to_base(self) -> None:
         """
-        Updates the base data frame with the data from every current section. Later sections overwrite earlier ones if they overlap.
+        Updates the base data frame with the data from every section. Later sections overwrite earlier ones if they overlap.
         """
         section_dfs = [section.data for section in self.sections.values()]
         for section_df in section_dfs:
@@ -437,6 +418,8 @@ class DataHandler(QtCore.QObject):
         """
         Saves the currently active section to the base data frame.
         """
+        if self.cas is None:
+            return
         self.update_base(self.cas.data)
 
     def get_state(self) -> DataState:
@@ -455,7 +438,9 @@ class DataHandler(QtCore.QObject):
         self.set_sfreq(state.sampling_rate)
         self._metadata = state.metadata
 
-    def get_result_identifier(self) -> ResultIdentifier:
+    def get_result_identifier(self) -> ResultIdentifier | None:
+        if self.sig_name is None or self.metadata is None:
+            return None
         return ResultIdentifier(
             signal_name=self.sig_name,
             source_file_name=self._app.file_info.fileName(),
@@ -464,24 +449,46 @@ class DataHandler(QtCore.QObject):
             oxygen_condition=self.metadata["oxygen_condition"],
         )
 
-    def get_section_results(self) -> dict[SectionID, "SectionResult"]:
+    def get_section_results(self) -> dict[SectionID, "SectionResult"] | None:
+        if len(self.sections) in {0, 1} or self.base_section is None:
+            msg = "Can't create section results without sections / from only the base section."
+            self._app.sig_show_message.emit(msg, "warning")
+            return None
         return {
             section_id: section.get_section_result()
             for section_id, section in self.sections.items()
             if section_id != self.base_section.section_id
         }
 
-    def get_focused_results(self) -> dict[SectionID, "FocusedResult"]:
+    def get_focused_results(self) -> dict[SectionID, "FocusedResult"] | None:
+        if len(self.sections) in {0, 1} or self.base_section is None:
+            msg = "Can't create focused results without sections / from only the base section."
+            self._app.sig_show_message.emit(msg, "warning")
+            return None
         return {
             section_id: section.get_focused_result()
             for section_id, section in self.sections.items()
             if section_id != self.base_section.section_id
         }
 
-    def get_complete_result(self) -> CompleteResult:
+    def get_complete_result(self) -> CompleteResult | None:
+        identifier = self.get_result_identifier()
+        processed_dataframe = self.base_df
+        complete_section_results = self.get_section_results()
+        focused_section_results = self.get_focused_results()
+
+        if (
+            identifier is None
+            or processed_dataframe is None
+            or complete_section_results is None
+            or focused_section_results is None
+        ):
+            msg = f"Can't create complete result without identifier / processed dataframe / complete section results / focused section results.\n\n{identifier = }\n{processed_dataframe = }\n{complete_section_results = }\n{focused_section_results = }"
+            self._app.sig_show_message.emit(msg, "warning")
+            return None
         return CompleteResult(
-            identifier=self.get_result_identifier(),
-            processed_dataframe=self.base_df,
-            complete_section_results=self.get_section_results(),
-            focused_section_results=self.get_focused_results(),
+            identifier=identifier,
+            processed_dataframe=processed_dataframe,
+            complete_section_results=complete_section_results,
+            focused_section_results=focused_section_results,
         )

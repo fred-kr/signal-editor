@@ -1,17 +1,13 @@
-import os
-import pprint
+import datetime
 import typing as t
 
-import numpy as np
-import pdir
-import polars as pl
 import polars.selectors as ps
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
 from .. import type_aliases as _t
-from ..handlers.plot_handler import PlotHandler
-from ..views._ui_state_maps import (
+from ..handlers import PlotHandler
+from ..views.ui_state_maps import (
     COMBO_BOX_ITEMS,
     FILTER_INPUT_STATES,
     INITIAL_PEAK_STATES,
@@ -41,8 +37,9 @@ class UIHandler(QtCore.QObject):
         )
 
         self._app.tabs_main.currentChanged.connect(self.on_main_tab_changed)
-        if os.environ.get("ENABLE_CONSOLE", "0") == "1":
-            self._app.action_open_console.triggered.connect(self.show_jupyter_console_widget)
+        self._app.btn_reset_peak_detection_values.clicked.connect(
+            self.set_initial_peak_detection_parameters
+        )
 
     def setup_ui(self) -> None:
         self._set_combo_box_items()
@@ -59,10 +56,6 @@ class UIHandler(QtCore.QObject):
         # Toolbar Plots
         self._setup_toolbars()
 
-        # Console
-        if os.environ.get("ENABLE_CONSOLE", "0") == "1":
-            self.create_jupyter_console_widget()
-
     def _setup_statusbar(self) -> None:
         sb = self._app.statusbar
         self.progress_bar = QtWidgets.QProgressBar()
@@ -71,10 +64,6 @@ class UIHandler(QtCore.QObject):
         )
         sb.addWidget(self.progress_bar)
         self.progress_bar.hide()
-        # self.label_cursor_pos = QtWidgets.QLabel(
-        #     "Cursor Position (scene): -, -; Base Index: -; Section Index: -", sb
-        # )
-        # sb.addPermanentWidget(self.label_cursor_pos)
         self.label_currently_showing = QtWidgets.QLabel("Currently showing: ")
         sb.addPermanentWidget(self.label_currently_showing)
         sb.showMessage("Ready")
@@ -90,7 +79,9 @@ class UIHandler(QtCore.QObject):
 
         export_menu = QtWidgets.QMenu(self._app.btn_export_focused)
         export_menu.addAction("CSV", lambda: self._app.export_focused_result("csv"))
-        export_menu.addAction("Text (tab-delimited)", lambda: self._app.export_focused_result("txt"))
+        export_menu.addAction(
+            "Text (tab-delimited)", lambda: self._app.export_focused_result("txt")
+        )
         export_menu.addAction("Excel", lambda: self._app.export_focused_result("xlsx"))
         self._app.btn_export_focused.setMenu(export_menu)
 
@@ -104,7 +95,6 @@ class UIHandler(QtCore.QObject):
         peak_combo_box = self._app.combo_box_peak_detection_method
         stacked_peak_widget = self._app.stacked_peak_parameters
         peak_combo_box.blockSignals(True)
-        peak_combo_box.clear()
         peak_combo_box.setItems(COMBO_BOX_ITEMS["combo_box_peak_detection_method"])
         peak_combo_box.setCurrentIndex(0)
         stacked_peak_widget.setCurrentIndex(0)
@@ -117,14 +107,18 @@ class UIHandler(QtCore.QObject):
         edit_tb.setVisible(False)
         self._app.action_toggle_section_sidebar.setChecked(False)
 
-    def update_currently_shown_label(self, text: str) -> None:
-        self.label_currently_showing.setText(f"Currently showing: {text}")
-
     def _set_combo_box_items(self) -> None:
         for key, value in COMBO_BOX_ITEMS.items():
             combo_box: pg.ComboBox = getattr(self._app, key)
-            combo_box.clear()
             combo_box.setItems(value)
+
+    @QtCore.Slot()
+    def set_initial_peak_detection_parameters(self) -> None:
+        for widget_name, properties in INITIAL_PEAK_STATES.items():
+            for property_name, value in properties.items():
+                getattr(self._app, widget_name).__getattribute__(
+                    INITIAL_STATE_METHODS_MAP[property_name]
+                )(value)
 
     @staticmethod
     def _blocked_set_combo_box_items(combo_box: QtWidgets.QComboBox, items: list[str]) -> None:
@@ -136,27 +130,28 @@ class UIHandler(QtCore.QObject):
 
     @QtCore.Slot()
     def update_data_select_ui(self) -> None:
-        self._app.container_file_info.setEnabled(True)
+        if self._app.data.raw_df is None:
+            return
         self._app.btn_load_selection.setEnabled(True)
         data_cols = self._app.data.raw_df.select(
             (~ps.contains(["index", "time", "temp"])) & (ps.float())
         ).columns
-        data_combo_box = self._app.combo_box_signal_column
-        self._blocked_set_combo_box_items(data_combo_box, data_cols)
+        self._blocked_set_combo_box_items(self._app.combo_box_signal_column, data_cols)
 
-        try:
-            metadata = self._app.data.metadata
-            meas_date = metadata["date_recorded"]
-
+        metadata = self._app.data.metadata
+        if metadata is None:
+            self._app.date_edit_file_info.setDate(QtCore.QDate(2000, 1, 1))
+            self._app.line_edit_subject_id.setText("unknown")
+            self._app.combo_box_oxygen_condition.setValue("unknown")
+        else:
+            meas_date = metadata["date_recorded"] or datetime.date(2000, 1, 1)
+            subject_id = metadata["animal_id"] or "unknown"
+            oxygen_condition = metadata["oxygen_condition"] or "unknown"
             self._app.date_edit_file_info.setDate(
                 QtCore.QDate(meas_date.year, meas_date.month, meas_date.day)
             )
-            self._app.line_edit_subject_id.setText(metadata["animal_id"])
-            self._app.combo_box_oxygen_condition.setValue(metadata["oxygen_condition"])
-        except Exception:
-            self._app.date_edit_file_info.setDate(QtCore.QDate.currentDate())
-            self._app.line_edit_subject_id.setText("unknown")
-            self._app.combo_box_oxygen_condition.setValue("unknown")
+            self._app.line_edit_subject_id.setText(subject_id)
+            self._app.combo_box_oxygen_condition.setValue(oxygen_condition)
 
     @QtCore.Slot()
     def reset_widget_state(self) -> None:
@@ -173,64 +168,9 @@ class UIHandler(QtCore.QObject):
 
     @QtCore.Slot(int)
     def on_main_tab_changed(self, index: int) -> None:
-        show_section_dock = index == 1 and self._app.action_toggle_section_sidebar.isChecked()
+        show_section_dock = index == 1 or self._app.action_toggle_section_sidebar.isChecked()
         self._app.toolbar_plots.setVisible(index == 1)
         self._app.dock_widget_sections.setVisible(show_section_dock)
-
-    def create_jupyter_console_widget(self) -> None:
-        try:
-            import jupyter_client
-            from PySide6 import QtCore, QtGui, QtWidgets
-            from qtconsole import inprocess
-        except ImportError:
-            return
-
-        class JupyterConsoleWidget(inprocess.QtInProcessRichJupyterWidget):
-            def __init__(self):
-                super().__init__()
-
-                self.kernel_manager: inprocess.QtInProcessKernelManager = (
-                    inprocess.QtInProcessKernelManager()
-                )
-                self.kernel_manager.start_kernel()
-                self.kernel_client: jupyter_client.blocking.client.BlockingKernelClient = (
-                    self.kernel_manager.client()
-                )
-                self.kernel_client.start_channels()
-                qapp_instance = QtWidgets.QApplication.instance()
-                if qapp_instance is not None:
-                    qapp_instance.aboutToQuit.connect(self.shutdown_kernel)
-
-            def shutdown_kernel(self):
-                self.kernel_client.stop_channels()
-                self.kernel_manager.shutdown_kernel()
-
-        self.jupyter_console = JupyterConsoleWidget()
-        self.jupyter_console.set_default_style("linux")
-        self.jupyter_console_dock = QtWidgets.QDockWidget("Jupyter Console")
-        self.jupyter_console_dock.setWidget(self.jupyter_console)
-        self.jupyter_console.kernel_manager.kernel.shell.push(
-            dict(
-                mw=self._app,
-                pg=pg,
-                np=np,
-                pl=pl,
-                pp=pprint.pprint,
-                pdir=pdir,
-                qtc=QtCore,
-                qtw=QtWidgets,
-                qtg=QtGui,
-            )
-        )
-        self.jupyter_console.execute("whos")
-
-    @QtCore.Slot()
-    def show_jupyter_console_widget(self) -> None:
-        if self.jupyter_console_dock.isVisible():
-            self.jupyter_console_dock.close()
-        else:
-            self.jupyter_console_dock.show()
-            self.jupyter_console_dock.resize(900, 600)
 
     @QtCore.Slot(str)
     def handle_filter_method_changed(self, text: str) -> None:
@@ -248,6 +188,17 @@ class UIHandler(QtCore.QObject):
         self._app.spin_box_order.setValue(3)
         self._app.slider_order.setValue(3)
 
+    def _set_neurokit2_cleaning_params(self) -> None:
+        self._app.combo_box_filter_method.blockSignals(True)
+        self._app.combo_box_filter_method.setValue("butterworth")
+        self._app.combo_box_filter_method.blockSignals(False)
+        self._app.dbl_spin_box_lowcut.setValue(0.5)
+        self._app.dbl_spin_box_highcut.setValue(
+            self._app.dbl_spin_box_highcut.minimum()
+        )  # This displays the SpecialValueText 'None'
+        self._app.spin_box_order.setValue(5)
+        self._app.slider_order.setValue(5)
+
     @QtCore.Slot()
     def handle_preprocess_pipeline_changed(self) -> None:
         pipeline_value = self._app.pipeline
@@ -260,10 +211,13 @@ class UIHandler(QtCore.QObject):
             self._app.container_custom_filter_inputs.setEnabled(False)
             self._app.combo_box_filter_method.setValue("butterworth")
             self._set_elgendi_cleaning_params()
-        else:
-            # TODO: add UI and logic for other signal cleaning pipelines
+        elif pipeline_value == "ecg_neurokit2":
             self._app.container_custom_filter_inputs.setEnabled(False)
-            msg = f"Selected pipeline {pipeline_value} not yet implemented, use either 'custom' or 'ppg_elgendi'."
+            self._app.container_powerline.setEnabled(True)
+            self._set_neurokit2_cleaning_params()
+        else:
+            self._app.container_custom_filter_inputs.setEnabled(False)
+            msg = f"Selected pipeline {pipeline_value} not yet implemented."
             self._app.sig_show_message.emit(msg, "info")
             return
 
@@ -288,6 +242,8 @@ class UIHandler(QtCore.QObject):
             }
             for param, widget in filter_widgets.items():
                 if widget.isEnabled():
+                    if param in ("lowcut", "highcut") and widget.value() == 0:
+                        filter_params[param] = None
                     filter_params[param] = widget.value()
 
         return filter_params
@@ -300,7 +256,7 @@ class UIHandler(QtCore.QObject):
         else:
             window_size = None
 
-        return _t.StandardizeParameters(robust=robust, window_size=window_size)
+        return {"robust": robust, "window_size": window_size, "method": method}
 
     def get_peak_detection_parameters(self) -> _t.PeakDetectionParameters:
         method = self._app.peak_detection_method
@@ -339,47 +295,51 @@ class UIHandler(QtCore.QObject):
                     search_radius=self._app.peak_xqrs_search_radius.value(),
                     peak_dir=self._app.xqrs_peak_direction,
                 )
+            case _:
+                raise NotImplementedError(f"Peak detection method {method} not yet implemented.")
 
         for key, val in vals.items():
             if isinstance(val, float):
                 vals[key] = round(val, 3)
 
-        return _t.PeakDetectionParameters(method=method, method_parameters=vals)
+        return {"method": method, "method_parameters": vals}
 
-    def set_peak_detection_parameters(self, params: _t.PeakDetectionParameters) -> None:
-        # sourcery skip: extract-method
-        method = params["method"]
-        self._app.combo_box_peak_detection_method.setValue(method)
+    # def set_peak_detection_parameters(self, params: _t.PeakDetectionParameters) -> None:
+    #     # sourcery skip: extract-method
+    #     method = params["method"]
+    #     self._app.combo_box_peak_detection_method.setValue(method)
 
-        vals = params["method_parameters"]
+    #     vals = params["method_parameters"]
 
-        match method:
-            case "elgendi_ppg":
-                vals = t.cast(_t.PeakDetectionElgendiPPG, vals)
-                self._app.peak_elgendi_ppg_peakwindow.setValue(vals["peakwindow"])
-                self._app.peak_elgendi_ppg_beatwindow.setValue(vals["beatwindow"])
-                self._app.peak_elgendi_ppg_beatoffset.setValue(vals["beatoffset"])
-                self._app.peak_elgendi_ppg_min_delay.setValue(vals["mindelay"])
-            case "local":
-                vals = t.cast(_t.PeakDetectionLocalMaxima, vals)
-                self._app.peak_local_max_radius.setValue(vals["radius"])
-            case "neurokit2":
-                vals = t.cast(_t.PeakDetectionNeurokit2, vals)
-                self._app.peak_neurokit2_smoothwindow.setValue(vals["smoothwindow"])
-                self._app.peak_neurokit2_avgwindow.setValue(vals["avgwindow"])
-                self._app.peak_neurokit2_gradthreshweight.setValue(vals["gradthreshweight"])
-                self._app.peak_neurokit2_minlenweight.setValue(vals["minlenweight"])
-                self._app.peak_neurokit2_mindelay.setValue(vals["mindelay"])
-                self._app.peak_neurokit2_correct_artifacts.setChecked(vals["correct_artifacts"])
-            case "promac":
-                vals = t.cast(_t.PeakDetectionProMAC, vals)
-                self._app.peak_promac_threshold.setValue(vals["threshold"])
-                self._app.peak_promac_gaussian_sd.setValue(vals["gaussian_sd"])
-                self._app.peak_promac_correct_artifacts.setChecked(vals["correct_artifacts"])
-            case "pantompkins":
-                vals = t.cast(_t.PeakDetectionPantompkins, vals)
-                self._app.peak_pantompkins_correct_artifacts.setChecked(vals["correct_artifacts"])
-            case "wfdb_xqrs":
-                vals = t.cast(_t.PeakDetectionXQRS, vals)
-                self._app.peak_xqrs_search_radius.setValue(vals["search_radius"])
-                self._app.peak_xqrs_peak_dir.setValue(vals["peak_dir"])
+    #     match method:
+    #         case "elgendi_ppg":
+    #             vals = t.cast(_t.PeakDetectionElgendiPPG, vals)
+    #             self._app.peak_elgendi_ppg_peakwindow.setValue(vals["peakwindow"])
+    #             self._app.peak_elgendi_ppg_beatwindow.setValue(vals["beatwindow"])
+    #             self._app.peak_elgendi_ppg_beatoffset.setValue(vals["beatoffset"])
+    #             self._app.peak_elgendi_ppg_min_delay.setValue(vals["mindelay"])
+    #         case "local":
+    #             vals = t.cast(_t.PeakDetectionLocalMaxima, vals)
+    #             self._app.peak_local_max_radius.setValue(vals["radius"])
+    #         case "neurokit2":
+    #             vals = t.cast(_t.PeakDetectionNeurokit2, vals)
+    #             self._app.peak_neurokit2_smoothwindow.setValue(vals["smoothwindow"])
+    #             self._app.peak_neurokit2_avgwindow.setValue(vals["avgwindow"])
+    #             self._app.peak_neurokit2_gradthreshweight.setValue(vals["gradthreshweight"])
+    #             self._app.peak_neurokit2_minlenweight.setValue(vals["minlenweight"])
+    #             self._app.peak_neurokit2_mindelay.setValue(vals["mindelay"])
+    #             self._app.peak_neurokit2_correct_artifacts.setChecked(vals["correct_artifacts"])
+    #         case "promac":
+    #             vals = t.cast(_t.PeakDetectionProMAC, vals)
+    #             self._app.peak_promac_threshold.setValue(vals["threshold"])
+    #             self._app.peak_promac_gaussian_sd.setValue(vals["gaussian_sd"])
+    #             self._app.peak_promac_correct_artifacts.setChecked(vals["correct_artifacts"])
+    #         case "pantompkins":
+    #             vals = t.cast(_t.PeakDetectionPantompkins, vals)
+    #             self._app.peak_pantompkins_correct_artifacts.setChecked(vals["correct_artifacts"])
+    #         case "wfdb_xqrs":
+    #             vals = t.cast(_t.PeakDetectionXQRS, vals)
+    #             self._app.peak_xqrs_search_radius.setValue(vals["search_radius"])
+    #             self._app.peak_xqrs_peak_dir.setValue(vals["peak_dir"])
+    #         case _:
+    #             raise NotImplementedError(f"Peak detection method {method} not yet implemented.")
