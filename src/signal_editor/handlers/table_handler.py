@@ -81,3 +81,8 @@ class TableHandler:
         table.resizeColumnsToContents()
         for col in range(n_columns):
             table.horizontalHeader().setSectionResizeMode(col, resize_mode)
+
+    def clear(self) -> None:
+        for table in self._tables.values():
+            table.setModel(None)
+        self._tables.clear()

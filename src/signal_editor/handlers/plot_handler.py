@@ -3,6 +3,7 @@ import typing as t
 import numpy as np
 import numpy.typing as npt
 import pyqtgraph as pg
+from pyqtgraph.widgets.MatplotlibWidget import MatplotlibWidget
 from PySide6 import QtCore, QtWidgets
 
 from ..views import CustomScatterPlotItem, CustomViewBox, TimeAxisItem
@@ -10,8 +11,8 @@ from ..views import CustomScatterPlotItem, CustomViewBox, TimeAxisItem
 if t.TYPE_CHECKING:
     from pyqtgraph.GraphicsScene import mouseEvents
 
-    from ..signal_editor import SignalEditor
     from ..models import SectionIndices
+    from ..signal_editor import SignalEditor
 
 
 class PlotHandler(QtCore.QObject):
@@ -23,7 +24,7 @@ class PlotHandler(QtCore.QObject):
 
     scatter_search_radius: int = 20
 
-    _name_color_map: dict[str, str] = {"hbr": "crimson", "ventilation": "steelblue"}
+    _name_color_map: dict[str, str] = {"hbr": "gray", "ventilation": "steelblue"}
 
     def __init__(self, app: "SignalEditor", parent: QtCore.QObject | None = None) -> None:
         super().__init__(parent)
@@ -39,6 +40,8 @@ class PlotHandler(QtCore.QObject):
         self._rate_item: pg.PlotDataItem | None = None
         self._rate_mean_item: pg.InfiniteLine | pg.PlotDataItem | None = None
         self._regions: list[pg.LinearRegionItem] = []
+        self._temperature_label: pg.LabelItem | None = None
+        self._bpm_label: pg.LabelItem | None = None
 
     # region Properties
     @property
@@ -81,6 +84,8 @@ class PlotHandler(QtCore.QObject):
         self._pw_main = main_plot_widget
         self._pw_rate = rate_plot_widget
 
+        self._mpw_analysis = self._app.mpl_widget_placeholder
+
     def _setup_plot_items(self) -> None:
         for plt in self.plot_items:
             vb = plt.getViewBox()
@@ -93,7 +98,7 @@ class PlotHandler(QtCore.QObject):
             plt.addLegend().anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(5, -5))
             plt.setMouseEnabled(x=True, y=False)
             vb.enableAutoRange("y")
-            vb.setAutoVisible(y=True)
+            vb.setAutoVisible(y=False)
             plt.scene().sigMouseMoved.connect(self._on_mouse_moved)
 
         self._setup_plot_labels()
@@ -127,7 +132,11 @@ class PlotHandler(QtCore.QObject):
 
     @QtCore.Slot(object)
     def _on_mouse_moved(self, pos: QtCore.QPointF) -> None:
-        if not hasattr(self._app, "data"):
+        if (
+            not hasattr(self._app, "data")
+            or self._temperature_label is None
+            or self._bpm_label is None
+        ):
             return
         cas = self._app.data.cas
         if cas is None:
@@ -172,16 +181,20 @@ class PlotHandler(QtCore.QObject):
 
     @QtCore.Slot()
     def reset_plots(self) -> None:
-        for plt in self.plot_items:
-            plt.clear()
-            plt.getViewBox().clear()
-
+        self.clear_regions()
+        self._selector = None
         self._signal_item = None
         self._scatter_item = None
         self._rate_item = None
         self._rate_mean_item = None
-        self._temperature_label.setText("")
-        self._bpm_label.setText("")
+        self._regions.clear()
+        self._temperature_label = None
+        self._bpm_label = None
+
+        for plt in self.plot_items:
+            plt.clear()
+            plt.getViewBox().clear()
+            plt.addLegend().clear()
 
         self._setup_plot_items()
 
@@ -484,3 +497,22 @@ class PlotHandler(QtCore.QObject):
         vb: CustomViewBox = self._pw_main.plotItem.vb
         if vb.mapped_selection_rect is not None:
             return vb.mapped_selection_rect.boundingRect()
+
+    def draw_rolling_rate(
+        self,
+        x: npt.NDArray[np.float_],
+        y: npt.NDArray[np.float_],
+        color: str = "green",
+        marker: str = "o",
+        linestyle: str | None = None,
+        linewidth: int = 2,
+        markersize: int = 12,
+    ) -> None:
+        subplot = self._mpw_analysis.getFigure().add_subplot(111)
+        subplot.scatter(
+            x,
+            y,
+        )
+        subplot.set_xlabel("Temperature (°C)")
+        subplot.set_ylabel("Rate (bpm)")
+        self._mpw_analysis.draw()

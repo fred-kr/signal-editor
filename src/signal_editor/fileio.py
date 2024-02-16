@@ -57,7 +57,7 @@ def read_edf(
     lf = (
         pl.from_numpy(data.transpose(), schema={name: pl.Float64 for name in column_names})  # type: ignore
         .lazy()
-        .with_row_count("index", offset=start)
+        .with_row_index(offset=start)
         .with_columns(
             pl.Series("time_s", times, dtype=pl.Decimal),
             pl.col("temperature").round(1),

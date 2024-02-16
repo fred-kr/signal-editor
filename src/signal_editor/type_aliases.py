@@ -262,3 +262,11 @@ class SpotItemSetDataKwargs(t.TypedDict, total=False):
     antialias: bool
     compositionMode: "QtGui.QPainter.CompositionMode | None"
     name: str | None
+
+
+class RollingRateParameters(t.TypedDict):
+    grp_col: str
+    temperature_col: str
+    every: int
+    period: int
+    offset: int

@@ -23,6 +23,7 @@ def create_config_file(filename: str | Path) -> ConfigParser:
     config["FilePatterns"] = {
         "focused_result": "FocusedResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
         "complete_result": "CompleteResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
+        "rolling_rate_result": "RollingRate_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
         "app_state_snapshot": "SignalEditorStateSnapshot_{TIMESTAMP}",
     }
 
@@ -111,6 +112,13 @@ class ConfigHandler:
     def make_complete_result_name(self, signal_name: str, source_file_name: str) -> str:
         return self._file_patterns.get(
             "complete_result", "CompleteResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}"
+        ).format(SIGNAL_NAME=signal_name, SOURCE_FILE_NAME=source_file_name)
+
+    def make_rolling_rate_result_name(
+        self, signal_name: str, source_file_name: str
+    ) -> str:
+        return self._file_patterns.get(
+            "rolling_rate_result", "RollingRate_{SIGNAL_NAME}_{SOURCE_FILE_NAME}"
         ).format(SIGNAL_NAME=signal_name, SOURCE_FILE_NAME=source_file_name)
 
     def make_app_state_name(self, timestamp: datetime.datetime | str) -> str:

@@ -4,7 +4,6 @@ import typing as t
 from collections import OrderedDict
 
 import attrs
-import neurokit2 as nk
 import numpy as np
 import numpy.typing as npt
 import polars as pl
@@ -12,15 +11,13 @@ import polars.selectors as ps
 
 from .. import type_aliases as _t
 from ..peaks import find_peaks
-from ..processing import filter_elgendi, filter_neurokit2, filter_signal, scale_signal
+from ..processing import filter_elgendi, filter_neurokit2, filter_signal, scale_signal, signal_rate, rolling_rate
 from .result import FocusedResult, ManualPeakEdits
 
 
 class SectionIndices(t.NamedTuple):
     start: int
     stop: int
-    # def __str__(self) -> str:
-    #     return f"{self.start}, {self.stop}"
 
 
 class SectionID(str):
@@ -203,7 +200,7 @@ class Section:
 
     def update_sfreq(self, new_sfreq: int) -> None:
         self._sampling_rate = new_sfreq
-        if self._rate.shape[0] != 0 or self._rate_interp.shape[0] != 0:
+        if self._rate.size != 0 or self._rate_interp.size != 0:
             self.calculate_rate(new_sfreq, self.peaks.to_numpy(zero_copy_only=True))
 
     @property
@@ -299,27 +296,10 @@ class Section:
         )
         self.set_peaks(peaks)
 
-    def calculate_rate(self, sampling_rate: int, peaks: npt.NDArray[np.int32 | np.uint32]) -> None:
-        self._rate = np.asarray(
-            nk.signal_rate(
-                peaks,
-                sampling_rate,
-                desired_length=None,
-                interpolation_method="monotone_cubic",
-            ),
-            dtype=np.float64,
-        )
-        self._rate_interp = np.asarray(
-            nk.signal_rate(
-                peaks,
-                sampling_rate,
-                desired_length=self.proc_data.shape[0],
-                interpolation_method="monotone_cubic",
-            ),
-            dtype=np.float64,
-        )
+    def calculate_rate(self, sampling_rate: int, peaks: npt.NDArray[np.intp]) -> None:
+        self._rate_interp = signal_rate(peaks, sampling_rate, self.data.height)
 
-    def set_peaks(self, peaks: npt.NDArray[np.int32 | np.uint32]) -> None:
+    def set_peaks(self, peaks: npt.NDArray[np.intp]) -> None:
         """
         Set the `is_peak` column, overwriting the current values.
 
@@ -432,12 +412,14 @@ class Section:
             raise RuntimeWarning(
                 f"Need at least 3 peaks to calculate focused results. Current peaks: {peaks}. No result created."
             )
+        sfreq = self.sfreq
 
         global_peaks = self.data.get_column("index").gather(peaks)
-        time_global = global_peaks / self.sfreq
-        time_section = peaks / self.sfreq
+        time_global = global_peaks / sfreq
+        time_section = peaks / sfreq
         intervals = peaks.diff().fill_null(0).to_numpy()
         temperature = self.data.get_column("temperature").gather(peaks).to_numpy()
+        rate = signal_rate(peaks.to_numpy(), sfreq)
 
         return FocusedResult(
             peaks_section_index=peaks.to_numpy(),
@@ -446,7 +428,7 @@ class Section:
             seconds_since_global_start=time_global.to_numpy(),
             peak_intervals=intervals,
             temperature=temperature,
-            rate_bpm=self.rate,
+            rate_bpm=rate,
         )
 
     def get_section_result(self) -> SectionResult:
@@ -471,6 +453,7 @@ class Section:
             )
             .collect()
         )
+        rate = signal_rate(self.peaks.to_numpy(), self.sfreq)
 
         return SectionResult(
             identifier=self.get_section_info().as_dict(),
@@ -478,9 +461,20 @@ class Section:
             peaks_section=self.peaks,
             peaks_global=self.peaks_global,
             peak_edits=self.get_peak_edits().as_dict(),
-            rate=self.rate,
+            rate=rate,
             rate_interpolated=self.rate_interp,
             processing_parameters=self.processing_parameters,
+        )
+
+    def get_bpm_per_temperature(self, grp_col: str, temperature_col: str, every: int, period: int, offset: int) -> pl.DataFrame:
+        data = self.get_focused_result().to_polars()
+        return rolling_rate(
+            data,
+            grp_col,
+            temperature_col,
+            every=every,
+            period=period,
+            offset=offset,
         )
 
 

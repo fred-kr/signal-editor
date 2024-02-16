@@ -13,15 +13,17 @@ from .. import type_aliases as _t
 from ..fileio import read_edf
 from ..models import (
     CompleteResult,
+    FocusedResult,
     ResultIdentifier,
     Section,
     SectionContainer,
     SectionID,
     SectionIndices,
+    SectionResult,
 )
+from ..processing import rolling_rate
 
 if t.TYPE_CHECKING:
-    from ..models.result import FocusedResult, SectionResult
     from ..signal_editor import SignalEditor
 
 
@@ -135,10 +137,8 @@ class DataHandler(QtCore.QObject):
         self._metadata: _t.FileMetadata | None = None
         self._sig_name: str | None = None
         self._error_no_data_available_shown = False
-        self._connect_qt_signals()
-
-    def _connect_qt_signals(self) -> None:
-        self.sig_sfreq_changed.connect(self._app.update_sfreq_blocked)
+        self._section_results: dict[SectionID, SectionResult] = {}
+        self._focused_results: dict[SectionID, FocusedResult] = {}
 
     def _clear(self) -> None:
         self._raw_df = None
@@ -215,8 +215,6 @@ class DataHandler(QtCore.QObject):
     @property
     def cas(self) -> Section | None:
         """Shorthand for the currently active section (cas = current active section)."""
-        if self.base_section is None:
-            return None
         return next(
             (section for section in self.sections.values() if section.is_active),
             self.base_section,
@@ -367,6 +365,7 @@ class DataHandler(QtCore.QObject):
 
     @QtCore.Slot()
     def reset(self) -> None:
+        self.clear_sections()
         self._raw_df = None
         self._base_df = None
         self._sections = SectionContainer()
@@ -375,6 +374,11 @@ class DataHandler(QtCore.QObject):
         self._metadata = None
         self._sig_name = None
         Section.reset_id_counter()
+        self._error_no_data_available_shown = False
+        self._base_section = None
+        self._metadata = None
+        self._section_results.clear()
+        self._focused_results.clear()
 
     @QtCore.Slot()
     def clear_sections(self) -> None:
@@ -403,24 +407,30 @@ class DataHandler(QtCore.QObject):
         del self._sections[section_id]
         self.sig_section_removed.emit(section_id)
 
-    def get_section(self, section_id: SectionID) -> Section:
-        return self.sections[section_id]
+    def save_all_sections(self) -> None:
+        """
+        Saves all sections.
 
-    def save_sections_to_base(self) -> None:
+        Updates the base data with each section's data.
+        Stores the section result and focused result of each section.
         """
-        Updates the base data frame with the data from every section. Later sections overwrite earlier ones if they overlap.
-        """
-        section_dfs = [section.data for section in self.sections.values()]
-        for section_df in section_dfs:
-            self.update_base(section_df)
+        for section in list(self.sections.values())[1:]:
+            self.update_base(section.data)
+            self._section_results[section.section_id] = section.get_section_result()
+            self._focused_results[section.section_id] = section.get_focused_result()
 
     def save_cas(self) -> None:
         """
-        Saves the currently active section to the base data frame.
+        Saves the current CAS data.
+
+        Updates the base data with the CAS data.
+        Stores the section result and focused result of the CAS.
         """
         if self.cas is None:
             return
         self.update_base(self.cas.data)
+        self._section_results[self.cas.section_id] = self.cas.get_section_result()
+        self._focused_results[self.cas.section_id] = self.cas.get_focused_result()
 
     def get_state(self) -> DataState:
         return DataState(
@@ -472,6 +482,7 @@ class DataHandler(QtCore.QObject):
         }
 
     def get_complete_result(self) -> CompleteResult | None:
+        self.save_all_sections()
         identifier = self.get_result_identifier()
         processed_dataframe = self.base_df
         complete_section_results = self.get_section_results()
@@ -492,3 +503,15 @@ class DataHandler(QtCore.QObject):
             complete_section_results=complete_section_results,
             focused_section_results=focused_section_results,
         )
+
+    def get_bpm_per_temperature(
+        self, grp_col: str, temperature_col: str, every: int, period: int, offset: int
+    ) -> pl.DataFrame:
+        section_results = self.get_focused_results()
+        if section_results is None:
+            raise RuntimeError("Can't get bpm per temperature without section results.")
+        dfs = [result.to_polars() for result in section_results.values()]
+        grouped_dfs = [
+            rolling_rate(df, grp_col, temperature_col, every, period, offset) for df in dfs
+        ]
+        return pl.concat(grouped_dfs)

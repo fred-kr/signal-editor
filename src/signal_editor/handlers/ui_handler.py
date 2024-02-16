@@ -77,13 +77,21 @@ class UIHandler(QtCore.QObject):
         self._app.action_remove_section.setEnabled(False)
         self._app.container_section_confirm_cancel.hide()
 
-        export_menu = QtWidgets.QMenu(self._app.btn_export_focused)
-        export_menu.addAction("CSV", lambda: self._app.export_focused_result("csv"))
-        export_menu.addAction(
+        foc_res_export_menu = QtWidgets.QMenu(self._app.btn_export_focused)
+        foc_res_export_menu.addAction("CSV", lambda: self._app.export_focused_result("csv"))
+        foc_res_export_menu.addAction(
             "Text (tab-delimited)", lambda: self._app.export_focused_result("txt")
         )
-        export_menu.addAction("Excel", lambda: self._app.export_focused_result("xlsx"))
-        self._app.btn_export_focused.setMenu(export_menu)
+        foc_res_export_menu.addAction("Excel", lambda: self._app.export_focused_result("xlsx"))
+        self._app.btn_export_focused.setMenu(foc_res_export_menu)
+
+        rolling_rate_export_menu = QtWidgets.QMenu(self._app.btn_export_rolling_rate)
+        rolling_rate_export_menu.addAction("CSV", lambda: self._app.export_rolling_rate("csv"))
+        rolling_rate_export_menu.addAction(
+            "Text (tab-delimited)", lambda: self._app.export_rolling_rate("txt")
+        )
+        rolling_rate_export_menu.addAction("Excel", lambda: self._app.export_rolling_rate("xlsx"))
+        self._app.btn_export_rolling_rate.setMenu(rolling_rate_export_menu)
 
     def _setup_inputs(self) -> None:
         # Signal Filtering
@@ -100,6 +108,9 @@ class UIHandler(QtCore.QObject):
         stacked_peak_widget.setCurrentIndex(0)
         peak_combo_box.blockSignals(False)
         peak_combo_box.currentIndexChanged.connect(stacked_peak_widget.setCurrentIndex)
+
+        self._app.combo_box_grp_col.addItems(["peaks_section_index", "peaks_global_index"])
+        self._app.combo_box_temperature_col.addItem("temperature")
 
     def _setup_toolbars(self) -> None:
         edit_tb = self._app.toolbar_plots
@@ -303,6 +314,20 @@ class UIHandler(QtCore.QObject):
                 vals[key] = round(val, 3)
 
         return {"method": method, "method_parameters": vals}
+
+    def get_rolling_rate_parameters(self) -> _t.RollingRateParameters:
+        grp_col = self._app.combo_box_grp_col.currentText()
+        temperature_col = self._app.combo_box_temperature_col.currentText()
+        every = self._app.spin_box_every.value()
+        period = self._app.spin_box_period.value()
+        offset = self._app.spin_box_offset.value()
+        return {
+            "grp_col": grp_col,
+            "temperature_col": temperature_col,
+            "every": every,
+            "period": period,
+            "offset": offset,
+        }
 
     # def set_peak_detection_parameters(self, params: _t.PeakDetectionParameters) -> None:
     #     # sourcery skip: extract-method

@@ -13,6 +13,8 @@ import pyqtgraph as pg
 from loguru import logger
 from PySide6 import QtCore, QtGui, QtWidgets
 
+from .processing import rolling_rate
+
 from . import type_aliases as _t
 from .fileio import result_dict_to_hdf5
 from .handlers import (
@@ -58,12 +60,12 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ui = UIHandler(self, self.plot)
         self.file_info: QtCore.QFileInfo = QtCore.QFileInfo()
         self._read_config()
-        self._connect_signals()
+        self._connect_qt_signals()
         self._result: CompleteResult | None = None
         self.tables = TableHandler()
         self._on_init_finished()
 
-    def _connect_signals(self) -> None:
+    def _connect_qt_signals(self) -> None:
         """
         Connect signals to slots.
         """
@@ -96,21 +98,22 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_save_to_hdf5.clicked.connect(self.save_to_hdf5)
         self.btn_select_file.clicked.connect(self.select_data_file)
         self.action_save_to_hdf5.triggered.connect(self.save_to_hdf5)
-        self.btn_export_focused.clicked.connect(self.export_focused_result)
+        self.btn_load_focused_result.clicked.connect(self._load_focused_result)
 
         # Data Handling
         self.btn_show_more_rows.clicked.connect(self._update_cas_table)
         self.data.sig_new_raw.connect(self.ui.update_data_select_ui)
+        self.data.sig_sfreq_changed.connect(self.update_sfreq_blocked)
         self.btn_load_selection.clicked.connect(self.handle_load_data)
         self.sig_data_loaded.connect(self._on_data_loaded)
         self.btn_compute_results.clicked.connect(self.update_results)
         self.action_get_section_result.triggered.connect(self._on_section_done)
+        self.btn_calculate_rolling_rate.clicked.connect(self.handle_rolling_rate_calculation)
 
         # Processing & Editing
         self.btn_apply_filter.clicked.connect(self.process_signal)
         self.btn_detect_peaks.clicked.connect(self.detect_peaks)
         self.plot.sig_peaks_edited.connect(self.handle_scatter_clicked)
-        # self.plot.sig_peaks_drawn.connect(self.handle_draw_rate)
         self.sig_data_processed.connect(self.update_data_tables)
         self.sig_peaks_detected.connect(self._on_peaks_detected)
         self.action_remove_selected_peaks.triggered.connect(self.plot.remove_selected_scatter)
@@ -153,7 +156,8 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self._setup_tables()
 
     def _setup_tables(self) -> None:
-        self.table_context_menu = QtWidgets.QMenu(self.table_view_cas)
+        self.tables.clear()
+        self.table_context_menu = QtWidgets.QMenu()
         self.table_context_menu.addAction("Load More", self._update_cas_table)
         self.table_view_cas.customContextMenuRequested.connect(
             lambda: self.table_context_menu.exec(QtGui.QCursor.pos())
@@ -163,6 +167,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.table_view_cas,
                 self.table_view_cas_description,
                 self.table_view_focused_result,
+                self.table_view_rolling_rate,
             ]:
                 table.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
                 self.tables.add_view(table.objectName(), table)
@@ -317,7 +322,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             "critical": QtWidgets.QMessageBox.Icon.Critical,
             "error": QtWidgets.QMessageBox.Icon.Critical,
         }
-        if level == "debug" and os.environ.get("DEV_MODE", "0") == "0":
+        if level == "debug" and os.environ.get("ENABLE_CONSOLE", "0") == "0":
             return
         msg_box = QtWidgets.QMessageBox()
         msg_box.setIcon(icon_map[level])
@@ -334,11 +339,42 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         # Open the config.ini file in the default os editor
         QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(file))
 
+    @QtCore.Slot()
+    def _load_focused_result(self) -> None:
+        file_path = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select Focused Result File",
+            self.config.output_dir.as_posix(),
+            "CSV Files (*.csv);;Excel Files (*.xlsx);;Text Files (*.txt)",
+        )[0]
+        if not file_path:
+            return
+
+        suffix = Path(file_path).suffix
+        match suffix:
+            case ".csv":
+                df = pl.read_csv(file_path)
+            case ".xlsx":
+                df = pl.read_excel(file_path)
+            case ".txt":
+                df = pl.read_csv(file_path, separator="\t")
+            case _:
+                self.sig_show_message.emit(f"Unsupported file format: {suffix}", "warning")
+                return
+
+        df_cols = df.columns
+        self.combo_box_grp_col.clear()
+        self.combo_box_temperature_col.clear()
+        self.combo_box_grp_col.addItems(df_cols)
+        self.combo_box_temperature_col.addItems(df_cols)
+        self._rr_df = df
+
     # region Sections
     @QtCore.Slot()
     def handle_intrasection_peak_detection(self) -> None:
         rect = self.plot.get_selection_rect()
-        if rect is None or self.data.cas is None:
+        cas = self.data.cas
+        if rect is None or cas is None:
             return
         left, right, top, bottom = int(rect.left()), int(rect.right()), rect.top(), rect.bottom()
         self.plot.remove_selection_rect()
@@ -347,8 +383,8 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         peak_type = self.selection_peak_type
         b_left, b_right = left + edge_buffer, right - edge_buffer
         b_left: int = np.maximum(b_left, 0)
-        b_right: int = np.minimum(b_right, self.data.cas.proc_data.len())
-        data = self.data.cas.proc_data[b_left:b_right].to_numpy()
+        b_right: int = np.minimum(b_right, cas.proc_data.len())
+        data = cas.proc_data[b_left:b_right].to_numpy()
         if self.check_box_use_selection_peak_find.isChecked():
             match peak_type:
                 case "Maxima":
@@ -384,7 +420,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
                             peaks = find_extrema(data, radius=win_size, direction="down")
 
         peaks = peaks + b_left
-        self.data.cas.update_peaks("add", peaks)
+        cas.update_peaks("add", peaks)
         self.sig_peaks_detected.emit()
 
     @QtCore.Slot(str)
@@ -414,8 +450,8 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.list_widget_sections.clear()
         self.combo_box_section_select.clear()
         self.data.clear_sections()
-        self.data.create_base_df(self.sig_name)
         self.plot.clear_regions()
+        self.data.create_base_df(self.sig_name)
         self.update_data_tables()
         self._result = None
 
@@ -438,6 +474,28 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.ui.progress_bar.setValue(100)
         self.statusbar.showMessage("Focused result ready for export, see 'Results' tab.")
         self.ui.progress_bar.hide()
+
+    @QtCore.Slot()
+    def handle_rolling_rate_calculation(self) -> None:
+        temperature_col = f"{self.combo_box_temperature_col.currentText()}_mean"
+        rate_col = "n_peaks_mean"
+        try:
+            if hasattr(self, "_rr_df"):
+                roll_df = rolling_rate(self._rr_df, **self.ui.get_rolling_rate_parameters()).sort(temperature_col)
+            else:
+                roll_df = self.data.get_bpm_per_temperature(
+                    **self.ui.get_rolling_rate_parameters()
+                ).sort(temperature_col)
+        except Exception as e:
+            msg = f"Failed to calculate rolling rate:\n\n{e}\n\nTraceback: {traceback.format_exc()}"
+            self.sig_show_message.emit(msg, "error")
+            return
+        self.tables.update_df_model(roll_df, self.table_view_rolling_rate, limit=1000)
+
+        self.plot.draw_rolling_rate(
+            x=roll_df.get_column(temperature_col).to_numpy(),
+            y=roll_df.get_column(rate_col).to_numpy(),
+        )
 
     @QtCore.Slot()
     def update_results(self) -> None:
@@ -541,7 +599,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         )
         if ok:
             sect_id = SectionID(to_remove)
-            bounds = self.data.get_section(sect_id).base_bounds
+            bounds = self.data.sections[sect_id].base_bounds
             self.data.remove_section(sect_id)
             self.plot.remove_region((bounds[0], bounds[1]))
             if len(self.data.removable_section_ids) == 0:
@@ -635,41 +693,65 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.config.output_dir = Path(file_name).parent
         try:
             results = self.data.get_focused_results()
-            if results is None:
-                msg = "No focused results to export."
-                self.sig_show_message.emit(msg, "info")
-                return
+        except Exception as e:
+            msg = f"Failed to create focused results:\n\n{e}\n\nTraceback: {traceback.format_exc()}"
+            self.sig_show_message.emit(msg, "error")
+            return
+        if results is None:
+            msg = "No focused results to export."
+            self.sig_show_message.emit(msg, "info")
+            return
 
-            write_functions: dict[
-                str, t.Callable[[pl.DataFrame, str | Path], "None | Workbook"]
-            ] = {
-                "csv": lambda df, path: df.write_csv(path),
-                "xlsx": lambda df, path: df.write_excel(path),
-                "txt": lambda df, path: df.write_csv(path, separator="\t"),
-            }
-            if item == "Only export currently active section":
+        write_functions: dict[str, t.Callable[[pl.DataFrame, str | Path], "None | Workbook"]] = {
+            "csv": lambda df, path: df.write_csv(path),
+            "xlsx": lambda df, path: df.write_excel(path),
+            "txt": lambda df, path: df.write_csv(path, separator="\t"),
+        }
+        match item:
+            case "Only export currently active section":
                 foc_df = self.data.cas.get_focused_result().to_polars()
                 write_functions[output_format](foc_df, file_name)
-
-            elif item == "Create a new file for each section":
+            case "Create a new file for each section":
                 for s_id, foc_res in results.items():
                     foc_df = foc_res.to_polars()
                     write_functions[output_format](foc_df, f"{file_name}_{s_id}")
-
-            elif item == "Concatenate all sections and write to a single file":
+            case "Concatenate all sections and write to a single file":
                 result_dfs = [
                     foc_res.to_polars().with_columns(pl.lit(s_id).alias("section_id"))
                     for s_id, foc_res in results.items()
                 ]
                 result_df = pl.concat(result_dfs)
                 write_functions[output_format](result_df, f"{file_name}_all")
-        except Exception as e:
-            msg = f"Failed to export focused result:\n\n{e}"
-            self.sig_show_message.emit(msg, "error")
-            return
+            case _:
+                return
 
         msg = f"Exported focused result to:\n\n{file_name}."
         self.sig_show_message.emit(msg, "info")
+
+    @QtCore.Slot(str)
+    def export_rolling_rate(self, output_format: t.Literal["csv", "xlsx", "txt"]) -> None:
+        if self.data.cas is None:
+            return
+        result_file_name = self.config.make_rolling_rate_result_name(
+            self.sig_name, self.file_info.completeBaseName()
+        )
+        params = self.ui.get_rolling_rate_parameters()
+        data = self.data.get_bpm_per_temperature(**params)
+
+        file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Select Output Location",
+            Path.joinpath(self.config.output_dir, result_file_name).as_posix(),
+            f"{output_format.upper()} Files (*.{output_format})",
+        )
+
+        match output_format:
+            case "csv":
+                data.write_csv(file_name)
+            case "xlsx":
+                data.write_excel(file_name)
+            case "txt":
+                data.write_csv(file_name, separator="\t")
 
     @QtCore.Slot()
     def _update_cas_table(self) -> None:
@@ -750,6 +832,8 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             self.ui.reset_widget_state()
             self.plot.reset_plots()
             self.data.reset()
+            self._setup_tables()
+            self.unsaved_changes = False
             self.file_info.setFile(path)
             self.line_edit_active_file.setText(Path(path).name)
             self.config.data_dir = self.file_info.dir().path()
@@ -764,7 +848,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.btn_load_selection.processing("Loading data...")
         self.statusbar.showMessage(f"Loading data from file: {self.file_info.canonicalFilePath()}")
 
-        signal_col = self.sig_name
+        signal_col = self.combo_box_signal_column.currentText()
         if signal_col not in self.data.raw_df.columns:
             msg = f"Selected column '{signal_col}' not found in data. Detected columns are: '{', '.join(self.data.raw_df.columns)}'"
             self.btn_load_selection.failure("Error", msg)
