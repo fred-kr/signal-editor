@@ -505,13 +505,15 @@ class DataHandler(QtCore.QObject):
         )
 
     def get_bpm_per_temperature(
-        self, grp_col: str, temperature_col: str, every: int, period: int, offset: int
+        self, grp_col: str, temperature_col: str, sec_every: int, sec_period: int, sec_offset: int, sampling_rate: int
     ) -> pl.DataFrame:
         section_results = self.get_focused_results()
+        
         if section_results is None:
+            
             raise RuntimeError("Can't get bpm per temperature without section results.")
         dfs = [result.to_polars() for result in section_results.values()]
         grouped_dfs = [
-            rolling_rate(df, grp_col, temperature_col, every, period, offset) for df in dfs
+            rolling_rate(df, grp_col, temperature_col, sec_every, sec_period, sec_offset, sampling_rate) for df in dfs
         ]
         return pl.concat(grouped_dfs)

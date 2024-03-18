@@ -11,7 +11,6 @@ if t.TYPE_CHECKING:
     from PySide6 import QtCore, QtGui
 
 
-type SignalName = t.Literal["hbr", "ventilation"]
 type ScaleMethod = t.Literal["mad", "zscore", "None"]
 type Pipeline = t.Literal[
     "custom",
@@ -267,6 +266,7 @@ class SpotItemSetDataKwargs(t.TypedDict, total=False):
 class RollingRateParameters(t.TypedDict):
     grp_col: str
     temperature_col: str
-    every: int
-    period: int
-    offset: int
+    sec_every: int
+    sec_period: int
+    sec_offset: int
+    sampling_rate: int

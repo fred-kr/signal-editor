@@ -1,4 +1,3 @@
-import pprint
 import re
 import typing as t
 from collections import OrderedDict
@@ -11,7 +10,14 @@ import polars.selectors as ps
 
 from .. import type_aliases as _t
 from ..peaks import find_peaks
-from ..processing import filter_elgendi, filter_neurokit2, filter_signal, scale_signal, signal_rate, rolling_rate
+from ..processing import (
+    filter_elgendi,
+    filter_neurokit2,
+    filter_signal,
+    rolling_rate,
+    scale_signal,
+    signal_rate,
+)
 from .result import FocusedResult, ManualPeakEdits
 
 
@@ -105,7 +111,8 @@ class Section:
         if "section_index" in data.columns:
             data = data.drop("section_index")
         self.data = (
-            data.with_row_index("section_index")
+            data.drop_nulls()
+            .with_row_index("section_index")
             .lazy()
             .select(ps.by_name("index", "section_index"), ~ps.by_name("index", "section_index"))
             .set_sorted(["index", "section_index"])
@@ -188,11 +195,11 @@ class Section:
 
     @property
     def raw_data(self) -> pl.Series:
-        return self.data.get_column(self.sig_name)
+        return self.data.get_column(self.sig_name).drop_nulls()
 
     @property
     def proc_data(self) -> pl.Series:
-        return self.data.get_column(self._proc_sig_name)
+        return self.data.get_column(self._proc_sig_name).drop_nulls()
 
     @property
     def sfreq(self) -> int:
@@ -211,6 +218,7 @@ class Section:
             .select("section_index")
             .collect()
             .get_column("section_index")
+            .drop_nulls()
         )
 
     @property
@@ -313,6 +321,7 @@ class Section:
         ValueError
             If any peaks are not positive integers
         """
+
         if np.any(peaks < 0):
             raise ValueError("Peaks must be positive integers")
         pl_peaks = pl.Series("peaks", peaks, pl.UInt32)
@@ -466,15 +475,24 @@ class Section:
             processing_parameters=self.processing_parameters,
         )
 
-    def get_bpm_per_temperature(self, grp_col: str, temperature_col: str, every: int, period: int, offset: int) -> pl.DataFrame:
+    def get_bpm_per_temperature(
+        self,
+        grp_col: str,
+        temperature_col: str,
+        sec_every: int,
+        sec_period: int,
+        sec_offset: int,
+        sampling_rate: int,
+    ) -> pl.DataFrame:
         data = self.get_focused_result().to_polars()
         return rolling_rate(
             data,
             grp_col,
             temperature_col,
-            every=every,
-            period=period,
-            offset=offset,
+            sec_every=sec_every,
+            sec_period=sec_period,
+            sec_offset=sec_offset,
+            sampling_rate=sampling_rate,
         )
 
 
@@ -485,6 +503,3 @@ class SectionContainer(OrderedDict[SectionID, Section]):
 
     def __getitem__(self, key: SectionID) -> Section:
         return super().__getitem__(key)
-
-    def __repr__(self) -> str:
-        return pprint.pformat(self, indent=2, width=250, compact=True)

@@ -104,7 +104,8 @@ def unpack_dict_to_attrs(
     if data is None:
         return
     if isinstance(data, str):
-        file.set_node_attr(node, "", data)
+        file.set_node_attr(node, "attribute_name", data)
+        return
     for key, value in data.items():
         if value is None:
             value = "unknown"

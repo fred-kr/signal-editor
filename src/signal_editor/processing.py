@@ -184,11 +184,17 @@ def rolling_rate(
     df: pl.DataFrame,
     grp_col: str,
     temperature_col: str,
-    every: int = 4000,
-    period: int = 24000,
-    offset: int = 0,
+    sec_every: int = 10,
+    sec_period: int = 60,
+    sec_offset: int = 0,
+    sampling_rate: int = 400,
 ) -> pl.DataFrame:
+    every = sec_every * sampling_rate
+    period = sec_period * sampling_rate
+    offset = sec_offset * sampling_rate
+
     remove_row_count = period // every
+
     return (
         df.sort(grp_col)
         .with_columns(pl.col(grp_col).cast(pl.Int64))

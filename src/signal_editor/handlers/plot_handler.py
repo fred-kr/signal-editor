@@ -3,7 +3,6 @@ import typing as t
 import numpy as np
 import numpy.typing as npt
 import pyqtgraph as pg
-from pyqtgraph.widgets.MatplotlibWidget import MatplotlibWidget
 from PySide6 import QtCore, QtWidgets
 
 from ..views import CustomScatterPlotItem, CustomViewBox, TimeAxisItem
@@ -38,7 +37,7 @@ class PlotHandler(QtCore.QObject):
         self._signal_item: pg.PlotDataItem | None = None
         self._scatter_item: CustomScatterPlotItem | None = None
         self._rate_item: pg.PlotDataItem | None = None
-        self._rate_mean_item: pg.InfiniteLine | pg.PlotDataItem | None = None
+        self._rate_mean_item: pg.InfiniteLine | None = None
         self._regions: list[pg.LinearRegionItem] = []
         self._temperature_label: pg.LabelItem | None = None
         self._bpm_label: pg.LabelItem | None = None
@@ -89,7 +88,7 @@ class PlotHandler(QtCore.QObject):
     def _setup_plot_items(self) -> None:
         for plt in self.plot_items:
             vb = plt.getViewBox()
-            vb.setMenuEnabled(False)
+            # vb.setMenuEnabled(False)
             plt.setAxisItems({"top": TimeAxisItem(orientation="top")})
             plt.showGrid(x=False, y=True)
             plt.setDownsampling(auto=True)
@@ -284,7 +283,7 @@ class PlotHandler(QtCore.QObject):
             sig,
             pen=self._name_color_map.get(name, "white"),
             skipFiniteCheck=True,
-            autoDownSample=True,
+            autoDownsample=True,
             name=f"Signal ({name})",
         )
         signal_item.curve.setSegmentedLineMode("on")
@@ -467,7 +466,7 @@ class PlotHandler(QtCore.QObject):
 
     @QtCore.Slot()
     def remove_selected_scatter(self) -> None:
-        vb: CustomViewBox = self._pw_main.getPlotItem().getViewBox()
+        vb = t.cast(CustomViewBox, self._pw_main.getPlotItem().getViewBox())
         if vb.mapped_selection_rect is None:
             return
         scatter_item = self._scatter_item
@@ -489,12 +488,12 @@ class PlotHandler(QtCore.QObject):
 
     @QtCore.Slot()
     def remove_selection_rect(self) -> None:
-        vb: CustomViewBox = self._pw_main.getPlotItem().getViewBox()
+        vb = t.cast(CustomViewBox, self._pw_main.getPlotItem().getViewBox())
         vb.selection_box = None
         vb.mapped_selection_rect = None
 
     def get_selection_rect(self) -> QtCore.QRectF | None:
-        vb: CustomViewBox = self._pw_main.plotItem.vb
+        vb = t.cast(CustomViewBox, self._pw_main.plotItem.vb)
         if vb.mapped_selection_rect is not None:
             return vb.mapped_selection_rect.boundingRect()
 
@@ -502,17 +501,25 @@ class PlotHandler(QtCore.QObject):
         self,
         x: npt.NDArray[np.float_],
         y: npt.NDArray[np.float_],
-        color: str = "green",
+        color: str | t.Sequence[str] = "green",
         marker: str = "o",
         linestyle: str | None = None,
         linewidth: int = 2,
         markersize: int = 12,
     ) -> None:
-        subplot = self._mpw_analysis.getFigure().add_subplot(111)
+        fig = self._mpw_analysis.getFigure()
+        subplot = fig.gca()
         subplot.scatter(
             x,
             y,
+            c=color,
         )
         subplot.set_xlabel("Temperature (°C)")
         subplot.set_ylabel("Rate (bpm)")
+        fig.tight_layout()
+        self._mpw_analysis.draw()
+
+    @QtCore.Slot()
+    def clear_mpl_plot(self) -> None:
+        self._mpw_analysis.fig.clear()
         self._mpw_analysis.draw()

@@ -321,12 +321,14 @@ class UIHandler(QtCore.QObject):
         every = self._app.spin_box_every.value()
         period = self._app.spin_box_period.value()
         offset = self._app.spin_box_offset.value()
+        sampling_rate = self._app.spin_box_focused_sample_rate.value()
         return {
             "grp_col": grp_col,
             "temperature_col": temperature_col,
-            "every": every,
-            "period": period,
-            "offset": offset,
+            "sec_every": every,
+            "sec_period": period,
+            "sec_offset": offset,
+            "sampling_rate": sampling_rate,
         }
 
     # def set_peak_detection_parameters(self, params: _t.PeakDetectionParameters) -> None:

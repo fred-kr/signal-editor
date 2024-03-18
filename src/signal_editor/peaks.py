@@ -67,6 +67,86 @@ def _signal_smooth(
     return smoothed
 
 
+# def _find_ppg_peaks_elgendi_old(
+#     sig: npt.NDArray[np.float64],
+#     sampling_rate: int,
+#     peakwindow: float = 0.111,
+#     beatwindow: float = 0.667,
+#     beatoffset: float = 0.02,
+#     mindelay: float = 0.3,
+# ) -> npt.NDArray[np.int32]:
+#     """
+#     Finds peaks in a PPG (photoplethysmography) signal using the method described by Elgendi et al. (see Notes)
+
+#     Parameters
+#     ----------
+#     sig : NDArray[np.float64]
+#         The PPG signal as a 1-dimensional NumPy array.
+#     sampling_rate : int
+#         The sampling rate of the PPG signal in samples per second.
+#     peakwindow : float, optional
+#         The width of the window used for smoothing the squared PPG signal to find peaks (in seconds).
+#     beatwindow : float, optional
+#         The width of the window used for smoothing the squared PPG signal to find beats (in seconds).
+#     beatoffset : float, optional
+#         The offset added to the smoothed beat signal to determine the threshold for detecting waves.
+#     mindelay : float, optional
+#         The minimum delay between consecutive peaks (in seconds).
+
+#     Returns
+#     -------
+#     npt.NDArray[np.int32]
+#         An array of peak indices as a 1-dimensional NumPy array.
+
+#     Notes
+#     -----
+#     This function implements the peak detection algorithm proposed by Elgendi et al. for
+#     PPG signals. The algorithm involves squaring the signal, applying a moving average
+#     with different window sizes for peak detection, and finding the local maxima in the
+#     resulting signal.
+
+#     For more information, see [Elgendi et al.](https://doi.org/10.1371/journal.pone.0076585).
+#     """
+#     sig_abs = sig.copy()
+#     sig_abs[sig_abs < 0] = 0
+#     sqrd = sig_abs**2
+
+#     peakwindow_samples = int(np.rint(peakwindow * sampling_rate))
+#     ma_peak = _signal_smooth(sqrd, kernel="boxcar", size=peakwindow_samples)
+
+#     beatwindow_samples = int(np.rint(beatwindow * sampling_rate))
+#     ma_beat = _signal_smooth(sqrd, kernel="boxcar", size=beatwindow_samples)
+
+#     thr1 = ma_beat + beatoffset * np.mean(sqrd, dtype=float)
+
+#     waves = ma_peak > thr1
+#     wave_changes = np.diff(waves.astype(int))
+#     beg_waves = np.flatnonzero(wave_changes == 1)
+#     end_waves = np.flatnonzero(wave_changes == -1)
+
+#     if end_waves[0] < beg_waves[0]:
+#         end_waves = end_waves[1:]
+
+#     min_len = peakwindow_samples
+#     min_delay_samples = int(np.rint(mindelay * sampling_rate))
+#     peaks = []
+
+#     for beg, end in zip(beg_waves, end_waves, strict=False):
+#         if end - beg < min_len:
+#             continue
+
+#         data = sig[beg:end]
+#         locmax, props = signal.find_peaks(data, prominence=(None, None))
+
+#         if locmax.size > 0:
+#             peak = beg + locmax[np.argmax(props["prominences"])]
+
+#             if not peaks or peak - peaks[-1] > min_delay_samples:
+#                 peaks.append(peak)
+
+#     return np.array(peaks, dtype=np.int32)
+
+
 def _find_ppg_peaks_elgendi(
     sig: npt.NDArray[np.float64],
     sampling_rate: int,
@@ -107,39 +187,40 @@ def _find_ppg_peaks_elgendi(
 
     For more information, see [Elgendi et al.](https://doi.org/10.1371/journal.pone.0076585).
     """
-    sig_abs = sig.copy()
-    sig_abs[sig_abs < 0] = 0
-    sqrd = sig_abs**2
+    sig_clipped_squared = np.clip(sig, 0, None) ** 2
 
-    peakwindow_samples = int(np.rint(peakwindow * sampling_rate))
-    ma_peak = _signal_smooth(sqrd, kernel="boxcar", size=peakwindow_samples)
+    peakwindow_samples = np.rint(peakwindow * sampling_rate).astype(np.int32)
+    ma_peak = _signal_smooth(sig_clipped_squared, kernel="boxcar", size=peakwindow_samples)
 
-    beatwindow_samples = int(np.rint(beatwindow * sampling_rate))
-    ma_beat = _signal_smooth(sqrd, kernel="boxcar", size=beatwindow_samples)
+    beatwindow_samples = np.rint(beatwindow * sampling_rate).astype(np.int32)
+    ma_beat = _signal_smooth(sig_clipped_squared, kernel="boxcar", size=beatwindow_samples)
 
-    thr1 = ma_beat + beatoffset * np.mean(sqrd, dtype=float)
+    thr1 = ma_beat + beatoffset * np.mean(sig_clipped_squared)
 
     waves = ma_peak > thr1
-    wave_changes = np.diff(waves.astype(int))
+    wave_changes = np.diff(waves.astype(np.int32))
     beg_waves = np.flatnonzero(wave_changes == 1)
     end_waves = np.flatnonzero(wave_changes == -1)
 
     if end_waves[0] < beg_waves[0]:
         end_waves = end_waves[1:]
+    if end_waves[-1] < beg_waves[-1]:
+        beg_waves = beg_waves[:-1]
 
-    min_len = peakwindow_samples
-    min_delay_samples = int(np.rint(mindelay * sampling_rate))
-    peaks = []
+    diff_waves = end_waves - beg_waves
+    valid_waves = diff_waves >= peakwindow_samples
+    beg_waves = beg_waves[valid_waves]
+    end_waves = end_waves[valid_waves]
+
+    min_delay_samples = np.rint(mindelay * sampling_rate).astype(np.int32)
+    peaks: list[int] = []
 
     for beg, end in zip(beg_waves, end_waves, strict=False):
-        if end - beg < min_len:
-            continue
-
         data = sig[beg:end]
         locmax, props = signal.find_peaks(data, prominence=(None, None))
 
         if locmax.size > 0:
-            peak = beg + locmax[np.argmax(props["prominences"])]
+            peak = beg + locmax[props["prominences"].argmax()]
 
             if not peaks or peak - peaks[-1] > min_delay_samples:
                 peaks.append(peak)
@@ -147,37 +228,72 @@ def _find_ppg_peaks_elgendi(
     return np.array(peaks, dtype=np.int32)
 
 
+# def _find_local_maxima_old(
+#     sig: npt.NDArray[np.float64],
+#     radius: int,
+# ) -> npt.NDArray[np.intp]:
+#     if len(sig) == 0 or np.min(sig) == np.max(sig):
+#         return np.empty(0, dtype=np.int32)
+
+#     max_vals = ndimage.maximum_filter(sig, size=2 * radius + 1, mode="constant")
+#     return np.nonzero(sig == max_vals)[0]
+
+
+# def _find_local_minima_old(
+#     sig: npt.NDArray[np.float64],
+#     radius: int,
+# ) -> npt.NDArray[np.intp]:
+#     if len(sig) == 0 or np.min(sig) == np.max(sig):
+#         return np.empty(0, dtype=np.int32)
+
+#     min_vals = ndimage.minimum_filter1d(sig, size=2 * radius + 1, mode="constant")
+#     return np.nonzero(sig == min_vals)[0]
+
+
 def _find_local_maxima(
     sig: npt.NDArray[np.float64],
     radius: int,
 ) -> npt.NDArray[np.intp]:
-    if len(sig) == 0 or np.min(sig) == np.max(sig):
-        return np.empty(0, dtype=np.int32)
+    if sig.size == 0 or np.min(sig) == np.max(sig):
+        return np.array([], dtype=np.int32)
 
-    max_vals = ndimage.maximum_filter(sig, size=2 * radius + 1, mode="constant")
-    return np.nonzero(sig == max_vals)[0]
+    max_vals = ndimage.maximum_filter1d(sig, size=2 * radius + 1, mode="constant")
+    return np.flatnonzero(sig == max_vals)
 
 
 def _find_local_minima(
     sig: npt.NDArray[np.float64],
     radius: int,
 ) -> npt.NDArray[np.intp]:
-    if len(sig) == 0 or np.min(sig) == np.max(sig):
-        return np.empty(0, dtype=np.int32)
+    if sig.size == 0 or np.min(sig) == np.max(sig):
+        return np.array([], dtype=np.int32)
 
-    min_vals = ndimage.minimum_filter(sig, size=2 * radius + 1, mode="constant")
-    return np.nonzero(sig == min_vals)[0]
+    min_vals = ndimage.minimum_filter1d(sig, size=2 * radius + 1, mode="constant")
+    return np.flatnonzero(sig == min_vals)
 
 
 def find_extrema(
     sig: npt.NDArray[np.float64], radius: int, direction: t.Literal["up", "down"]
 ) -> npt.NDArray[np.intp]:
     if direction == "up":
-        return _find_local_maxima(sig, radius)
+        peaks = _find_local_maxima(sig, radius)
     elif direction == "down":
-        return _find_local_minima(sig, radius)
+        peaks = _find_local_minima(sig, radius)
     else:
         raise ValueError(f"Unknown direction: {direction}")
+
+    # Merge peaks that are too close together
+    peak_diffs = np.diff(peaks)
+    close_peaks = np.where(peak_diffs <= MIN_DIST)[0]
+    while len(close_peaks) > 0:
+        # Replace the two close peaks with their midpoint
+        for i in close_peaks:
+            peaks[i] = (peaks[i] + peaks[i + 1]) // 2
+        peaks = np.delete(peaks, close_peaks + 1)
+        peak_diffs = np.diff(peaks)
+        close_peaks = np.where(peak_diffs <= MIN_DIST)[0]
+
+    return peaks
 
 
 def _shift_peaks(
@@ -236,32 +352,11 @@ def _get_comparison_fn(find_peak_fn: t.Callable[..., np.int_]) -> t.Callable[...
         raise ValueError(f"find_peak_fn {find_peak_fn} not supported.")
 
 
-def _handle_close_peaks(
-    sig: npt.NDArray[np.float64],
-    peak_idx: npt.NDArray[np.int32],
-    find_peak_fn: t.Callable[..., np.int_],
-) -> npt.NDArray[np.int32]:
-    qrs_diffs = np.diff(peak_idx)
-    close_inds = np.where(qrs_diffs <= MIN_DIST)[0]
-
-    if not close_inds.size:
-        return peak_idx
-
-    comparison_fn = _get_comparison_fn(find_peak_fn)
-    to_remove = [
-        ind if comparison_fn(sig[peak_idx[ind]], sig[peak_idx[ind + 1]]) else ind + 1
-        for ind in close_inds
-    ]
-
-    peak_idx = np.delete(peak_idx, to_remove)
-    return peak_idx
-
-
 def _remove_outliers(
     sig: npt.NDArray[np.float64],
     peak_idx: npt.NDArray[np.int32],
     n_std: float,
-    find_peak_fn: t.Callable[[npt.NDArray[np.float32 | np.float64]], int],
+    find_peak_fn: t.Callable[..., np.intp],
 ) -> npt.NDArray[np.int32]:
     comparison_ops = {np.argmax: (np.less_equal, -1), np.argmin: (np.greater_equal, 1)}
 
@@ -285,7 +380,30 @@ def _remove_outliers(
             outliers_mask[i] = True
 
     peak_idx = peak_idx[~outliers_mask]
-    return _handle_close_peaks(sig, peak_idx, find_peak_fn)
+    return peak_idx
+    # return _handle_close_peaks(sig, peak_idx, find_peak_fn)
+
+
+def _handle_close_peaks(
+    sig: npt.NDArray[np.float64],
+    peak_idx: npt.NDArray[np.int32],
+    n_std: float,
+    find_peak_fn: t.Callable[..., np.intp],
+) -> npt.NDArray[np.int32]:
+    qrs_diffs = np.diff(peak_idx)
+    close_inds = np.where(qrs_diffs <= MIN_DIST)[0]
+
+    if not close_inds.size:
+        return peak_idx
+
+    comparison_fn = _get_comparison_fn(find_peak_fn)
+    to_remove = [
+        ind if comparison_fn(sig[peak_idx[ind]], sig[peak_idx[ind + 1]]) else ind + 1
+        for ind in close_inds
+    ]
+
+    peak_idx = np.delete(peak_idx, to_remove)
+    return _remove_outliers(sig, peak_idx, n_std, find_peak_fn)
 
 
 def _sanitize_qrs_inds(
@@ -294,7 +412,7 @@ def _sanitize_qrs_inds(
     n_std: float = 4.0,
 ) -> npt.NDArray[np.int32]:
     find_peak_fn = np.argmax if np.mean(sig) < np.mean(sig[qrs_inds]) else np.argmin
-    peak_idx = _remove_outliers(sig, qrs_inds, n_std, find_peak_fn)
+    peak_idx = _handle_close_peaks(sig, qrs_inds, n_std, find_peak_fn)
     sorted_indices = np.argsort(peak_idx)
     return peak_idx[
         sorted_indices[(peak_idx[sorted_indices] > 0) & (peak_idx[sorted_indices] < sig.size)]
@@ -342,12 +460,12 @@ def find_peaks(
     """
     match method:
         case "local":
-            return _find_local_maxima(
-                sig, radius=method_parameters.get("radius", sampling_rate // 2)
+            return find_extrema(
+                sig, radius=method_parameters.get("radius", sampling_rate // 2), direction="up"
             )
         case "local_min":
-            return _find_local_minima(
-                sig, radius=method_parameters.get("radius", sampling_rate // 2)
+            return find_extrema(
+                sig, radius=method_parameters.get("radius", sampling_rate // 2), direction="down"
             )
         case "elgendi_ppg":
             return _find_ppg_peaks_elgendi(

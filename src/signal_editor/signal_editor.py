@@ -6,14 +6,13 @@ import typing as t
 from datetime import datetime
 from pathlib import Path
 
+import matplotlib.colors as mcolors
 import numpy as np
 import numpy.typing as npt
 import polars as pl
 import pyqtgraph as pg
 from loguru import logger
 from PySide6 import QtCore, QtGui, QtWidgets
-
-from .processing import rolling_rate
 
 from . import type_aliases as _t
 from .fileio import result_dict_to_hdf5
@@ -27,6 +26,7 @@ from .handlers import (
 )
 from .models import CompleteResult, SectionID
 from .peaks import find_extrema, find_peaks
+from .processing import rolling_rate
 from .views.main_window import Ui_MainWindow
 
 if t.TYPE_CHECKING:
@@ -123,6 +123,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         # Plot / View actions
         self.action_reset_view.triggered.connect(self._emit_data_range_info)
         self.sig_update_view_range.connect(self.plot.reset_view_range)
+        self.btn_clear_mpl_plot.clicked.connect(self.plot.clear_mpl_plot)
 
         # File information / metadata
         self.spin_box_sample_rate.editingFinished.connect(
@@ -153,6 +154,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.data.set_sfreq(sfreq)
         self.plot.update_time_axis_scale(sfreq)
         self._result: CompleteResult | None = None
+        self.previous_filter: str | None = None
         self._setup_tables()
 
     def _setup_tables(self) -> None:
@@ -176,20 +178,19 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def _add_jupyter_console(self) -> None:
         try:
-            import pprint
-
             import jupyter_client
             import numpy as np
             import polars as pl
             import pyqtgraph as pg
             from PySide6 import QtCore, QtGui, QtWidgets
             from qtconsole import inprocess
+            from rich import inspect, print
 
         except ImportError:
             return
 
         class JupyterConsoleWidget(inprocess.QtInProcessRichJupyterWidget):
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__()
                 self.set_default_style("linux")
                 self.kernel_manager: inprocess.QtInProcessKernelManager = (
@@ -200,6 +201,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
                     self.kernel_manager.client()
                 )
                 self.kernel_client.start_channels()
+
                 qapp_instance = QtWidgets.QApplication.instance()
                 if qapp_instance is not None:
                     qapp_instance.aboutToQuit.connect(self.shutdown_kernel)
@@ -210,10 +212,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.kernel_manager.shutdown_kernel()
 
         self.jupyter_console = JupyterConsoleWidget()
-        self.jupyter_console_dock = QtWidgets.QDockWidget(
-            "Jupyter Console",
-            flags=QtCore.Qt.WindowType.Dialog,
-        )
+        self.jupyter_console_dock = QtWidgets.QDockWidget("Jupyter Console")
         self.jupyter_console_dock.setWidget(self.jupyter_console)
         self.jupyter_console_dock.resize(900, 600)
         self.jupyter_console.kernel_manager.kernel.shell.push(
@@ -222,10 +221,11 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
                 pg=pg,
                 np=np,
                 pl=pl,
-                pp=pprint.pprint,
+                print=print,
                 qtc=QtCore,
                 qtw=QtWidgets,
                 qtg=QtGui,
+                inspect=inspect,
             )
         )
         self.jupyter_console.execute("whos")
@@ -341,33 +341,56 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
 
     @QtCore.Slot()
     def _load_focused_result(self) -> None:
-        file_path = QtWidgets.QFileDialog.getOpenFileName(
+        file_paths, selected_filter = QtWidgets.QFileDialog.getOpenFileNames(
             self,
-            "Select Focused Result File",
-            self.config.output_dir.as_posix(),
+            "Select Focused Result Files to create combined rolling rate for",
+            self.config.focused_result_dir.as_posix(),
             "CSV Files (*.csv);;Excel Files (*.xlsx);;Text Files (*.txt)",
-        )[0]
-        if not file_path:
+            self.previous_filter or "Excel Files (*.xlsx)",
+        )
+        if not file_paths:
             return
 
-        suffix = Path(file_path).suffix
+        self._current_subject_id = Path(file_paths[0]).parent.name
+        self._current_focused_result_file_names = [Path(file_path).name for file_path in file_paths]
+
+        self.previous_filter = selected_filter
+        file_0 = file_paths[0]
+        self.config.focused_result_dir = Path(file_0).parent
+        if "PM_03" in file_0 or "PM03" in file_0 or "PM_05" in file_0 or "PM05" in file_0:
+            self.spin_box_focused_sample_rate.setValue(1000)
+
+        suffix = Path(file_0).suffix
+        dataframes: list[pl.DataFrame] = []
         match suffix:
             case ".csv":
-                df = pl.read_csv(file_path)
+                dataframes.extend(pl.read_csv(file_path) for file_path in file_paths)
             case ".xlsx":
-                df = pl.read_excel(file_path)
+                dataframes.extend(pl.read_excel(file_path) for file_path in file_paths)
             case ".txt":
-                df = pl.read_csv(file_path, separator="\t")
+                dataframes.extend(
+                    pl.read_csv(file_path, separator="\t") for file_path in file_paths
+                )
             case _:
                 self.sig_show_message.emit(f"Unsupported file format: {suffix}", "warning")
                 return
 
-        df_cols = df.columns
+        # Check if all dataframes have the same column names
+        df_cols = dataframes[0].columns
+        for df in dataframes[1:]:
+            if df.columns != df_cols:
+                self.sig_show_message.emit("All dataframes must have the same columns", "warning")
+                return
         self.combo_box_grp_col.clear()
         self.combo_box_temperature_col.clear()
         self.combo_box_grp_col.addItems(df_cols)
         self.combo_box_temperature_col.addItems(df_cols)
-        self._rr_df = df
+        if "temperature" in df_cols:
+            self.combo_box_temperature_col.setCurrentIndex(df_cols.index("temperature"))
+
+        self.list_widget_focused_results.clear()
+        self.list_widget_focused_results.addItems(self._current_focused_result_file_names)
+        self._rr_dfs = dataframes
 
     # region Sections
     @QtCore.Slot()
@@ -480,12 +503,18 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         temperature_col = f"{self.combo_box_temperature_col.currentText()}_mean"
         rate_col = "n_peaks_mean"
         try:
-            if hasattr(self, "_rr_df"):
-                roll_df = rolling_rate(self._rr_df, **self.ui.get_rolling_rate_parameters()).sort(temperature_col)
-            else:
-                roll_df = self.data.get_bpm_per_temperature(
-                    **self.ui.get_rolling_rate_parameters()
-                ).sort(temperature_col)
+            if not hasattr(self, "_rr_dfs"):
+                self.sig_show_message.emit("Can't find attribute '_rr_dfs' in self.", "error")
+                return
+            colors = list(mcolors.TABLEAU_COLORS)
+            col_enum = pl.Enum(colors[: len(self._rr_dfs)])
+            roll_dfs = [
+                rolling_rate(df, **self.ui.get_rolling_rate_parameters()).with_columns(
+                    plot_color=pl.repeat(pl.lit(colors[i]), pl.len(), dtype=col_enum)
+                )
+                for i, df in enumerate(self._rr_dfs)
+            ]
+            roll_df = pl.concat(roll_dfs).sort(temperature_col)
         except Exception as e:
             msg = f"Failed to calculate rolling rate:\n\n{e}\n\nTraceback: {traceback.format_exc()}"
             self.sig_show_message.emit(msg, "error")
@@ -495,7 +524,9 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.plot.draw_rolling_rate(
             x=roll_df.get_column(temperature_col).to_numpy(),
             y=roll_df.get_column(rate_col).to_numpy(),
+            color=roll_df.get_column("plot_color").to_list(),
         )
+        self._rr_df_export = roll_df
 
     @QtCore.Slot()
     def update_results(self) -> None:
@@ -730,13 +761,14 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
 
     @QtCore.Slot(str)
     def export_rolling_rate(self, output_format: t.Literal["csv", "xlsx", "txt"]) -> None:
-        if self.data.cas is None:
+        if self.data.cas is None and not hasattr(self, "_rr_df_export"):
             return
-        result_file_name = self.config.make_rolling_rate_result_name(
-            self.sig_name, self.file_info.completeBaseName()
-        )
-        params = self.ui.get_rolling_rate_parameters()
-        data = self.data.get_bpm_per_temperature(**params)
+        result_file_name = self.config.make_rolling_rate_result_name(self._current_subject_id)
+        # params = self.ui.get_rolling_rate_parameters()
+        data = self._rr_df_export
+        # if not hasattr(self, "_rr_df_export"):
+        # data = self.data.get_bpm_per_temperature(**params)
+        # else:
 
         file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
             self,
@@ -745,6 +777,10 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             f"{output_format.upper()} Files (*.{output_format})",
         )
 
+        if not file_name:
+            self.sig_show_message.emit("Export cancelled. No files written.", "info")
+            return
+
         match output_format:
             case "csv":
                 data.write_csv(file_name)
@@ -752,6 +788,8 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
                 data.write_excel(file_name)
             case "txt":
                 data.write_csv(file_name, separator="\t")
+
+        self.sig_show_message.emit(f"Exported rolling rate to:\n\n{file_name}.", "info")
 
     @QtCore.Slot()
     def _update_cas_table(self) -> None:

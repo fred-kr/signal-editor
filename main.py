@@ -7,7 +7,7 @@ if __name__ == "__main__":
     import contextlib
     import os
 
-    from signal_editor.signal_editor import main
+    from src.signal_editor.signal_editor import main
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--dev", action="store_true")
@@ -28,5 +28,6 @@ if __name__ == "__main__":
 
     with contextlib.suppress(Exception):
         import dotenv
+
         dotenv.load_dotenv(".env")
     main()

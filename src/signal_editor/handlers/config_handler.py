@@ -18,12 +18,16 @@ def create_config_file(filename: str | Path) -> ConfigParser:
         "sample_rate": "-1",
     }
 
-    config["FileLocations"] = {"data_files": ".", "output_files": ".\\output"}
+    config["FileLocations"] = {
+        "data_files": ".",
+        "output_files": ".\\output",
+        "focused_result_files": ".\\output",
+    }
 
     config["FilePatterns"] = {
         "focused_result": "FocusedResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
         "complete_result": "CompleteResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
-        "rolling_rate_result": "RollingRate_{SIGNAL_NAME}_{SOURCE_FILE_NAME}",
+        "rolling_rate_result": "RollingRate_{SOURCE_FILE_NAME}",
         "app_state_snapshot": "SignalEditorStateSnapshot_{TIMESTAMP}",
     }
 
@@ -104,6 +108,15 @@ class ConfigHandler:
         self._set_path("output_files", value)
         self.write_config()
 
+    @property
+    def focused_result_dir(self) -> Path:
+        return Path(self._file_locations.get("focused_result_files", ".\\output")).resolve()
+
+    @focused_result_dir.setter
+    def focused_result_dir(self, value: Path | str) -> None:
+        self._set_path("focused_result_files", value)
+        self.write_config()
+
     def make_focused_result_name(self, signal_name: str, source_file_name: str) -> str:
         return self._file_patterns.get(
             "focused_result", "FocusedResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}"
@@ -114,12 +127,10 @@ class ConfigHandler:
             "complete_result", "CompleteResult_{SIGNAL_NAME}_{SOURCE_FILE_NAME}"
         ).format(SIGNAL_NAME=signal_name, SOURCE_FILE_NAME=source_file_name)
 
-    def make_rolling_rate_result_name(
-        self, signal_name: str, source_file_name: str
-    ) -> str:
+    def make_rolling_rate_result_name(self, source_file_name: str) -> str:
         return self._file_patterns.get(
-            "rolling_rate_result", "RollingRate_{SIGNAL_NAME}_{SOURCE_FILE_NAME}"
-        ).format(SIGNAL_NAME=signal_name, SOURCE_FILE_NAME=source_file_name)
+            "rolling_rate_result", "RollingRate_{SOURCE_FILE_NAME}"
+        ).format(SOURCE_FILE_NAME=source_file_name)
 
     def make_app_state_name(self, timestamp: datetime.datetime | str) -> str:
         if isinstance(timestamp, datetime.datetime):
