@@ -188,12 +188,18 @@ def rolling_rate(
     sec_period: int = 60,
     sec_offset: int = 0,
     sampling_rate: int = 400,
+    start_by: t.Literal["window", "datapoint"] = "window",
+    label: t.Literal["left", "right", "datapoint"] = "left",
+    include_boundaries: bool = False,
+    edge_behavior: t.Literal["approximate", "remove"] = "remove",
 ) -> pl.DataFrame:
     every = sec_every * sampling_rate
     period = sec_period * sampling_rate
     offset = sec_offset * sampling_rate
 
-    remove_row_count = period // every
+    n_edge_rows = period // every - 1
+    # if edge_behavior == "multiply":
+    # mult_factors = reversed([sec_period / (sec_every * (i + 1)) for i in range(n_edge_rows)])
 
     return (
         df.sort(grp_col)
@@ -203,11 +209,50 @@ def rolling_rate(
             every=f"{every}i",
             period=f"{period}i",
             offset=f"{offset}i",
+            label=label,
+            start_by=start_by,
+            include_boundaries=include_boundaries,
         )
         .agg(
-            pl.count().alias("n_peaks"),
+            pl.len().alias("n_peaks"),
             pl.mean(temperature_col).round(1).suffix("_mean"),
-        )[:-remove_row_count]
+        )[:-n_edge_rows]
         .group_by(pl.col(f"{temperature_col}_mean"))
-        .agg(pl.mean("n_peaks").suffix("_mean"))
+        .agg(
+            pl.mean("n_peaks").name.suffix("_mean"),
+            pl.std("n_peaks").name.suffix("_std"),
+            pl.min("n_peaks").name.suffix("_min"),
+            pl.max("n_peaks").name.suffix("_max"),
+            pl.median("n_peaks").name.suffix("_median"),
+        )
     )
+
+# def rolling_rate2(
+#     df: pl.DataFrame,
+#     grp_col: str,
+#     temperature_col: str,
+#     sec_every: int = 10,
+#     sec_period: int = 60,
+#     sec_offset: int = 0,
+#     sampling_rate: int = 400,
+#     start_by: t.Literal["window", "datapoint"] = "window",
+#     edge_behavior: t.Literal["approximate", "remove"] = "remove",
+# ) -> pl.DataFrame:
+#     every = sec_every * sampling_rate
+#     period = sec_period * sampling_rate
+#     offset = sec_offset * sampling_rate
+
+#     n_edge_rows = period // every - 1
+
+#     dynamic_grped = (
+#         df.sort(grp_col)
+#         .with_columns(pl.col(grp_col).cast(pl.Int64))
+#         .group_by_dynamic(
+#             pl.col(grp_col),
+#             every=f"{every}i",
+#             period=f"{period}i",
+#             offset=f"{offset}i",
+#             start_by=start_by,
+            
+#         )
+#     )

@@ -67,86 +67,6 @@ def _signal_smooth(
     return smoothed
 
 
-# def _find_ppg_peaks_elgendi_old(
-#     sig: npt.NDArray[np.float64],
-#     sampling_rate: int,
-#     peakwindow: float = 0.111,
-#     beatwindow: float = 0.667,
-#     beatoffset: float = 0.02,
-#     mindelay: float = 0.3,
-# ) -> npt.NDArray[np.int32]:
-#     """
-#     Finds peaks in a PPG (photoplethysmography) signal using the method described by Elgendi et al. (see Notes)
-
-#     Parameters
-#     ----------
-#     sig : NDArray[np.float64]
-#         The PPG signal as a 1-dimensional NumPy array.
-#     sampling_rate : int
-#         The sampling rate of the PPG signal in samples per second.
-#     peakwindow : float, optional
-#         The width of the window used for smoothing the squared PPG signal to find peaks (in seconds).
-#     beatwindow : float, optional
-#         The width of the window used for smoothing the squared PPG signal to find beats (in seconds).
-#     beatoffset : float, optional
-#         The offset added to the smoothed beat signal to determine the threshold for detecting waves.
-#     mindelay : float, optional
-#         The minimum delay between consecutive peaks (in seconds).
-
-#     Returns
-#     -------
-#     npt.NDArray[np.int32]
-#         An array of peak indices as a 1-dimensional NumPy array.
-
-#     Notes
-#     -----
-#     This function implements the peak detection algorithm proposed by Elgendi et al. for
-#     PPG signals. The algorithm involves squaring the signal, applying a moving average
-#     with different window sizes for peak detection, and finding the local maxima in the
-#     resulting signal.
-
-#     For more information, see [Elgendi et al.](https://doi.org/10.1371/journal.pone.0076585).
-#     """
-#     sig_abs = sig.copy()
-#     sig_abs[sig_abs < 0] = 0
-#     sqrd = sig_abs**2
-
-#     peakwindow_samples = int(np.rint(peakwindow * sampling_rate))
-#     ma_peak = _signal_smooth(sqrd, kernel="boxcar", size=peakwindow_samples)
-
-#     beatwindow_samples = int(np.rint(beatwindow * sampling_rate))
-#     ma_beat = _signal_smooth(sqrd, kernel="boxcar", size=beatwindow_samples)
-
-#     thr1 = ma_beat + beatoffset * np.mean(sqrd, dtype=float)
-
-#     waves = ma_peak > thr1
-#     wave_changes = np.diff(waves.astype(int))
-#     beg_waves = np.flatnonzero(wave_changes == 1)
-#     end_waves = np.flatnonzero(wave_changes == -1)
-
-#     if end_waves[0] < beg_waves[0]:
-#         end_waves = end_waves[1:]
-
-#     min_len = peakwindow_samples
-#     min_delay_samples = int(np.rint(mindelay * sampling_rate))
-#     peaks = []
-
-#     for beg, end in zip(beg_waves, end_waves, strict=False):
-#         if end - beg < min_len:
-#             continue
-
-#         data = sig[beg:end]
-#         locmax, props = signal.find_peaks(data, prominence=(None, None))
-
-#         if locmax.size > 0:
-#             peak = beg + locmax[np.argmax(props["prominences"])]
-
-#             if not peaks or peak - peaks[-1] > min_delay_samples:
-#                 peaks.append(peak)
-
-#     return np.array(peaks, dtype=np.int32)
-
-
 def _find_ppg_peaks_elgendi(
     sig: npt.NDArray[np.float64],
     sampling_rate: int,
@@ -226,28 +146,6 @@ def _find_ppg_peaks_elgendi(
                 peaks.append(peak)
 
     return np.array(peaks, dtype=np.int32)
-
-
-# def _find_local_maxima_old(
-#     sig: npt.NDArray[np.float64],
-#     radius: int,
-# ) -> npt.NDArray[np.intp]:
-#     if len(sig) == 0 or np.min(sig) == np.max(sig):
-#         return np.empty(0, dtype=np.int32)
-
-#     max_vals = ndimage.maximum_filter(sig, size=2 * radius + 1, mode="constant")
-#     return np.nonzero(sig == max_vals)[0]
-
-
-# def _find_local_minima_old(
-#     sig: npt.NDArray[np.float64],
-#     radius: int,
-# ) -> npt.NDArray[np.intp]:
-#     if len(sig) == 0 or np.min(sig) == np.max(sig):
-#         return np.empty(0, dtype=np.int32)
-
-#     min_vals = ndimage.minimum_filter1d(sig, size=2 * radius + 1, mode="constant")
-#     return np.nonzero(sig == min_vals)[0]
 
 
 def _find_local_maxima(
@@ -381,7 +279,6 @@ def _remove_outliers(
 
     peak_idx = peak_idx[~outliers_mask]
     return peak_idx
-    # return _handle_close_peaks(sig, peak_idx, find_peak_fn)
 
 
 def _handle_close_peaks(

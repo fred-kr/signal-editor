@@ -329,3 +329,28 @@ FILTER_INPUT_STATES = {
         "container_powerline": False,
     },
 }
+
+
+# ------------------------------------------------------------------------------------------------ #
+#                                     Rolling Rate Input Widgets                                   #
+# ------------------------------------------------------------------------------------------------ #
+ROLLING_RATE_INPUT_STATES = {
+    "combo_box_grp_col": {
+        "currentIndex": 0,
+    },
+    "combo_box_temperature_col": {
+        "currentText": "temperature",
+    },
+    "spin_box_every": {
+        "value": 10,
+    },
+    "spin_box_period": {
+        "value": 60,
+    },
+    "spin_box_offset": {
+        "value": 0,
+    },
+    "spin_box_focused_sample_rate": {
+        "value": 400,
+    },
+}

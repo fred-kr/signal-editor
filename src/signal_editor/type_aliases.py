@@ -6,9 +6,10 @@ import numpy.typing as npt
 import polars as pl
 
 if t.TYPE_CHECKING:
+    from PySide6 import QtCore, QtGui
+
     from .handlers import DataState
     from .models import SectionContainer, SectionID, SectionIndices
-    from PySide6 import QtCore, QtGui
 
 
 type ScaleMethod = t.Literal["mad", "zscore", "None"]
@@ -270,3 +271,7 @@ class RollingRateParameters(t.TypedDict):
     sec_period: int
     sec_offset: int
     sampling_rate: int
+    start_by: t.NotRequired[t.Literal["window", "datapoint"]]
+    label: t.NotRequired[t.Literal["left", "right", "datapoint"]]
+    include_boundaries: t.NotRequired[bool]
+    edge_behavior: t.NotRequired[t.Literal["approximate", "remove"]]

@@ -23,9 +23,9 @@ from PySide6.QtWidgets import (QAbstractItemView, QAbstractScrollArea, QAbstract
     QLineEdit, QListWidget, QListWidgetItem, QMainWindow,
     QMenu, QMenuBar, QPushButton, QScrollArea,
     QSizePolicy, QSlider, QSpacerItem, QSpinBox,
-    QStackedWidget, QStatusBar, QTabWidget, QTableView,
-    QTextBrowser, QToolBar, QToolBox, QToolButton,
-    QTreeView, QVBoxLayout, QWidget)
+    QSplitter, QStackedWidget, QStatusBar, QTabWidget,
+    QTableView, QTextBrowser, QToolBar, QToolBox,
+    QToolButton, QTreeView, QVBoxLayout, QWidget)
 
 from pyqtgraph import (ComboBox, FeedbackButton)
 from pyqtgraph.widgets.MatplotlibWidget import MatplotlibWidget
@@ -35,7 +35,7 @@ class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(2255, 1042)
+        MainWindow.resize(2245, 1042)
         sizePolicy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -162,6 +162,7 @@ class Ui_MainWindow(object):
         self.action_toggle_section_sidebar = QAction(MainWindow)
         self.action_toggle_section_sidebar.setObjectName(u"action_toggle_section_sidebar")
         self.action_toggle_section_sidebar.setCheckable(True)
+        self.action_toggle_section_sidebar.setChecked(True)
         icon18 = QIcon()
         icon18.addFile(u":/iconduck/iconduck/open-panel-right.svg", QSize(), QIcon.Normal, QIcon.Off)
         self.action_toggle_section_sidebar.setIcon(icon18)
@@ -381,28 +382,34 @@ class Ui_MainWindow(object):
         self.gridLayout_16.setObjectName(u"gridLayout_16")
         self.container_analysis_tab = QWidget(self.tab_analysis)
         self.container_analysis_tab.setObjectName(u"container_analysis_tab")
-        self.horizontalLayout_6 = QHBoxLayout(self.container_analysis_tab)
-        self.horizontalLayout_6.setSpacing(4)
-        self.horizontalLayout_6.setContentsMargins(7, 7, 7, 7)
-        self.horizontalLayout_6.setObjectName(u"horizontalLayout_6")
-        self.table_view_rolling_rate = QTableView(self.container_analysis_tab)
+        self.gridLayout_23 = QGridLayout(self.container_analysis_tab)
+        self.gridLayout_23.setSpacing(4)
+        self.gridLayout_23.setContentsMargins(7, 7, 7, 7)
+        self.gridLayout_23.setObjectName(u"gridLayout_23")
+        self.splitter = QSplitter(self.container_analysis_tab)
+        self.splitter.setObjectName(u"splitter")
+        self.splitter.setOrientation(Qt.Horizontal)
+        self.splitter.setChildrenCollapsible(False)
+        self.table_view_rolling_rate = QTableView(self.splitter)
         self.table_view_rolling_rate.setObjectName(u"table_view_rolling_rate")
         sizePolicy5 = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         sizePolicy5.setHorizontalStretch(0)
         sizePolicy5.setVerticalStretch(0)
         sizePolicy5.setHeightForWidth(self.table_view_rolling_rate.sizePolicy().hasHeightForWidth())
         self.table_view_rolling_rate.setSizePolicy(sizePolicy5)
+        self.table_view_rolling_rate.setMinimumSize(QSize(300, 0))
         self.table_view_rolling_rate.setSizeAdjustPolicy(QAbstractScrollArea.AdjustToContents)
-
-        self.horizontalLayout_6.addWidget(self.table_view_rolling_rate)
-
-        self.mpl_widget_placeholder = MatplotlibWidget(self.container_analysis_tab)
+        self.table_view_rolling_rate.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table_view_rolling_rate.setProperty("showDropIndicator", False)
+        self.table_view_rolling_rate.setCornerButtonEnabled(False)
+        self.splitter.addWidget(self.table_view_rolling_rate)
+        self.table_view_rolling_rate.horizontalHeader().setCascadingSectionResizes(True)
+        self.mpl_widget_placeholder = MatplotlibWidget(self.splitter)
         self.mpl_widget_placeholder.setObjectName(u"mpl_widget_placeholder")
+        self.splitter.addWidget(self.mpl_widget_placeholder)
 
-        self.horizontalLayout_6.addWidget(self.mpl_widget_placeholder)
+        self.gridLayout_23.addWidget(self.splitter, 0, 0, 1, 1)
 
-        self.horizontalLayout_6.setStretch(0, 2)
-        self.horizontalLayout_6.setStretch(1, 7)
 
         self.gridLayout_16.addWidget(self.container_analysis_tab, 0, 0, 1, 1)
 
@@ -415,7 +422,7 @@ class Ui_MainWindow(object):
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QMenuBar(MainWindow)
         self.menubar.setObjectName(u"menubar")
-        self.menubar.setGeometry(QRect(0, 0, 2255, 22))
+        self.menubar.setGeometry(QRect(0, 0, 2245, 22))
         self.menubar.setNativeMenuBar(True)
         self.menu_editing_tools = QMenu(self.menubar)
         self.menu_editing_tools.setObjectName(u"menu_editing_tools")
@@ -1741,9 +1748,13 @@ class Ui_MainWindow(object):
         self.gridLayout_21.setSpacing(4)
         self.gridLayout_21.setContentsMargins(7, 7, 7, 7)
         self.gridLayout_21.setObjectName(u"gridLayout_21")
-        self.verticalSpacer_3 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+        self.list_widget_focused_results = QListWidget(self.page)
+        self.list_widget_focused_results.setObjectName(u"list_widget_focused_results")
+        self.list_widget_focused_results.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.list_widget_focused_results.setSelectionMode(QAbstractItemView.MultiSelection)
+        self.list_widget_focused_results.setSpacing(2)
 
-        self.gridLayout_21.addItem(self.verticalSpacer_3, 2, 0, 1, 1)
+        self.gridLayout_21.addWidget(self.list_widget_focused_results, 2, 0, 1, 1)
 
         self.container_rolling_rate = QWidget(self.page)
         self.container_rolling_rate.setObjectName(u"container_rolling_rate")
@@ -1753,13 +1764,10 @@ class Ui_MainWindow(object):
         self.gridLayout_19.setObjectName(u"gridLayout_19")
         self.btn_export_rolling_rate = QPushButton(self.container_rolling_rate)
         self.btn_export_rolling_rate.setObjectName(u"btn_export_rolling_rate")
+        sizePolicy8.setHeightForWidth(self.btn_export_rolling_rate.sizePolicy().hasHeightForWidth())
+        self.btn_export_rolling_rate.setSizePolicy(sizePolicy8)
 
-        self.gridLayout_19.addWidget(self.btn_export_rolling_rate, 4, 2, 1, 1)
-
-        self.btn_clear_mpl_plot = QPushButton(self.container_rolling_rate)
-        self.btn_clear_mpl_plot.setObjectName(u"btn_clear_mpl_plot")
-
-        self.gridLayout_19.addWidget(self.btn_clear_mpl_plot, 4, 1, 1, 1)
+        self.gridLayout_19.addWidget(self.btn_export_rolling_rate, 3, 1, 2, 1)
 
         self.group_box_rolling_rate_inputs = QGroupBox(self.container_rolling_rate)
         self.group_box_rolling_rate_inputs.setObjectName(u"group_box_rolling_rate_inputs")
@@ -1837,27 +1845,96 @@ class Ui_MainWindow(object):
 
         self.formLayout_10.setWidget(5, QFormLayout.FieldRole, self.spin_box_focused_sample_rate)
 
+        self.startByLabel = QLabel(self.group_box_rolling_rate_inputs)
+        self.startByLabel.setObjectName(u"startByLabel")
+        self.startByLabel.setEnabled(False)
 
-        self.gridLayout_19.addWidget(self.group_box_rolling_rate_inputs, 0, 1, 1, 2)
+        self.formLayout_10.setWidget(6, QFormLayout.LabelRole, self.startByLabel)
 
-        self.btn_load_focused_result = QPushButton(self.container_rolling_rate)
-        self.btn_load_focused_result.setObjectName(u"btn_load_focused_result")
+        self.combo_box_start_by = QComboBox(self.group_box_rolling_rate_inputs)
+        self.combo_box_start_by.addItem("")
+        self.combo_box_start_by.addItem("")
+        self.combo_box_start_by.setObjectName(u"combo_box_start_by")
+        self.combo_box_start_by.setEnabled(False)
 
-        self.gridLayout_19.addWidget(self.btn_load_focused_result, 2, 1, 1, 1)
+        self.formLayout_10.setWidget(6, QFormLayout.FieldRole, self.combo_box_start_by)
+
+        self.labelLabel = QLabel(self.group_box_rolling_rate_inputs)
+        self.labelLabel.setObjectName(u"labelLabel")
+        self.labelLabel.setEnabled(False)
+
+        self.formLayout_10.setWidget(7, QFormLayout.LabelRole, self.labelLabel)
+
+        self.combo_box_label = QComboBox(self.group_box_rolling_rate_inputs)
+        self.combo_box_label.addItem("")
+        self.combo_box_label.addItem("")
+        self.combo_box_label.addItem("")
+        self.combo_box_label.setObjectName(u"combo_box_label")
+        self.combo_box_label.setEnabled(False)
+
+        self.formLayout_10.setWidget(7, QFormLayout.FieldRole, self.combo_box_label)
+
+        self.includeWindowBoundariesLabel = QLabel(self.group_box_rolling_rate_inputs)
+        self.includeWindowBoundariesLabel.setObjectName(u"includeWindowBoundariesLabel")
+        self.includeWindowBoundariesLabel.setEnabled(False)
+
+        self.formLayout_10.setWidget(8, QFormLayout.LabelRole, self.includeWindowBoundariesLabel)
+
+        self.check_box_include_boundaries = QCheckBox(self.group_box_rolling_rate_inputs)
+        self.check_box_include_boundaries.setObjectName(u"check_box_include_boundaries")
+        self.check_box_include_boundaries.setEnabled(False)
+
+        self.formLayout_10.setWidget(8, QFormLayout.FieldRole, self.check_box_include_boundaries)
+
+
+        self.gridLayout_19.addWidget(self.group_box_rolling_rate_inputs, 0, 0, 1, 2)
+
+        self.btn_clear_mpl_plot = QPushButton(self.container_rolling_rate)
+        self.btn_clear_mpl_plot.setObjectName(u"btn_clear_mpl_plot")
+        sizePolicy8.setHeightForWidth(self.btn_clear_mpl_plot.sizePolicy().hasHeightForWidth())
+        self.btn_clear_mpl_plot.setSizePolicy(sizePolicy8)
+
+        self.gridLayout_19.addWidget(self.btn_clear_mpl_plot, 2, 0, 1, 1)
+
+        self.btn_reset_rolling_rate_inputs = QPushButton(self.container_rolling_rate)
+        self.btn_reset_rolling_rate_inputs.setObjectName(u"btn_reset_rolling_rate_inputs")
+        sizePolicy8.setHeightForWidth(self.btn_reset_rolling_rate_inputs.sizePolicy().hasHeightForWidth())
+        self.btn_reset_rolling_rate_inputs.setSizePolicy(sizePolicy8)
+
+        self.gridLayout_19.addWidget(self.btn_reset_rolling_rate_inputs, 4, 0, 1, 1)
 
         self.btn_calculate_rolling_rate = QPushButton(self.container_rolling_rate)
         self.btn_calculate_rolling_rate.setObjectName(u"btn_calculate_rolling_rate")
+        sizePolicy8.setHeightForWidth(self.btn_calculate_rolling_rate.sizePolicy().hasHeightForWidth())
+        self.btn_calculate_rolling_rate.setSizePolicy(sizePolicy8)
 
-        self.gridLayout_19.addWidget(self.btn_calculate_rolling_rate, 2, 2, 1, 1)
+        self.gridLayout_19.addWidget(self.btn_calculate_rolling_rate, 1, 0, 1, 1)
+
+        self.btn_load_focused_result = QPushButton(self.container_rolling_rate)
+        self.btn_load_focused_result.setObjectName(u"btn_load_focused_result")
+        sizePolicy8.setHeightForWidth(self.btn_load_focused_result.sizePolicy().hasHeightForWidth())
+        self.btn_load_focused_result.setSizePolicy(sizePolicy8)
+
+        self.gridLayout_19.addWidget(self.btn_load_focused_result, 1, 1, 2, 1)
+
+        self.btn_clear_rolling_rate_data = QPushButton(self.container_rolling_rate)
+        self.btn_clear_rolling_rate_data.setObjectName(u"btn_clear_rolling_rate_data")
+        sizePolicy8.setHeightForWidth(self.btn_clear_rolling_rate_data.sizePolicy().hasHeightForWidth())
+        self.btn_clear_rolling_rate_data.setSizePolicy(sizePolicy8)
+
+        self.gridLayout_19.addWidget(self.btn_clear_rolling_rate_data, 3, 0, 1, 1)
 
 
         self.gridLayout_21.addWidget(self.container_rolling_rate, 0, 0, 1, 1)
 
-        self.list_widget_focused_results = QListWidget(self.page)
-        self.list_widget_focused_results.setObjectName(u"list_widget_focused_results")
-        self.list_widget_focused_results.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.verticalSpacer_3 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
-        self.gridLayout_21.addWidget(self.list_widget_focused_results, 1, 0, 1, 1)
+        self.gridLayout_21.addItem(self.verticalSpacer_3, 3, 0, 1, 1)
+
+        self.label_35 = QLabel(self.page)
+        self.label_35.setObjectName(u"label_35")
+
+        self.gridLayout_21.addWidget(self.label_35, 1, 0, 1, 1)
 
         self.sidebar.addWidget(self.page)
 
@@ -2249,7 +2326,6 @@ class Ui_MainWindow(object):
                         " margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" font-weight:700;\">Complete</span> - Viewing currently not implemented. Can be exported to an HDF5 file via the 'Export Complete Result (HDF5)' button.</p></body></html>", None))
         self.btn_export_focused.setText(QCoreApplication.translate("MainWindow", u"Export Focused Result", None))
         self.btn_export_rolling_rate.setText(QCoreApplication.translate("MainWindow", u"Export", None))
-        self.btn_clear_mpl_plot.setText(QCoreApplication.translate("MainWindow", u"Clear plot", None))
         self.group_box_rolling_rate_inputs.setTitle(QCoreApplication.translate("MainWindow", u"Rolling Window Rate Inputs", None))
         self.label_21.setText(QCoreApplication.translate("MainWindow", u"Grouping column:", None))
         self.label_26.setText(QCoreApplication.translate("MainWindow", u"Temperature column:", None))
@@ -2261,7 +2337,21 @@ class Ui_MainWindow(object):
         self.spin_box_offset.setSuffix(QCoreApplication.translate("MainWindow", u" s", None))
         self.focused_result_sample_rate_label.setText(QCoreApplication.translate("MainWindow", u"Sample Rate", None))
         self.spin_box_focused_sample_rate.setSuffix(QCoreApplication.translate("MainWindow", u" Hz", None))
-        self.btn_load_focused_result.setText(QCoreApplication.translate("MainWindow", u"Load a Focused Result File", None))
-        self.btn_calculate_rolling_rate.setText(QCoreApplication.translate("MainWindow", u"Calculate", None))
+        self.startByLabel.setText(QCoreApplication.translate("MainWindow", u"Start by", None))
+        self.combo_box_start_by.setItemText(0, QCoreApplication.translate("MainWindow", u"window", None))
+        self.combo_box_start_by.setItemText(1, QCoreApplication.translate("MainWindow", u"datapoint", None))
+
+        self.labelLabel.setText(QCoreApplication.translate("MainWindow", u"Label", None))
+        self.combo_box_label.setItemText(0, QCoreApplication.translate("MainWindow", u"left", None))
+        self.combo_box_label.setItemText(1, QCoreApplication.translate("MainWindow", u"right", None))
+        self.combo_box_label.setItemText(2, QCoreApplication.translate("MainWindow", u"datapoint", None))
+
+        self.includeWindowBoundariesLabel.setText(QCoreApplication.translate("MainWindow", u"Include Window Boundaries", None))
+        self.btn_clear_mpl_plot.setText(QCoreApplication.translate("MainWindow", u"Clear plot", None))
+        self.btn_reset_rolling_rate_inputs.setText(QCoreApplication.translate("MainWindow", u"Reset Inputs", None))
+        self.btn_calculate_rolling_rate.setText(QCoreApplication.translate("MainWindow", u"Calculate + Plot", None))
+        self.btn_load_focused_result.setText(QCoreApplication.translate("MainWindow", u"Load Focused Result File(s)", None))
+        self.btn_clear_rolling_rate_data.setText(QCoreApplication.translate("MainWindow", u"Clear data", None))
+        self.label_35.setText(QCoreApplication.translate("MainWindow", u"Loaded File(s):", None))
     # retranslateUi
 

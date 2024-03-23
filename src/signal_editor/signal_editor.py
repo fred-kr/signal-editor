@@ -124,6 +124,8 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.action_reset_view.triggered.connect(self._emit_data_range_info)
         self.sig_update_view_range.connect(self.plot.reset_view_range)
         self.btn_clear_mpl_plot.clicked.connect(self.plot.clear_mpl_plot)
+        self.btn_clear_rolling_rate_data.clicked.connect(self._on_clear_rolling_rate_data)
+        self.btn_reset_rolling_rate_inputs.clicked.connect(self.ui.set_initial_rolling_rate_inputs)
 
         # File information / metadata
         self.spin_box_sample_rate.editingFinished.connect(
@@ -155,6 +157,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.plot.update_time_axis_scale(sfreq)
         self._result: CompleteResult | None = None
         self.previous_filter: str | None = None
+        self.current_rr_df_cols = None
         self._setup_tables()
 
     def _setup_tables(self) -> None:
@@ -340,6 +343,13 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(file))
 
     @QtCore.Slot()
+    def _on_clear_rolling_rate_data(self) -> None:
+        if hasattr(self, "_rr_df_export"):
+            self._rr_df_export = None
+        self.table_view_rolling_rate.setModel(None)
+        self.plot.clear_mpl_plot()
+
+    @QtCore.Slot()
     def _load_focused_result(self) -> None:
         file_paths, selected_filter = QtWidgets.QFileDialog.getOpenFileNames(
             self,
@@ -351,6 +361,9 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         if not file_paths:
             return
 
+        self.plot.clear_mpl_plot()
+        self.table_view_rolling_rate.setModel(None)
+
         self._current_subject_id = Path(file_paths[0]).parent.name
         self._current_focused_result_file_names = [Path(file_path).name for file_path in file_paths]
 
@@ -359,6 +372,8 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.config.focused_result_dir = Path(file_0).parent
         if "PM_03" in file_0 or "PM03" in file_0 or "PM_05" in file_0 or "PM05" in file_0:
             self.spin_box_focused_sample_rate.setValue(1000)
+        else:
+            self.spin_box_focused_sample_rate.setValue(400)
 
         suffix = Path(file_0).suffix
         dataframes: list[pl.DataFrame] = []
@@ -391,6 +406,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         self.list_widget_focused_results.clear()
         self.list_widget_focused_results.addItems(self._current_focused_result_file_names)
         self._rr_dfs = dataframes
+        self.current_rr_df_cols = df_cols
 
     # region Sections
     @QtCore.Slot()
@@ -504,7 +520,10 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         rate_col = "n_peaks_mean"
         try:
             if not hasattr(self, "_rr_dfs"):
-                self.sig_show_message.emit("Can't find attribute '_rr_dfs' in self.", "error")
+                self.sig_show_message.emit(
+                    "Can't find attribute '_rr_dfs' in self. Make sure to load focused result files first.",
+                    "error",
+                )
                 return
             colors = list(mcolors.TABLEAU_COLORS)
             col_enum = pl.Enum(colors[: len(self._rr_dfs)])
@@ -519,7 +538,7 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
             msg = f"Failed to calculate rolling rate:\n\n{e}\n\nTraceback: {traceback.format_exc()}"
             self.sig_show_message.emit(msg, "error")
             return
-        self.tables.update_df_model(roll_df, self.table_view_rolling_rate, limit=1000)
+        self.tables.update_df_model(roll_df, self.table_view_rolling_rate, limit=3000)
 
         self.plot.draw_rolling_rate(
             x=roll_df.get_column(temperature_col).to_numpy(),
@@ -764,11 +783,13 @@ class SignalEditor(QtWidgets.QMainWindow, Ui_MainWindow):
         if self.data.cas is None and not hasattr(self, "_rr_df_export"):
             return
         result_file_name = self.config.make_rolling_rate_result_name(self._current_subject_id)
-        # params = self.ui.get_rolling_rate_parameters()
+
         data = self._rr_df_export
-        # if not hasattr(self, "_rr_df_export"):
-        # data = self.data.get_bpm_per_temperature(**params)
-        # else:
+
+        if data is None:
+            msg = "No rolling rate data to export. Please make sure to load a focused result file and then create the rolling rate version using the 'Calculate + Plot' button."
+            self.sig_show_message.emit(msg, "warning")
+            return
 
         file_name, _ = QtWidgets.QFileDialog.getSaveFileName(
             self,

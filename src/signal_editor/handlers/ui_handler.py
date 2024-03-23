@@ -12,6 +12,7 @@ from ..views.ui_state_maps import (
     FILTER_INPUT_STATES,
     INITIAL_STATE_MAP,
     INPUT_WIDGETS_PEAK_DETECTION,
+    ROLLING_RATE_INPUT_STATES,
     WIDGET_PARAMETER_TO_SETTER,
 )
 
@@ -322,6 +323,9 @@ class UIHandler(QtCore.QObject):
         period = self._app.spin_box_period.value()
         offset = self._app.spin_box_offset.value()
         sampling_rate = self._app.spin_box_focused_sample_rate.value()
+        # start_by = t.cast(t.Literal["window", "datapoint"], self._app.combo_box_start_by.currentText())
+        # label = t.cast(t.Literal["left", "right", "datapoint"], self._app.combo_box_label.currentText())
+        # include_boundaries = self._app.check_box_include_boundaries.isChecked()
         return {
             "grp_col": grp_col,
             "temperature_col": temperature_col,
@@ -330,6 +334,24 @@ class UIHandler(QtCore.QObject):
             "sec_offset": offset,
             "sampling_rate": sampling_rate,
         }
+
+    @QtCore.Slot()
+    def set_initial_rolling_rate_inputs(self) -> None:
+        for widget_name, properties in ROLLING_RATE_INPUT_STATES.items():
+            if widget_name == "combo_box_grp_col":
+                continue
+            for property_name, value in properties.items():
+                getattr(self._app, widget_name).__getattribute__(
+                    WIDGET_PARAMETER_TO_SETTER[property_name]
+                )(value)
+        current_grp_index_items = self._app.current_rr_df_cols or [""]
+        # Either the first item in the list that has the wort "index" in it, or 0
+        self._app.combo_box_grp_col.setCurrentIndex(0)
+
+        for i, item in enumerate(current_grp_index_items):
+            if "index" in item.lower():
+                self._app.combo_box_grp_col.setCurrentIndex(i)
+                break
 
     # def set_peak_detection_parameters(self, params: _t.PeakDetectionParameters) -> None:
     #     # sourcery skip: extract-method
